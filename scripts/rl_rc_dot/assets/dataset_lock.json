@@ -1,0 +1,3763 @@
+{
+  "schema": "vcm-bdd100k-dataset-lock/1",
+  "version": "v1",
+  "status": "LOCKED",
+  "source": {
+    "dataset": "BDD100K Train00 — Driving Video with Object Tracking",
+    "provider": "Kaggle robikscube/driving-video-with-object-tracking",
+    "dataset_root_hint": "/kaggle/input/datasets/robikscube/driving-video-with-object-tracking",
+    "source_is_lossy_h264": true,
+    "is_official_bdd100k_test": false
+  },
+  "reference_manifest": {
+    "origin": "independent RL-RC-DoT reproduction",
+    "url": "https://github.com/Puiching-Memory/RL-RC-DoT/blob/main/data/bdd100k_streams.json",
+    "github_blob_sha": "4c37dd299a866042dfa734b867c6957e983e03a7",
+    "train_val_preserved": true
+  },
+  "split_protocol": {
+    "seed": 20261027,
+    "counts": {
+      "train": 65,
+      "val": 7,
+      "test": 100
+    },
+    "test_is_internal_holdout": true,
+    "prefix_group_length": 8,
+    "max_test_per_prefix_group": 1,
+    "require_test_labels": true,
+    "min_labeled_frames_test": 10,
+    "min_car_boxes_test": 1,
+    "train_val_prefix_overlap_legacy": [
+      "00d8d95a"
+    ]
+  },
+  "splits": {
+    "train": [
+      "0000f77c-6257be58",
+      "0000f77c-cb820c98",
+      "000e0252-8523a4a9",
+      "000f157f-dab3a407",
+      "000f8d37-d4c09a0f",
+      "00a04f65-af2ab984",
+      "00a0f008-3c67908e",
+      "00a0f008-a315437f",
+      "00a1176f-0652080e",
+      "00a1176f-5121b501",
+      "00a2e3ca-5c856cde",
+      "00a2e3ca-62992459",
+      "00a2f5b6-d4217a96",
+      "00a395fe-d60c0b47",
+      "00a9cd6b-b39be004",
+      "00abd8a7-ecd6fc56",
+      "00abf44e-04004ca0",
+      "00adbb3f-7757d4ea",
+      "00afa5b2-c14a542f",
+      "00afa6b9-4efe0141",
+      "00b04b30-501822fa",
+      "00b1dfed-a89dbe2b",
+      "00b93c6e-6298aa25",
+      "00be7020-457a6db4",
+      "00beeb02-ba0790aa",
+      "00c12bd0-bb46e479",
+      "00c29c52-f9524f1e",
+      "00c41a61-4ba25ad4",
+      "00c497ae-595d361b",
+      "00c50078-6298b9c1",
+      "00c87627-b7f6f46c",
+      "00ca8821-db8033d5",
+      "00cb28b9-08a22af7",
+      "00ccf2e8-59a6bfc9",
+      "00ccf2e8-ac055be6",
+      "00ccf2e8-f8c69860",
+      "00ce6f6d-50bbee62",
+      "00ce8219-12c6d905",
+      "00ce8219-d0b5582e",
+      "00cef86b-204ea619",
+      "00cef86b-d8d105b9",
+      "00cf8e3d-3d27efb0",
+      "00cf8e3d-4683d983",
+      "00cf8e3d-773de15e",
+      "00cf8e3d-a7b4978c",
+      "00d0f034-6d666f7b",
+      "00d18b13-52d3e4c4",
+      "00d4b6b7-7d0a60bf",
+      "00d4b6b7-a0b1a3e0",
+      "00d7268f-fd4487be",
+      "00d79c0a-23bea078",
+      "00d79c0a-a2b85ca4",
+      "00d84b1d-21e6fe01",
+      "00d8944b-e157478b",
+      "00d8d95a-74aa476a",
+      "00d9e313-7d75bb18",
+      "00d9e313-926b6698",
+      "00dc5030-237e7f71",
+      "00de601c-858a8a8d",
+      "00de601c-cfa2404b",
+      "00e49ed1-9d41220c",
+      "00e4cae5-c0582574",
+      "00e5e793-f94de032",
+      "00e81dcc-b1dd9e7b",
+      "00e8c106-e197c4b1"
+    ],
+    "val": [
+      "00a820ef-d655700e",
+      "00b04b12-a7d7eb85",
+      "00c17a92-d4803287",
+      "00ce95b0-84be34a3",
+      "00d15d58-9197cde5",
+      "00d8d95a-47d98291",
+      "00e02d60-54df99d1"
+    ],
+    "test": [
+      "0024b742-83709bd4",
+      "002685b6-856c17f7",
+      "002b562f-e0ac84fe",
+      "002cd38e-c7defded",
+      "003e23ee-67d25f19",
+      "00423717-eba4da41",
+      "00423ac5-1fa7ff43",
+      "0045e757-66a334b5",
+      "004855fc-ff3946ad",
+      "00495359-27ce9c7e",
+      "005645a1-dbe34c9d",
+      "005fd7be-d8e0dc65",
+      "00690c26-e4bbbd72",
+      "006d6f8e-4759e8c1",
+      "0075a5b0-9a8d5dbb",
+      "0081e3ea-3f7b0282",
+      "00831388-d801f28b",
+      "0090c713-9d58a186",
+      "0092e44c-3b3dee4b",
+      "009aecce-ce4a9413",
+      "009bd04d-42445981",
+      "00e100a8-9c852617",
+      "00e42886-b826e91d",
+      "00edfec7-4d92adef",
+      "00f28fce-a799f8a1",
+      "01051f5c-0ec95f5c",
+      "01079b7f-9d0e53c5",
+      "01094b4f-27d47f20",
+      "0110b332-cc1282d2",
+      "011f8556-ca1f4828",
+      "01251d51-eb962582",
+      "01317a31-6ea7d85d",
+      "013aba02-3fbd03ff",
+      "013b7dd3-80000bcd",
+      "014324ec-d139c447",
+      "0145b233-ee9c5b63",
+      "01460ec4-b50591be",
+      "014f61f0-c93a2f84",
+      "014f813e-ea18f067",
+      "01534bbe-6b88ae77",
+      "015bbc07-91083530",
+      "015cbf2d-1b0ecee0",
+      "015fe6c9-48a58255",
+      "01621265-578a97d7",
+      "016a3756-afd08730",
+      "016a63d6-582c4677",
+      "0178ff32-d94d3509",
+      "017bc60b-45528fb9",
+      "017bec14-8512b7fd",
+      "017e2d3b-acac71ff",
+      "01818f85-6397dd75",
+      "01a0fe55-298688cb",
+      "01a4075d-544ddc3c",
+      "01a4933a-252e566a",
+      "01a4deab-9d5e5a17",
+      "01aa2961-e390a466",
+      "01c5fd90-949d2d90",
+      "01c71072-718028b8",
+      "01c9d396-c1de70b1",
+      "01cce42a-cd2acad5",
+      "01ce9ed7-51ffbb0e",
+      "01d07f62-a9eec120",
+      "01d3a4d7-7940d3f0",
+      "01dd2e02-3bd0526b",
+      "01dd5d9a-4501cd3a",
+      "01df5158-81b61006",
+      "01dfa9c5-8e06d106",
+      "01e87cf1-25268f60",
+      "01e9deb7-ed388859",
+      "01fa77d0-e86c6400",
+      "01ff4acd-abd98a91",
+      "020adf31-972bcf64",
+      "020cc8f8-8b679d0b",
+      "020fb8c8-9a194dc3",
+      "0210896b-e54d48dc",
+      "02162021-ff5ac522",
+      "02172d82-354cb4fd",
+      "02188a44-65ad27f3",
+      "021c4a16-f4d18785",
+      "02480aee-cb6bb3a5",
+      "0248ab56-904b42ad",
+      "024b275b-bbfdf5ee",
+      "02521568-dd1da95c",
+      "02522f64-cf006cd5",
+      "0263b4e2-51a4b4ff",
+      "026e1e49-771df1d9",
+      "026eb2d9-a96c8aa4",
+      "02739c8c-301f2697",
+      "027bf15c-291f196d",
+      "02927def-14c4c3cb",
+      "0293224c-713dea0d",
+      "029968d6-9eea29a2",
+      "029aad77-628b9c45",
+      "029ae5bb-c8d1a298",
+      "02a17951-3d88d95e",
+      "02a7e164-14ba1015",
+      "02a88cd9-89d23c1c",
+      "02b0443e-25d7d385",
+      "02b1d9ff-845e5ab3",
+      "02b7b9ee-066c81db"
+    ]
+  },
+  "preprocessing": {
+    "autorotate": true,
+    "width": 480,
+    "height": 320,
+    "resize_mode": "stretch",
+    "fps": 30,
+    "pix_fmt": "yuv420p",
+    "format": "rawvideo",
+    "ffmpeg_vs": "fps=30"
+  },
+  "annotation_protocol": {
+    "source_file": "mot_labels.parquet",
+    "source_file_sha256": "e296934ebba47f360fb49a61060d5dfc6027f91a8655b96b565ece7ac1599e02",
+    "source_type": "parquet",
+    "frame_index_requires_visual_confirmation": true,
+    "annotation_fps_assumption": 5.0,
+    "bbox_coordinate_mode": "display",
+    "manual_qa_confirmed": true,
+    "empty_annotation_policy": "Exclude rows with missing category and all bbox coordinates missing from object annotations; do not infer negative GT frames.",
+    "selected_empty_annotation_rows": 383,
+    "selected_malformed_object_rows": 0,
+    "explanation": "MOT frameIndex có thể là 5fps sampled index, hoặc native frame index; review overlays before LOCK."
+  },
+  "video_records": [
+    {
+      "video_id": "0000f77c-6257be58",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0000f77c-6257be58.mov",
+      "size_bytes": 20046247,
+      "sha256": "313eed7b8e46ae388c9d59f4e6068d5ab6fb98ce13e0d63b48b8cdd604d76767",
+      "fps_avg": 30.148637489677952,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1126,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0000f77c-cb820c98",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0000f77c-cb820c98.mov",
+      "size_bytes": 20672016,
+      "sha256": "e6608a6ef6a15e2dfb31ce4f3df3b8307ce1bbe57a1931eb8e1feab3a5c35670",
+      "fps_avg": 30.151377285135247,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1385,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "000e0252-8523a4a9",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/000e0252-8523a4a9.mov",
+      "size_bytes": 20732879,
+      "sha256": "a441b1d3e610add311df789130a04093af7f1573677fc58362fc97c61eae14cc",
+      "fps_avg": 30.05241700640652,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1251,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "000f157f-dab3a407",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/000f157f-dab3a407.mov",
+      "size_bytes": 20824557,
+      "sha256": "e30071c4d8bf1e2a40eed0e4cc0c833fe8e7a9df9eda47226f7b222ba6ad9051",
+      "fps_avg": 30.153258296299374,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1824,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "000f8d37-d4c09a0f",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/000f8d37-d4c09a0f.mov",
+      "size_bytes": 21093539,
+      "sha256": "54ad379892bf50c98b9bd6f43f2453fbac3386d755a8f06e50abfad5bbb4d1ab",
+      "fps_avg": 30.14950166112957,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2035,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a04f65-af2ab984",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a04f65-af2ab984.mov",
+      "size_bytes": 20334810,
+      "sha256": "0643749bfb617020b5259d08fd004cebf85fc6cf33f23db5fe541ef5300e9199",
+      "fps_avg": 30.02495840266223,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 2029,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a0f008-3c67908e",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a0f008-3c67908e.mov",
+      "size_bytes": 20002461,
+      "sha256": "024651a98f9f25bf9297b44d371fc0333307e52ba981afc90cf2b524d2474a5d",
+      "fps_avg": 30.200923499313614,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 172,
+      "car_boxes": 1356,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a0f008-a315437f",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a0f008-a315437f.mov",
+      "size_bytes": 21473610,
+      "sha256": "ca41c860da9c9ad63ab6793b8104d9f3f7eaf7e055e090ce512b51d1999537cd",
+      "fps_avg": 30.19274611398964,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 2286,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a1176f-0652080e",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a1176f-0652080e.mov",
+      "size_bytes": 20344929,
+      "sha256": "d0ba4f84d34a9ed2c88d8d2bf5aa8d8eb9973b91c39a06062fe7330e614252d2",
+      "fps_avg": 30.15200598056317,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2166,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a1176f-5121b501",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a1176f-5121b501.mov",
+      "size_bytes": 18730706,
+      "sha256": "e1a110436825fd480de0b5e64c8ea0ad0dea5447fe26cd78302cdd682cee7c6f",
+      "fps_avg": 30.07450331125828,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1819,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a2e3ca-5c856cde",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a2e3ca-5c856cde.mov",
+      "size_bytes": 20298165,
+      "sha256": "7ad0bba9d3f0ae69e66c10e2707da38a8c298e01209be8d1e1fc3c9dbab2ccff",
+      "fps_avg": 30.05362264621524,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 3078,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a2e3ca-62992459",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a2e3ca-62992459.mov",
+      "size_bytes": 21003874,
+      "sha256": "d0f7c7495ddc95256d90698a5c908040485748afc4784142c6c5864cf36c9c1f",
+      "fps_avg": 30.052373430875384,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1992,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a2f5b6-d4217a96",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a2f5b6-d4217a96.mov",
+      "size_bytes": 20579383,
+      "sha256": "b9a85f8bbe4f1e01d71945f0cc442f222971e8d8143f16f1f6ebca69920d7cc5",
+      "fps_avg": 30.05246065450912,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1949,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a395fe-d60c0b47",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a395fe-d60c0b47.mov",
+      "size_bytes": 20750610,
+      "sha256": "3383cbf438377c5e4f4b6b7de73e4f707fa1c3bd724028833f66ad1597294042",
+      "fps_avg": 30.058329541223678,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 2960,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a9cd6b-b39be004",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a9cd6b-b39be004.mov",
+      "size_bytes": 20795729,
+      "sha256": "08fab91a134955ee60e6738143609337bb1f2b38ece5c9eaf36e3345e0c02671",
+      "fps_avg": 30.139257294429708,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 193,
+      "car_boxes": 1015,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00abd8a7-ecd6fc56",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00abd8a7-ecd6fc56.mov",
+      "size_bytes": 20845546,
+      "sha256": "92a0b42a3307abfd0292ad0d80d7412f2b8cfdccdf3a6bca13dd0367d40ba3ea",
+      "fps_avg": 30.024916943521596,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1431,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00abf44e-04004ca0",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00abf44e-04004ca0.mov",
+      "size_bytes": 21409613,
+      "sha256": "a6d9704c129ffe2e2aec3dfd17e2603140eb4b1df2e0bf398f81213b51c94e37",
+      "fps_avg": 30.14724232592962,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2545,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00adbb3f-7757d4ea",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00adbb3f-7757d4ea.mov",
+      "size_bytes": 19896285,
+      "sha256": "f5263497609d0c9740d9e5fdbd6aac063fc5e0049f73c068c2b25a854721d7a0",
+      "fps_avg": 30.066175552503434,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 2664,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00afa5b2-c14a542f",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00afa5b2-c14a542f.mov",
+      "size_bytes": 20598217,
+      "sha256": "cf122f55e0451ba741c823cf89fb324289e9a12c7a1b83bbf1057b8d011c0691",
+      "fps_avg": 30.152385710716963,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1947,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00afa6b9-4efe0141",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00afa6b9-4efe0141.mov",
+      "size_bytes": 20501801,
+      "sha256": "ac5e4fd77555b11bd79efd6e88464ff5079dbbf85f46d8c8e765d3fb9e3bc76d",
+      "fps_avg": 30.09054450738,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1833,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00b04b30-501822fa",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00b04b30-501822fa.mov",
+      "size_bytes": 10369929,
+      "sha256": "7cdd7e760bcb8e7432bd77667270524234aef6ab663bf2288249a58315f9a901",
+      "fps_avg": 29.82734172991909,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 102,
+      "car_boxes": 1444,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00b1dfed-a89dbe2b",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00b1dfed-a89dbe2b.mov",
+      "size_bytes": 19735945,
+      "sha256": "c90afa767dc452e67a0f9a6f9d4883b2b2aeddffd7086572fb5a50bb47455caa",
+      "fps_avg": 30.151753876772535,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1351,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00b93c6e-6298aa25",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00b93c6e-6298aa25.mov",
+      "size_bytes": 20328150,
+      "sha256": "629e6eb9c70bb69e6291028543af5b87b19949715a7810c1ce538f41cdc71e7a",
+      "fps_avg": 30.01497005988024,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1126,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00be7020-457a6db4",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00be7020-457a6db4.mov",
+      "size_bytes": 10359832,
+      "sha256": "8249c773f39ded3aef9f2627df70a33b1444ebc0211b7822aa355cf6aa328975",
+      "fps_avg": 29.87939945852818,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 103,
+      "car_boxes": 1626,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00beeb02-ba0790aa",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00beeb02-ba0790aa.mov",
+      "size_bytes": 20388422,
+      "sha256": "a9b639ffa7d5bc454cac1e9af4ad1b8c4dcfe684977c13e64ada718c9324b73c",
+      "fps_avg": 30.0446207238473,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1173,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00c12bd0-bb46e479",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00c12bd0-bb46e479.mov",
+      "size_bytes": 20466437,
+      "sha256": "04aa7b33a0d1deb64adbb3a4b0a75fa03baddffa7381f7739ddfd791ab905af9",
+      "fps_avg": 30.027252456850277,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 193,
+      "car_boxes": 1551,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00c29c52-f9524f1e",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00c29c52-f9524f1e.mov",
+      "size_bytes": 20790492,
+      "sha256": "cf6ccc4f54a361b60d8f1f73b0d24296fc4a88185565c1cdc2b09796520e8b43",
+      "fps_avg": 30.0,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1141,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00c41a61-4ba25ad4",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00c41a61-4ba25ad4.mov",
+      "size_bytes": 20783746,
+      "sha256": "0db32735b24595441b1eeea40d8acd3fe53c25c7bb023692fa4a8c448d27ef1f",
+      "fps_avg": 29.988782251028294,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2457,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00c497ae-595d361b",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00c497ae-595d361b.mov",
+      "size_bytes": 20911615,
+      "sha256": "511301fe7a52b1eebb39a1453835068a073d5cb46c7a8376c35aadbd62785d84",
+      "fps_avg": 29.982553792473208,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 984,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00c50078-6298b9c1",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00c50078-6298b9c1.mov",
+      "size_bytes": 19996832,
+      "sha256": "4889e165545286e5e4e5d81a08513f56bc44011d16d18279a5ad018235a4d994",
+      "fps_avg": 29.985032429735572,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2174,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00c87627-b7f6f46c",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00c87627-b7f6f46c.mov",
+      "size_bytes": 20651694,
+      "sha256": "3a0ce4416c0ee0232360245e6cf62ef58603efe5d0e595b65fc7491665c2ccc5",
+      "fps_avg": 30.18475366178429,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1922,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00ca8821-db8033d5",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00ca8821-db8033d5.mov",
+      "size_bytes": 20366391,
+      "sha256": "fccb95807140d1931771560abda82c178951bc0dd91d9478f8131a6047fa1196",
+      "fps_avg": 30.07830302025935,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 2735,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00cb28b9-08a22af7",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00cb28b9-08a22af7.mov",
+      "size_bytes": 22393480,
+      "sha256": "34912a1f65d1a00032e628e73840f54214d1f5b5af319c68390c0e14ee52f42e",
+      "fps_avg": 30.00622019489944,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 196,
+      "car_boxes": 1293,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00ccf2e8-59a6bfc9",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00ccf2e8-59a6bfc9.mov",
+      "size_bytes": 18596505,
+      "sha256": "94d9718aa8db817511006fae870e173eb454d139481f65c1c5f02a096f72ffdc",
+      "fps_avg": 30.00123869689087,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 181,
+      "car_boxes": 439,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00ccf2e8-ac055be6",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00ccf2e8-ac055be6.mov",
+      "size_bytes": 21058706,
+      "sha256": "44d33f05678f1918c70deaddae0d2abae3d40f267ff991356e559d7ab2f3f2de",
+      "fps_avg": 30.106726234797716,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 910,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00ccf2e8-f8c69860",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00ccf2e8-f8c69860.mov",
+      "size_bytes": 17076517,
+      "sha256": "27a1ff81a69390a3b6cf4b99a27aba4a19560bb67536dcb68d35e46b8e079075",
+      "fps_avg": 30.058281321043278,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1473,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00ce6f6d-50bbee62",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00ce6f6d-50bbee62.mov",
+      "size_bytes": 21486126,
+      "sha256": "1af44d6c1c7ae47a9f48dce38cce56b11cedb6382207442a5ad558422456a1e9",
+      "fps_avg": 29.787941787941786,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1006,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00ce8219-12c6d905",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00ce8219-12c6d905.mov",
+      "size_bytes": 19103692,
+      "sha256": "c7056f9b62df4f1af1f48ad7fed2c584178699ec4a73e17425abcbd92abc3552",
+      "fps_avg": 29.711862292628165,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 194,
+      "car_boxes": 1790,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00ce8219-d0b5582e",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00ce8219-d0b5582e.mov",
+      "size_bytes": 21349584,
+      "sha256": "2f7eee2ee106fa0e1ebb736919bf234970c3b901d983a6104fa765ac64460fbb",
+      "fps_avg": 30.064870259481037,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 669,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00cef86b-204ea619",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00cef86b-204ea619.mov",
+      "size_bytes": 20053253,
+      "sha256": "c127fa3e656877e20b6b17aa40932807bca846b2d443abb5c1fa80864b377199",
+      "fps_avg": 30.127404446665,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 2686,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00cef86b-d8d105b9",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00cef86b-d8d105b9.mov",
+      "size_bytes": 19866765,
+      "sha256": "de0fff3529b73f94f26da58dce507ba5f45908c3855c90f697e86ee1e64ef787",
+      "fps_avg": 29.90024614587382,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 195,
+      "car_boxes": 1870,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00cf8e3d-3d27efb0",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00cf8e3d-3d27efb0.mov",
+      "size_bytes": 20702751,
+      "sha256": "ac96e94cde48eb9fe7afc9b947dcca9d495e2c52ec97e9f76759c4106267541d",
+      "fps_avg": 30.076993128570248,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1918,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00cf8e3d-4683d983",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00cf8e3d-4683d983.mov",
+      "size_bytes": 20072758,
+      "sha256": "992903295590583c3283eabf54bd30114198e983d515e4cf8c8a0fabecd79752",
+      "fps_avg": 30.052373430875384,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1573,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00cf8e3d-773de15e",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00cf8e3d-773de15e.mov",
+      "size_bytes": 20676007,
+      "sha256": "f7e14d46eaf42d2715ea403674bf6912ddae9ec03651cc8b5962c76f9ddd9ae5",
+      "fps_avg": 29.993761696818467,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1255,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00cf8e3d-a7b4978c",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00cf8e3d-a7b4978c.mov",
+      "size_bytes": 20679574,
+      "sha256": "5caee391014678a4448d6e6a347112e7e1f8c150654ac2649dfbfc66caa9c19c",
+      "fps_avg": 29.71897537925889,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 2115,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d0f034-6d666f7b",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d0f034-6d666f7b.mov",
+      "size_bytes": 21723266,
+      "sha256": "1204800ce1b1802b2587d866fd8b8a60523ca4e91dc92468bd771e3ed5a71523",
+      "fps_avg": 30.164828355434377,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1915,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d18b13-52d3e4c4",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d18b13-52d3e4c4.mov",
+      "size_bytes": 20448492,
+      "sha256": "d0dad04258ac1beeebc9d5c66c84a20a1f4f46e0b349cf60a91741ae531e717f",
+      "fps_avg": 30.139026812313805,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 2663,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d4b6b7-7d0a60bf",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d4b6b7-7d0a60bf.mov",
+      "size_bytes": 20758598,
+      "sha256": "3a3c2560359a417c3b454195a2a307106a43e0a939a0f8637419046eb06a5f8d",
+      "fps_avg": 30.10333236502469,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1405,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d4b6b7-a0b1a3e0",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d4b6b7-a0b1a3e0.mov",
+      "size_bytes": 20055292,
+      "sha256": "763b839052ee035f1d3eef3ea4d050fd7b6ff6d675fa387d61ccec3b80714d5d",
+      "fps_avg": 30.135848115990196,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1269,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d7268f-fd4487be",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d7268f-fd4487be.mov",
+      "size_bytes": 21220474,
+      "sha256": "a36f5de6874da2f8c572703aa883f365065571a16e9f147ec5784945ca75814e",
+      "fps_avg": 30.198675496688743,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1369,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d79c0a-23bea078",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d79c0a-23bea078.mov",
+      "size_bytes": 20215078,
+      "sha256": "8d3b3e428e6339d8460c3f546ac1d358cd08b163dc171b90e3cf5a1eca946326",
+      "fps_avg": 30.001245898916068,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2793,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d79c0a-a2b85ca4",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d79c0a-a2b85ca4.mov",
+      "size_bytes": 21457535,
+      "sha256": "a4f06a98d8362b960ce1ef53ee6483177997dfc747fd51af9d1bbfbe8f443779",
+      "fps_avg": 30.151502607831773,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1533,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d84b1d-21e6fe01",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d84b1d-21e6fe01.mov",
+      "size_bytes": 19785641,
+      "sha256": "305d00ffa3b2e44f8f41e33c50c7340a4645b066930f9e124fcbb7e99a5437bb",
+      "fps_avg": 30.030998140111592,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1253,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d8944b-e157478b",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d8944b-e157478b.mov",
+      "size_bytes": 20562746,
+      "sha256": "6572ee6a228a79b492c102e65ea9f80f13e418a78ca36dd8ec9fe1ff49ba0441",
+      "fps_avg": 30.103246672471702,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 3082,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d8d95a-74aa476a",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d8d95a-74aa476a.mov",
+      "size_bytes": 20228468,
+      "sha256": "056bf745e07daeca3ba4b64127b9fcc6db9b0e3029b3534644e14e8d8d6ff336",
+      "fps_avg": 30.09099596958491,
+      "coded_size": [
+        1280,
+        720
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 0,
+      "labeled_frames": 202,
+      "car_boxes": 1878,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d9e313-7d75bb18",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d9e313-7d75bb18.mov",
+      "size_bytes": 20216286,
+      "sha256": "b965f2f80a59eace737a77420889cdcf77bb11094decb36b9ba29eee09151d6c",
+      "fps_avg": 30.05219985085757,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1044,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d9e313-926b6698",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d9e313-926b6698.mov",
+      "size_bytes": 21022614,
+      "sha256": "78222abde8c70801b4a0265a22011526d062165b5d736f0a9e456f20f8eda80a",
+      "fps_avg": 29.925373134328357,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 832,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00dc5030-237e7f71",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00dc5030-237e7f71.mov",
+      "size_bytes": 10793090,
+      "sha256": "d9e72f43df8a23414f4cac2f0a022e0ed99a6454b9c841e800eb43998698248c",
+      "fps_avg": 29.928741092636578,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 103,
+      "car_boxes": 263,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00de601c-858a8a8d",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00de601c-858a8a8d.mov",
+      "size_bytes": 20354544,
+      "sha256": "08dec62ef00b1e2a26807d91cb2aab33aae1fbbba946b632b8ac2b0da94d4580",
+      "fps_avg": 30.09917355371901,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 2739,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00de601c-cfa2404b",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00de601c-cfa2404b.mov",
+      "size_bytes": 20924830,
+      "sha256": "70e8c670c19909b53248083dbdc2c14db38440e9d6e063ff1ae46eecc0e177ae",
+      "fps_avg": 30.00249604792412,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 195,
+      "car_boxes": 1359,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00e49ed1-9d41220c",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00e49ed1-9d41220c.mov",
+      "size_bytes": 19717288,
+      "sha256": "f0b454c31a55d49f3fec7acda316202538b4e1869bec296cc5c713533de6a363",
+      "fps_avg": 30.072373346643374,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1195,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00e4cae5-c0582574",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00e4cae5-c0582574.mov",
+      "size_bytes": 20838797,
+      "sha256": "86a8a28f79dfc805c3a6d1bc6ad095912ef12c1f87a408b5a06a2dfde2f644bc",
+      "fps_avg": 30.077313159863664,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 192,
+      "car_boxes": 1654,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00e5e793-f94de032",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00e5e793-f94de032.mov",
+      "size_bytes": 18179400,
+      "sha256": "4370e2285c240acf8745a652cfcd123c40e070cc9b31ac24d9d3005049237738",
+      "fps_avg": 30.205607476635514,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 651,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00e81dcc-b1dd9e7b",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00e81dcc-b1dd9e7b.mov",
+      "size_bytes": 21227526,
+      "sha256": "5153dcd1a9eeeca66cdb6a27f74a673bc44d4ac68a96a7ea2971d766b4c80383",
+      "fps_avg": 30.049586776859503,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1484,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00e8c106-e197c4b1",
+      "split": "train",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00e8c106-e197c4b1.mov",
+      "size_bytes": 19236690,
+      "sha256": "91fa8f04299ea27492d027d3654cd5a73b33da67cca981d25ae048428a927153",
+      "fps_avg": 30.124172185430464,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 894,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00a820ef-d655700e",
+      "split": "val",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00a820ef-d655700e.mov",
+      "size_bytes": 20086549,
+      "sha256": "f62889580e48367250776c24ce4745175892c5751f55aa5a818ddda8e022b718",
+      "fps_avg": 30.185855058001746,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2930,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00b04b12-a7d7eb85",
+      "split": "val",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00b04b12-a7d7eb85.mov",
+      "size_bytes": 20276696,
+      "sha256": "f07015e60dfb3c78ecd5ea0dd88d37a4ba4b2801c80386ffda7c8033497bfde3",
+      "fps_avg": 29.995021573182875,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1198,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00c17a92-d4803287",
+      "split": "val",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00c17a92-d4803287.mov",
+      "size_bytes": 19996585,
+      "sha256": "7aca5406be98601de3796b3dfe9d1b45111acdad943c944fab0dec3c51291df9",
+      "fps_avg": 30.103590298290136,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1420,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00ce95b0-84be34a3",
+      "split": "val",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00ce95b0-84be34a3.mov",
+      "size_bytes": 20115998,
+      "sha256": "31e573ec4fbbe7cff7c731f3918a15354565ef1ad5a90ad80db509cc044b115d",
+      "fps_avg": 30.151004617496568,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 968,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d15d58-9197cde5",
+      "split": "val",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d15d58-9197cde5.mov",
+      "size_bytes": 20549341,
+      "sha256": "6665b4ca9a8c3182b63a3a5a8348e26388c7a13d00f189265fba91733976ffbd",
+      "fps_avg": 29.99501329787234,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2099,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00d8d95a-47d98291",
+      "split": "val",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00d8d95a-47d98291.mov",
+      "size_bytes": 18704430,
+      "sha256": "973e83d31587ce31470acf2f2322608dceae9b69deac6c1944fb1e32eb2d5824",
+      "fps_avg": 30.124172185430464,
+      "coded_size": [
+        1280,
+        720
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 0,
+      "labeled_frames": 203,
+      "car_boxes": 1213,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00e02d60-54df99d1",
+      "split": "val",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00e02d60-54df99d1.mov",
+      "size_bytes": 20465059,
+      "sha256": "46db40913205d78efe75fbddeebd28d68e8f7aa72b22c8ac646f08438b8bb7ac",
+      "fps_avg": 30.18462682251869,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1681,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0024b742-83709bd4",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0024b742-83709bd4.mov",
+      "size_bytes": 20449098,
+      "sha256": "22c2731f1b575df3872049944b3d830775cbebcd3f85eac30cb52c62c56581e7",
+      "fps_avg": 29.977460555972954,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 199,
+      "car_boxes": 1150,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "002685b6-856c17f7",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/002685b6-856c17f7.mov",
+      "size_bytes": 20733601,
+      "sha256": "84129a69e03b020a3cd65cdc0de8ac9aedfb10cddbde193ad1294b11bd77f929",
+      "fps_avg": 30.101829621657423,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 3002,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "002b562f-e0ac84fe",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/002b562f-e0ac84fe.mov",
+      "size_bytes": 19458609,
+      "sha256": "46ec38b054087d1d0f86eac2b4057e5e54dc906780d374844274c92edb2e8cd3",
+      "fps_avg": 30.00124693461906,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 193,
+      "car_boxes": 837,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "002cd38e-c7defded",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/002cd38e-c7defded.mov",
+      "size_bytes": 20575751,
+      "sha256": "586e690f17b6e44cc7013e0dedc7e1792d25f528d05587056fdd023351c3bebc",
+      "fps_avg": 30.001245898916068,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1138,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "003e23ee-67d25f19",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/003e23ee-67d25f19.mov",
+      "size_bytes": 21006085,
+      "sha256": "a67e0aab2b9c8c7966659dcb64521e7858d2c5721b6bc95c6341ddbf7543a17e",
+      "fps_avg": 29.936438037472477,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 711,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00423717-eba4da41",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00423717-eba4da41.mov",
+      "size_bytes": 20612855,
+      "sha256": "f21c2928a72040c54437807169238107ad1131f110a3faaa3fbdaf887c64412c",
+      "fps_avg": 30.027388164992946,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 846,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00423ac5-1fa7ff43",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00423ac5-1fa7ff43.mov",
+      "size_bytes": 20282761,
+      "sha256": "ec360270688bfaba6cb52999605dea8cfa1315db3f4372bdce92ecd3c111a0a8",
+      "fps_avg": 30.10242318261304,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1174,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0045e757-66a334b5",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0045e757-66a334b5.mov",
+      "size_bytes": 19657160,
+      "sha256": "ec2517303c4a0592742747623fc01fde205d360334af9ce4633fe21d30d67c98",
+      "fps_avg": 29.98253928660514,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1469,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "004855fc-ff3946ad",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/004855fc-ff3946ad.mov",
+      "size_bytes": 20785350,
+      "sha256": "2b59c081bffa6f454649434e26756546c66839606c61eef2c16fe2dd0a263bf0",
+      "fps_avg": 29.828628197698485,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2599,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00495359-27ce9c7e",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00495359-27ce9c7e.mov",
+      "size_bytes": 10418319,
+      "sha256": "33ac929f7a45e8ec6d7b5ebc45a557a3751299b96595840f926736eab7d49d75",
+      "fps_avg": 30.23274806043283,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 104,
+      "car_boxes": 884,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "005645a1-dbe34c9d",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/005645a1-dbe34c9d.mov",
+      "size_bytes": 20627790,
+      "sha256": "de2a0b09f6b6aafcb49ba17307a79d8e7ac91181ea099643bb1ebb84d0ed6f13",
+      "fps_avg": 29.97632792059471,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1967,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "005fd7be-d8e0dc65",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/005fd7be-d8e0dc65.mov",
+      "size_bytes": 21162799,
+      "sha256": "3be76681e8fc34ec58c81fbacaced8ebd9fe957c8a1a2f278a2e1caea8cf82f2",
+      "fps_avg": 30.09950248756219,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1781,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00690c26-e4bbbd72",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00690c26-e4bbbd72.mov",
+      "size_bytes": 20760753,
+      "sha256": "8238e8e2c3bf2b7e60dd266ff136cbdacce998ae82e123123de149101f133917",
+      "fps_avg": 29.977665646455456,
+      "coded_size": [
+        1280,
+        720
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 0,
+      "labeled_frames": 203,
+      "car_boxes": 1014,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "006d6f8e-4759e8c1",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/006d6f8e-4759e8c1.mov",
+      "size_bytes": 18936561,
+      "sha256": "08c1f28ca30c5d38dd070b74c39a3c3908765595c3fa5062fb56412b56a8c726",
+      "fps_avg": 30.058426221356648,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1567,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0075a5b0-9a8d5dbb",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0075a5b0-9a8d5dbb.mov",
+      "size_bytes": 10443526,
+      "sha256": "ff7a13a5d428320bde189cc56004038d936ee45fbbc096477c3be5747f712d52",
+      "fps_avg": 30.41061800082953,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 102,
+      "car_boxes": 561,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0081e3ea-3f7b0282",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0081e3ea-3f7b0282.mov",
+      "size_bytes": 21072050,
+      "sha256": "49db5cbdbdb03270f363bf0cd5bbb126095333cb443ee0acd1527f435ec0285d",
+      "fps_avg": 30.073319249409717,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 163,
+      "car_boxes": 705,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00831388-d801f28b",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00831388-d801f28b.mov",
+      "size_bytes": 19814731,
+      "sha256": "46fbeed22b9f60e353bc3819768993d0f571d1ebad15b93a7e8b42de14d4dc9a",
+      "fps_avg": 30.12698149224002,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1474,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0090c713-9d58a186",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0090c713-9d58a186.mov",
+      "size_bytes": 17612658,
+      "sha256": "c7499e3ad2bb789a9e165accf6d79e03b309c116295862a23a43834c1cfdb529",
+      "fps_avg": 29.898838516298238,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 817,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0092e44c-3b3dee4b",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0092e44c-3b3dee4b.mov",
+      "size_bytes": 19190305,
+      "sha256": "60a6bfe1f5275dcfca7bd0e2b0e21f7231e13b76338949431058c2d13aac8185",
+      "fps_avg": 30.239520958083833,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1674,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "009aecce-ce4a9413",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/009aecce-ce4a9413.mov",
+      "size_bytes": 20936362,
+      "sha256": "5cc3ab755128d4f8d9d22ea3af8b38452274608eb9e079bba379ea1b1faa6b18",
+      "fps_avg": 29.996275296941604,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1989,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "009bd04d-42445981",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/009bd04d-42445981.mov",
+      "size_bytes": 20398216,
+      "sha256": "4d767e189840f024f33e3f2495f93e30d9b5736fb22ac03a2ff6ac6f4b2fee53",
+      "fps_avg": 29.980046558031262,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1672,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00e100a8-9c852617",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00e100a8-9c852617.mov",
+      "size_bytes": 20322633,
+      "sha256": "ae6be5d514943f3ed2c7395620b9a3858cb77b5d7fbfd6b59785833e46749ad3",
+      "fps_avg": 30.130286292532784,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 118,
+      "car_boxes": 278,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00e42886-b826e91d",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00e42886-b826e91d.mov",
+      "size_bytes": 20527770,
+      "sha256": "64992babf0baea96a8c1a91f012d52246e5969a6c89dfcd5a2a17bab799261e2",
+      "fps_avg": 29.982625961777117,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1036,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00edfec7-4d92adef",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00edfec7-4d92adef.mov",
+      "size_bytes": 18517216,
+      "sha256": "73b2e67b3c3bdff89ebc4cfe12f836d920c8aef339451b2d73fb76f66f089cfe",
+      "fps_avg": 30.007545904250858,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 183,
+      "car_boxes": 1018,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "00f28fce-a799f8a1",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/00f28fce-a799f8a1.mov",
+      "size_bytes": 20283814,
+      "sha256": "7879e44ddbeb70f4ae13c07f77d4bd573adc45657b3523a5787b7e9a41c3af57",
+      "fps_avg": 30.00249604792412,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1693,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01051f5c-0ec95f5c",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01051f5c-0ec95f5c.mov",
+      "size_bytes": 20638546,
+      "sha256": "056fd4f0a9dce74e7d9000d21fca5e3ef7cec76054307d629cdf915b85cddede",
+      "fps_avg": 30.12855181595041,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1150,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01079b7f-9d0e53c5",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01079b7f-9d0e53c5.mov",
+      "size_bytes": 20642116,
+      "sha256": "13b9bb85bee4db2456532af97cf61cbb01a773d22600aa05069d0176c8cd9835",
+      "fps_avg": 30.05348923995522,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 182,
+      "car_boxes": 350,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01094b4f-27d47f20",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01094b4f-27d47f20.mov",
+      "size_bytes": 20480230,
+      "sha256": "f15aa0dd032e0836cb2e859e7b1f23164ae941f5266e97c99f24be9c70594545",
+      "fps_avg": 30.12844494325976,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1042,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0110b332-cc1282d2",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0110b332-cc1282d2.mov",
+      "size_bytes": 20123242,
+      "sha256": "2c0b806cb5b84f53f1f5fd87af38f67ed615b10c6adfe177f41a3bdb00595fdb",
+      "fps_avg": 30.076126294770997,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1488,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "011f8556-ca1f4828",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/011f8556-ca1f4828.mov",
+      "size_bytes": 19549809,
+      "sha256": "d046105697a52b515315420c0a668884d05ad084804c92a8d059d4590fbed56b",
+      "fps_avg": 29.98375879731812,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2213,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01251d51-eb962582",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01251d51-eb962582.mov",
+      "size_bytes": 20567654,
+      "sha256": "822daaf336c21bda44703d7db73c243ab21fdceacd871111f8c1ae0149d550ac",
+      "fps_avg": 29.987557030277895,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1674,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01317a31-6ea7d85d",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01317a31-6ea7d85d.mov",
+      "size_bytes": 20396181,
+      "sha256": "9c4aca53c6a3f9d04e1518253fc73d66371927309d7071f46237e2d1f2e2ca72",
+      "fps_avg": 30.002481594838283,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1239,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "013aba02-3fbd03ff",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/013aba02-3fbd03ff.mov",
+      "size_bytes": 20271883,
+      "sha256": "031c95f6be5f28dcd31696c86b0ccce6625af896510ddbbfa51ea3c0e184d713",
+      "fps_avg": 30.080795525170913,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 2301,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "013b7dd3-80000bcd",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/013b7dd3-80000bcd.mov",
+      "size_bytes": 20193484,
+      "sha256": "dfbceb10b0ce2a26d248a147dbb3d33484598890097e81f65045476722bdde0c",
+      "fps_avg": 30.006230529595015,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1793,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "014324ec-d139c447",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/014324ec-d139c447.mov",
+      "size_bytes": 18464342,
+      "sha256": "debc56f532740116e1578bb11b38fc27aa40f60cae270cefee2fcd05c14d1eb3",
+      "fps_avg": 30.022423386761897,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 185,
+      "car_boxes": 502,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0145b233-ee9c5b63",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0145b233-ee9c5b63.mov",
+      "size_bytes": 20625959,
+      "sha256": "d5b0b8ff7b7c383a6e23ca6d67c2b0af7dbb11105e7db48085a5944f25011ed8",
+      "fps_avg": 30.027388164992946,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1312,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01460ec4-b50591be",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01460ec4-b50591be.mov",
+      "size_bytes": 20142038,
+      "sha256": "d244f65a7ecca95a324b2277290221771899a4e955ac490004380c58fd0e143b",
+      "fps_avg": 30.011339296963587,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 199,
+      "car_boxes": 667,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "014f61f0-c93a2f84",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/014f61f0-c93a2f84.mov",
+      "size_bytes": 20261630,
+      "sha256": "70df1f5a3e1e6e805b73d3a22c50696fae52df6b918c487b62ae0c4548a3b5a7",
+      "fps_avg": 29.991259832688225,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1957,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "014f813e-ea18f067",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/014f813e-ea18f067.mov",
+      "size_bytes": 20840100,
+      "sha256": "dcb05e036cdf12317d90086ae19a453a3a18a633e8d644e45632ace5e5179595",
+      "fps_avg": 30.03345310370462,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1923,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01534bbe-6b88ae77",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01534bbe-6b88ae77.mov",
+      "size_bytes": 20329107,
+      "sha256": "b00bc0bfd51154fb5f2ad42d77fd9eb21039f701f3f66b07a645b9d28ddc0209",
+      "fps_avg": 30.101829621657423,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1241,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "015bbc07-91083530",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/015bbc07-91083530.mov",
+      "size_bytes": 20887490,
+      "sha256": "29aed628dd00df95e5213019c8ae0fe5f7d43883769748e8ee0c2061376b2cfd",
+      "fps_avg": 30.001245898916068,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2166,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "015cbf2d-1b0ecee0",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/015cbf2d-1b0ecee0.mov",
+      "size_bytes": 10028178,
+      "sha256": "47d46e3a760096712746d50b6a385554e5c7822682362df2a23b4bd755bfadef",
+      "fps_avg": 30.074812967581046,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 102,
+      "car_boxes": 501,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "015fe6c9-48a58255",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/015fe6c9-48a58255.mov",
+      "size_bytes": 21397518,
+      "sha256": "d7865127d6713855098c8beb4f5a1d2e6a1c3e1afc1adee3af51fea3bb4af194",
+      "fps_avg": 30.09983361064892,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 195,
+      "car_boxes": 935,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01621265-578a97d7",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01621265-578a97d7.mov",
+      "size_bytes": 20345337,
+      "sha256": "4c9beb75c56b3bd3d6a1c6caf2ba9f23a088b7e77120e7261d73fcff7815c266",
+      "fps_avg": 30.101076505875586,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 204,
+      "car_boxes": 1731,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "016a3756-afd08730",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/016a3756-afd08730.mov",
+      "size_bytes": 20587015,
+      "sha256": "1ac4e100ac0682eb1f42bc3d24bf8c7d3b57db805a1914eb616d7776e5d86bde",
+      "fps_avg": 30.130732517119736,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1039,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "016a63d6-582c4677",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/016a63d6-582c4677.mov",
+      "size_bytes": 19882570,
+      "sha256": "7c8a06f7e9bce17fe5a01cb78b37a5408f66851c84407bd7e79badb257faa37d",
+      "fps_avg": 30.102337964888925,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 829,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0178ff32-d94d3509",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0178ff32-d94d3509.mov",
+      "size_bytes": 17277587,
+      "sha256": "3e9017353c1cf5de9805ddedc26412db0d519f67d502b5864ee01c4c61e2b65b",
+      "fps_avg": 30.06106933654605,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1171,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "017bc60b-45528fb9",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/017bc60b-45528fb9.mov",
+      "size_bytes": 20371804,
+      "sha256": "eb9f38cc76edc0dcba62a02dce907b79936bb0807251ddd7d9a4b64d8b08e96b",
+      "fps_avg": 30.074812967581046,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 197,
+      "car_boxes": 1581,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "017bec14-8512b7fd",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/017bec14-8512b7fd.mov",
+      "size_bytes": 20326502,
+      "sha256": "050ebe85ed3b28c6cf5b8e87519cadf95c94cbe5584f25f39f2fa1a1157869de",
+      "fps_avg": 30.027342779020632,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1580,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "017e2d3b-acac71ff",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/017e2d3b-acac71ff.mov",
+      "size_bytes": 20363817,
+      "sha256": "289075fe6f4ae9d64aad1240e1ad3a3d49a470d56a3124e64113fade56b86be1",
+      "fps_avg": 30.034895314057827,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1450,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01818f85-6397dd75",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01818f85-6397dd75.mov",
+      "size_bytes": 19790927,
+      "sha256": "c1cc46499914ee19cfcba7fd22b7c7828c62c1a871eeb8f78028245ab1447e08",
+      "fps_avg": 30.089820359281436,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1719,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01a0fe55-298688cb",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01a0fe55-298688cb.mov",
+      "size_bytes": 17995607,
+      "sha256": "d3cab54b394e40bd080b6d31cdae35122fed9440081e64e17e289fdace33e1fa",
+      "fps_avg": 30.027274981403423,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 785,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01a4075d-544ddc3c",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01a4075d-544ddc3c.mov",
+      "size_bytes": 19382376,
+      "sha256": "e0400b0b43be9edc0684ca39a28f79fdb46cc54ae6da2db2467374b8d2dca63f",
+      "fps_avg": 30.0,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2335,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01a4933a-252e566a",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01a4933a-252e566a.mov",
+      "size_bytes": 22992629,
+      "sha256": "9a3dc54b1bf53486132ffa8e9352c48dd2b0e35fc44def111a12795427aed12f",
+      "fps_avg": 29.70890767500937,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 200,
+      "car_boxes": 1305,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01a4deab-9d5e5a17",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01a4deab-9d5e5a17.mov",
+      "size_bytes": 20676208,
+      "sha256": "e3a61fe70484c529566a3efdf42ce2eb91edd56e5ed277b09323a1810125099c",
+      "fps_avg": 30.376265677736573,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 184,
+      "car_boxes": 1433,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01aa2961-e390a466",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01aa2961-e390a466.mov",
+      "size_bytes": 20732756,
+      "sha256": "0768b69bc4a840d73102a94e4b69bb53f5f47a16054b5977b791f714189c1acc",
+      "fps_avg": 30.036173132094298,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 168,
+      "car_boxes": 328,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01c5fd90-949d2d90",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01c5fd90-949d2d90.mov",
+      "size_bytes": 17205322,
+      "sha256": "af03d40c7e7c255773c82bc615c135eeae0ccf875740f3400bec88e4a56721d6",
+      "fps_avg": 30.055842812823165,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 457,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01c71072-718028b8",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01c71072-718028b8.mov",
+      "size_bytes": 20369826,
+      "sha256": "ef9ee4622ef773ddf2fa52cb650487e69abfeaab0c7560aa1be008ddd434ac8f",
+      "fps_avg": 30.18113678950656,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 2949,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01c9d396-c1de70b1",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01c9d396-c1de70b1.mov",
+      "size_bytes": 21331500,
+      "sha256": "9b244a7a0841e0305a5b8bc94210f51ff86526e92ff9e9f2d2a2a1826e23ba09",
+      "fps_avg": 30.12823173009088,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2783,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01cce42a-cd2acad5",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01cce42a-cd2acad5.mov",
+      "size_bytes": 21006766,
+      "sha256": "1cb6fae71801a97697afa47bb65acf81059e101d2d93364841d6e95a60ccaf2e",
+      "fps_avg": 30.153999006458022,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1957,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01ce9ed7-51ffbb0e",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01ce9ed7-51ffbb0e.mov",
+      "size_bytes": 19984648,
+      "sha256": "a07769245a69971fa60f674b493fcddabc2e301502803391bc6a3d36dcf2aba8",
+      "fps_avg": 30.002485707183695,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 2037,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01d07f62-a9eec120",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01d07f62-a9eec120.mov",
+      "size_bytes": 20165612,
+      "sha256": "8177cc0feea2de645a8a970d36a5194368d7ae3ebf09603fdc93bd0b2bb55b23",
+      "fps_avg": 30.157146420553754,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 187,
+      "car_boxes": 215,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01d3a4d7-7940d3f0",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01d3a4d7-7940d3f0.mov",
+      "size_bytes": 20260490,
+      "sha256": "bc63dce8fae75bf5deec0e958b82e2dc356cc02958e2bf7d2e419fa6b8107aea",
+      "fps_avg": 30.121779471460524,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 2696,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01dd2e02-3bd0526b",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01dd2e02-3bd0526b.mov",
+      "size_bytes": 20496645,
+      "sha256": "37e805f9ca2cf58cab0a7dc78f837585187bb7fd8a4584387903ee3e8452dcae",
+      "fps_avg": 30.114770459081836,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1060,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01dd5d9a-4501cd3a",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01dd5d9a-4501cd3a.mov",
+      "size_bytes": 20570335,
+      "sha256": "b975587344f5ee4cd9f9dd10322825e249a275162b0b86284e7841d12531c45e",
+      "fps_avg": 30.008737985270255,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1232,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01df5158-81b61006",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01df5158-81b61006.mov",
+      "size_bytes": 18859552,
+      "sha256": "dfc52467437c29bb73c1620ed1e167099e7c8319d98f7f1e15393958cc93cc3c",
+      "fps_avg": 30.072193178989295,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 199,
+      "car_boxes": 1246,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01dfa9c5-8e06d106",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01dfa9c5-8e06d106.mov",
+      "size_bytes": 20147241,
+      "sha256": "b4d162d64d7546e3bb637008f72839c3cc30b7227120dfbcd660248efdab6f9b",
+      "fps_avg": 30.139720558882235,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1430,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01e87cf1-25268f60",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01e87cf1-25268f60.mov",
+      "size_bytes": 20196666,
+      "sha256": "5fa3d9d18ac42b2e95d2b0a3bad4ac6d80fff28efb3e309b1dc6d39626d886bc",
+      "fps_avg": 30.103590298290136,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1703,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01e9deb7-ed388859",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01e9deb7-ed388859.mov",
+      "size_bytes": 19783252,
+      "sha256": "dd5af49e2a4279d22c5a1e4c8bf6ae5ef739d67929077c31cfed1fdb3634a037",
+      "fps_avg": 30.02745652716532,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1402,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01fa77d0-e86c6400",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01fa77d0-e86c6400.mov",
+      "size_bytes": 20643251,
+      "sha256": "b5b33af2833c791ea6260725f5a78a91da2c70aae0118e6187054e8fa97bdc08",
+      "fps_avg": 30.008694572102844,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 711,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "01ff4acd-abd98a91",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/01ff4acd-abd98a91.mov",
+      "size_bytes": 20298379,
+      "sha256": "fb9d9fe907c9c057657103047059e268f4f696662c3503945bb3768e29688a1b",
+      "fps_avg": 30.12698149224002,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1017,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "020adf31-972bcf64",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/020adf31-972bcf64.mov",
+      "size_bytes": 20318189,
+      "sha256": "4be9bb59cf20b693992b7cd468d35917e44c87ce63dca86284af80dfb506eb00",
+      "fps_avg": 30.12698149224002,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1183,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "020cc8f8-8b679d0b",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/020cc8f8-8b679d0b.mov",
+      "size_bytes": 21183596,
+      "sha256": "48616d8db762245e90ac0a84756fd2a0251b3ae40306c5605ca0869657d3c4bf",
+      "fps_avg": 30.01495762007645,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 2052,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "020fb8c8-9a194dc3",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/020fb8c8-9a194dc3.mov",
+      "size_bytes": 20047146,
+      "sha256": "57d830bac8ad0d16a03201591333ab4994133082a3c685c64c589f13625cc550",
+      "fps_avg": 30.16385302879841,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 858,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0210896b-e54d48dc",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0210896b-e54d48dc.mov",
+      "size_bytes": 20016834,
+      "sha256": "0870d0a4a31f46d05654b866cac878f717efe3a5463e52a7936710da263123c2",
+      "fps_avg": 30.02355274575431,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 895,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02162021-ff5ac522",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02162021-ff5ac522.mov",
+      "size_bytes": 21156005,
+      "sha256": "4266d4094dc07000e2f88da481bc6e1b6fc50e72679e645ee8b4498e6c88d030",
+      "fps_avg": 29.800498753117207,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1286,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02172d82-354cb4fd",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02172d82-354cb4fd.mov",
+      "size_bytes": 22225520,
+      "sha256": "113d090c9c4247a942f79955e3988555f681682ed76a63013d56b42e83ee7616",
+      "fps_avg": 30.02978160158835,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 1673,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02188a44-65ad27f3",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02188a44-65ad27f3.mov",
+      "size_bytes": 19759237,
+      "sha256": "e2b81662bfcc7e01a65891d35de183f71e3e9e2242f2c0578f655235a21b249f",
+      "fps_avg": 30.002481594838283,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1674,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "021c4a16-f4d18785",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/021c4a16-f4d18785.mov",
+      "size_bytes": 19712356,
+      "sha256": "87021467914a6b8dbf128e0fe4ecdb9b2a63517effecd8c30c59e456d2b41f70",
+      "fps_avg": 30.028705745309313,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 2607,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02480aee-cb6bb3a5",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02480aee-cb6bb3a5.mov",
+      "size_bytes": 20819817,
+      "sha256": "eea504e444ab9ea3976257e5a275ae317ac0ecddb6ad4b6409db776550c4dc87",
+      "fps_avg": 30.12208288348144,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1878,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0248ab56-904b42ad",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0248ab56-904b42ad.mov",
+      "size_bytes": 19131631,
+      "sha256": "fe2e2d978d394089403857803dec4dc6b4d8f3ea29352efae5324b329a551b38",
+      "fps_avg": 30.073380042286804,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1620,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "024b275b-bbfdf5ee",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/024b275b-bbfdf5ee.mov",
+      "size_bytes": 21100915,
+      "sha256": "b9389505fdb2214de78941dec0220f01ad8fba28e0eed2b389ab45e61bcd2063",
+      "fps_avg": 30.204863424383745,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2819,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02521568-dd1da95c",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02521568-dd1da95c.mov",
+      "size_bytes": 20057128,
+      "sha256": "dd71bb463d963fef51db826e37528393b957c9f63321de0b8fb1eb1fbf558269",
+      "fps_avg": 30.145745961881826,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 196,
+      "car_boxes": 1742,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02522f64-cf006cd5",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02522f64-cf006cd5.mov",
+      "size_bytes": 19860670,
+      "sha256": "895f4bc76f6247a124929d552341e17383e70b42382a3323e11ff0cb7d552b74",
+      "fps_avg": 30.014982520392874,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2263,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0263b4e2-51a4b4ff",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0263b4e2-51a4b4ff.mov",
+      "size_bytes": 20063888,
+      "sha256": "e47a47265dfed850aca57547d0a1698ba687a7c0a20d6d748a5d9b6ea3c26f71",
+      "fps_avg": 30.152258923371328,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1693,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "026e1e49-771df1d9",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/026e1e49-771df1d9.mov",
+      "size_bytes": 19248122,
+      "sha256": "3e828cbf13172c6611c492826be1c1f39932549a7551d15bf3c15a41f0d59273",
+      "fps_avg": 30.184907546226885,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 2324,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "026eb2d9-a96c8aa4",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/026eb2d9-a96c8aa4.mov",
+      "size_bytes": 21028366,
+      "sha256": "18f3d467d322d03ae97a5efbb7d66dbb5d35d2dd4d66964b04ebeea15bd56c84",
+      "fps_avg": 29.848396984508327,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1599,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02739c8c-301f2697",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02739c8c-301f2697.mov",
+      "size_bytes": 20383155,
+      "sha256": "5cf52a7406f208e9441e14c07eeb2249556519ea4f0db12bf18b1b258833855a",
+      "fps_avg": 30.05246065450912,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1607,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "027bf15c-291f196d",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/027bf15c-291f196d.mov",
+      "size_bytes": 21240115,
+      "sha256": "e17f2bf1ea76d2883c99546fb7162b431e5f7a5f590d95769f044d6437f2a5af",
+      "fps_avg": 30.054690089492873,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 203,
+      "car_boxes": 3151,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02927def-14c4c3cb",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02927def-14c4c3cb.mov",
+      "size_bytes": 20150085,
+      "sha256": "377167e594e5d1b9518eddf080a41ad5944b8033050762cdd437a234ea712c23",
+      "fps_avg": 30.201924268076144,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 1271,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "0293224c-713dea0d",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/0293224c-713dea0d.mov",
+      "size_bytes": 20325519,
+      "sha256": "622852e1e61824ffb957ace7aa55903f965203b79e9cb2044f2e4093daf955c3",
+      "fps_avg": 30.003734904759927,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 200,
+      "car_boxes": 924,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "029968d6-9eea29a2",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/029968d6-9eea29a2.mov",
+      "size_bytes": 21052429,
+      "sha256": "620ef4f1ff34fe7a8130f1d10bbaae2572033e85552276f46fea2404c9558810",
+      "fps_avg": 30.06454816285998,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 203,
+      "car_boxes": 2390,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "029aad77-628b9c45",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/029aad77-628b9c45.mov",
+      "size_bytes": 21790259,
+      "sha256": "251f24524f5eebe510363192b61b4fc42cbda5d954760366e4b785e0ca6f382b",
+      "fps_avg": 30.150753768844222,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 3032,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "029ae5bb-c8d1a298",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/029ae5bb-c8d1a298.mov",
+      "size_bytes": 17801505,
+      "sha256": "39e011355129793eacee8a03ee0ee9f9c05d7128c3a66dad7fc45b3bb36188f9",
+      "fps_avg": 30.03237320494729,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 3472,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02a17951-3d88d95e",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02a17951-3d88d95e.mov",
+      "size_bytes": 20352188,
+      "sha256": "e4872a3b3a978d00f8c982118c514a2ca50b4506ff4fc400929d36dbe4d0d3ef",
+      "fps_avg": 30.078563411896745,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1920,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02a7e164-14ba1015",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02a7e164-14ba1015.mov",
+      "size_bytes": 20972576,
+      "sha256": "45cf3d0372eb4b0a80db2be734a7a6e81d0ea37553a52be730c74c8e0f7df0d2",
+      "fps_avg": 30.001247972045427,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1118,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02a88cd9-89d23c1c",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02a88cd9-89d23c1c.mov",
+      "size_bytes": 10463765,
+      "sha256": "64b3eb286a02a5457c847401d6d36b028fa1c4c065ea637ff6af2f3701a0db5d",
+      "fps_avg": 30.176193233518074,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 102,
+      "car_boxes": 1030,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02b0443e-25d7d385",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02b0443e-25d7d385.mov",
+      "size_bytes": 20557512,
+      "sha256": "4aa34b00f7ddbacb41cd7d14296a22bc53e27c779832ba5efc334fb14d7e59e3",
+      "fps_avg": 30.109853528628495,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1206,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02b1d9ff-845e5ab3",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02b1d9ff-845e5ab3.mov",
+      "size_bytes": 19591092,
+      "sha256": "6e7112d1cb355b60a82e9f195e5313babe055c3a43a4090b3fd64ff6c9ab7e52",
+      "fps_avg": 30.078628780629863,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": -90,
+      "labeled_frames": 202,
+      "car_boxes": 1056,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    },
+    {
+      "video_id": "02b7b9ee-066c81db",
+      "split": "test",
+      "relative_path": "bdd100k_videos_train_00/bdd100k/videos/train/02b7b9ee-066c81db.mov",
+      "size_bytes": 20354605,
+      "sha256": "99827b066fdc0445ca58db540ea18dc2124b3ad8d914613318d7a5eaf1dd0ba2",
+      "fps_avg": 30.127086967356092,
+      "coded_size": [
+        720,
+        1280
+      ],
+      "display_size": [
+        1280,
+        720
+      ],
+      "rotation": 90,
+      "labeled_frames": 202,
+      "car_boxes": 1323,
+      "frame_index_map_hypothesis": "5fps_sample_index_candidate"
+    }
+  ],
+  "audit": {
+    "gates": [
+      {
+        "name": "video_inventory_exact_expected_count",
+        "pass": true,
+        "detail": "1000"
+      },
+      {
+        "name": "no_duplicate_video_ids",
+        "pass": true,
+        "detail": "0"
+      },
+      {
+        "name": "fixed_reference_65_train_7_val",
+        "pass": true,
+        "detail": "missing_train=[]; missing_val=[]"
+      },
+      {
+        "name": "split_sizes_and_no_overlap",
+        "pass": true,
+        "detail": ""
+      },
+      {
+        "name": "ffprobe_selected_172",
+        "pass": true,
+        "detail": "bad=[]"
+      },
+      {
+        "name": "ffprobe_all_inventory",
+        "pass": true,
+        "detail": "failed=0"
+      },
+      {
+        "name": "test_label_coverage",
+        "pass": true,
+        "detail": "bad=[]"
+      },
+      {
+        "name": "decode_3_points_each",
+        "pass": true,
+        "detail": "failed=0"
+      },
+      {
+        "name": "source_sha256_172",
+        "pass": true,
+        "detail": "hashed=172"
+      },
+      {
+        "name": "annotation_file_sha256",
+        "pass": true,
+        "detail": ""
+      },
+      {
+        "name": "preview_rendered",
+        "pass": true,
+        "detail": "preview_ok=6/6"
+      },
+      {
+        "name": "bbox_parsing_sample",
+        "pass": true,
+        "detail": "object_rows_checked=1157; malformed=0; empty_rows_sample=3"
+      },
+      {
+        "name": "selected_172_annotation_integrity",
+        "pass": true,
+        "detail": "malformed_selected=0; empty_selected=383"
+      }
+    ],
+    "full_decode_enabled": false,
+    "decode_sample_fractions": [
+      0.06,
+      0.5,
+      0.94
+    ],
+    "bbox_sample_checked": 1157,
+    "bbox_sample_bad": 0,
+    "bbox_sample_empty": 3,
+    "annotation_empty_rows_all": 3930,
+    "annotation_malformed_rows_all": 0,
+    "selected_malformed_annotation_rows": 0,
+    "manual_qa_confirmed": true
+  },
+  "manifest_sha256": "8649c879eb8202d920979d3f5b50ec9cae585587587b33e9dc6abc24ca30559c"
+}
