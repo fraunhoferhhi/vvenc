@@ -9,6 +9,9 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <cstdint>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -59,6 +62,36 @@ public:
     }
     if( !area ) throw std::runtime_error("RL-RC-DoT: empty action overlap");
     return int(std::llround(double(weighted) / double(area)));
+  }
+
+
+  static bool traceEnabled()
+  {
+    const char* path = std::getenv("VVENC_DOT_QP_TRACE_FILE");
+    return enabled() && path && path[0] != '\0';
+  }
+
+  // Called ONLY after xCompressCtu selects its winning CU tree.
+  // CTU-level min/max/area-mean QP are audit data, NOT QP control granularity.
+  static void traceFinalCtu( int poc, unsigned ctuAddr, unsigned x,
+                             unsigned y, int requestedDelta, unsigned numLumaCus,
+                             int minQp, int maxQp, double areaWeightedQp )
+  {
+    if( !traceEnabled() ) return;
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+    static std::ofstream output;
+    if( !output.is_open() )
+    {
+      output.open(std::getenv("VVENC_DOT_QP_TRACE_FILE"),std::ios::out|std::ios::trunc);
+      if( !output ) throw std::runtime_error("RL-RC-DoT: cannot open final QP trace");
+      output << "poc,ctu,x,y,requested_delta,num_luma_cus,min_qp,max_qp,area_mean_qp\n";
+    }
+    output << poc << ',' << ctuAddr << ',' << x << ',' << y << ','
+           << requestedDelta << ',' << numLumaCus << ','
+           << minQp << ',' << maxQp << ',' << std::setprecision(9)
+           << areaWeightedQp << '\n';
+    output.flush();
   }
 
 private:

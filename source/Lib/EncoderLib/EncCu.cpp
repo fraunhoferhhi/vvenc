@@ -533,6 +533,45 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
       nLumaCus, nLumaCus ? minLumaQp : -1, nLumaCus ? maxLumaQp : -1 );
   }
 
+  // Instrument only the winning CU tree after xCompressCtu has completed.
+  // Never infer actual CU QP from requested action alone.
+  if( rl::DotAction::traceEnabled() && !pic->isPreAnalysis )
+  {
+    int minLumaQp = MAX_QP, maxLumaQp = -MAX_QP;
+    unsigned nLumaCus = 0;
+    double weightedQp = 0.0, validLumaArea = 0.0;
+    if( m_wppMutex ) m_wppMutex->lock();
+    for( const CodingUnit* cu : cs.cus )
+    {
+      if( cu->chType != CH_L || cu->lumaPos().x < pos.x ||
+          cu->lumaPos().x >= pos.x + (int)pcv.maxCUSize ||
+          cu->lumaPos().y < pos.y ||
+          cu->lumaPos().y >= pos.y + (int)pcv.maxCUSize )
+        continue;
+      const unsigned xx = (unsigned) cu->lumaPos().x, yy = (unsigned) cu->lumaPos().y;
+      if( xx >= (unsigned)cs.area.Y().width || yy >= (unsigned)cs.area.Y().height ) continue;
+      const unsigned ww = std::min( (unsigned)cu->lumaSize().width, (unsigned)cs.area.Y().width - xx );
+      const unsigned hh = std::min( (unsigned)cu->lumaSize().height, (unsigned)cs.area.Y().height - yy );
+      const double area = double(ww) * hh;
+      nLumaCus++;
+      minLumaQp = std::min(minLumaQp, (int)cu->qp);
+      maxLumaQp = std::max(maxLumaQp, (int)cu->qp);
+      weightedQp += area * (int)cu->qp;
+      validLumaArea += area;
+    }
+    if( m_wppMutex ) m_wppMutex->unlock();
+    const unsigned lumaWidth = std::min((unsigned)pcv.maxCUSize,
+        (unsigned)cs.area.Y().width - (unsigned)pos.x);
+    const unsigned lumaHeight = std::min((unsigned)pcv.maxCUSize,
+        (unsigned)cs.area.Y().height - (unsigned)pos.y);
+    const int delta = rl::DotAction::deltaFor(slice->poc,
+        (unsigned)pos.x,(unsigned)pos.y,lumaWidth,lumaHeight);
+    rl::DotAction::traceFinalCtu(slice->poc,(unsigned)ctuRsAddr,
+        (unsigned)pos.x,(unsigned)pos.y,delta,nLumaCus,
+        nLumaCus?minLumaQp:-1,nLumaCus?maxLumaQp:-1,
+        validLumaArea?weightedQp/validLumaArea:-1.0);
+  }
+
   m_CABACEstimator->resetBits();
   m_CABACEstimator->coding_tree_unit( cs, ctuArea, prevQP, ctuRsAddr, true, true );
 

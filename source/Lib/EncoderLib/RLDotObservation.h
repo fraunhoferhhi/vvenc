@@ -83,8 +83,9 @@ public:
     const double lastPicBits = rc && rc->encRCSeq ? double(rc->encRCSeq->rlLastPictureBits) : 0.0;
     const double lastPicQP = rc && rc->encRCSeq && rc->encRCSeq->rlLastPictureQP >= 0
                               ? double(rc->encRCSeq->rlLastPictureQP) : double(slice.sliceQp);
-    // G03 and G04 are previous completed-picture *encoder* statistics, not
-    // exact Annex-B AU bits or per-block QP. G06-G12 remain unavailable.
+    // G03/G04 and G06-G08 now contain causal completed-picture encoder
+    // statistics. G06–G08 are luma area-weighted CU groups (not MB counts).
+    // G09–G12 still require verified final-picture/syntax instrumentation.
     // Emit DOT_PROXY until the full paper feature mapping is implemented.
     const std::array<double,16> g = {{
       double(slice.sliceQp)/63.0,
@@ -92,7 +93,10 @@ public:
       fps > 0 && target > 0 ? lastPicBits / (target/fps) : 0.0,
       lastPicQP/63.0,
       meanQp/63.0,
-      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+      rc && rc->encRCSeq ? rc->encRCSeq->rlLastPctIntra : 0.0,
+      rc && rc->encRCSeq ? rc->encRCSeq->rlLastPctInter : 0.0,
+      rc && rc->encRCSeq ? rc->encRCSeq->rlLastPctSkip  : 0.0,
+      0.0, 0.0, 0.0, 0.0,
       double(completed)/frames,
       target > 0 ? std::tanh(std::log(std::max(1.0,codedBps)/target)) : 0.0,
       slice.isIntra() ? 1.0 : 0.0,

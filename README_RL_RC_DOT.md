@@ -20,7 +20,7 @@ Baseline: VVenC v1.14.0 at 9428ea8636ae7f443ecde89999d16b2dfc421524.
 ## Scientific status: PROTOTYPE, not full reproduction
 
 The encoder writes DOT_PROXY, not DOT_STATE, to make gaps explicit. The
-current 16-entry observation has zero placeholders for G06-G12.
+current 16-entry observation has zero placeholders for G09-G12.
 L01 is luma-only AC variance; L02 is spatial prediction error rather than
 true lookahead intra SATD; L03 is temporal SAD rather than MB-tree propagated
 cost; L04 is QPA scale proxy rather than x264 inverse qscale. G15 is an
@@ -43,6 +43,11 @@ block target: one-to-one matched YOLO predictions score 1; unmatched boxes
 score 0, with occupied-cell masks including zero-reward false positives.
 This activates auxiliary training but the exact original block-target
 mapping remains unverified; it is NOT yet paper-faithful.
+
+G06/G07/G08 now reflect area-weighted, non-overlapping winning VVC luma
+CU classes (Intra-like / Inter non-Skip / Skip) in the previous completed
+picture, with IBC/Palette grouped into Intra-like. The fields remain in a
+DOT_PROXY observation until all 16+4 features are validated.
 Full-video 65-train/7-val/100-test orchestration, frozen-YOLO collection
 for this NEW 16+4 bridge, and final BD-rate results remain unvalidated.
 
@@ -55,6 +60,11 @@ for this NEW 16+4 bridge, and final BD-rate results remain unvalidated.
     python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_contract.py' -v
     python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_agent.py' -v
     python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_auxiliary.py' -v
+
+Export VVENC_DOT_QP_TRACE_FILE=/tmp/dot_final_qp.csv to audit winning
+luma CU min/max and area-weighted QP for each POC+CTU. A trace without
+VVENC_DOT_ACTION_DIR is disabled, and the result MUST be checked against
+the full POC×CTU grid before making claims about spatial control.
 
 ## Smoke test protocol
 
