@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import gymnasium as gym
 from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv
-from scripts.rl_rc_dot.model import OBSERVATIONS,ACTIONS,AuxPPO,AuxiliaryLabels,build
+from scripts.rl_rc_dot.model import OBSERVATIONS,ACTIONS,AuxPPO,AuxiliaryLabels,build,clip_actor_critic_gradients
 from scripts.rl_rc_dot.method import action_map,wire_map
 
 torch.set_num_threads(2)
@@ -40,6 +40,10 @@ class IntegratedModel(unittest.TestCase):
             model.learn(8)
             self.assertEqual(model.completed_rollouts,1)
             self.assertEqual(model.trained_frames,8)
+            for metric in ("explained_variance_defined","return_mean","return_rmse",
+                           "actor_gradient_norm","critic_gradient_norm","auxiliary_target_mean"):
+                self.assertIn(metric,model.last_update_metrics)
+            self.assertLessEqual(model.last_update_metrics["auxiliary_loss"],1.0)
             model.assert_checkpoint_finite()
         finally:model.get_env().close()
     def test_sb3_update_checkpoint_reload_and_fresh_resume(self):
@@ -66,6 +70,34 @@ class IntegratedModel(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"Nonfinite"):model.train()
             for k,v in saved.items():self.assertTrue(torch.equal(v,model.policy.state_dict()[k]))
         finally:model.get_env().close()
+    def test_isolated_critic_gradients_and_bounded_auxiliary_output(self):
+        model=build(DummyVecEnv([Fixture]),7,n_steps=4,batch_size=4,n_epochs=1,device="cpu")
+        try:
+            self.assertFalse(model.policy.share_features_extractor)
+            self.assertIsNot(model.policy.pi_features_extractor,model.policy.vf_features_extractor)
+            x=torch.ones((2,64))*1000
+            with torch.no_grad():
+                predictions=model.policy.reward_head(x)
+            self.assertTrue(((predictions>=0)&(predictions<=1)).all())
+            actor=model.policy.action_net.weight
+            critic=model.policy.value_net.weight
+            model.policy.optimizer.zero_grad()
+            actor.grad=torch.ones_like(actor)*1000
+            critic.grad=torch.ones_like(critic)*1000000
+            a,c=clip_actor_critic_gradients(model.policy,0.5)
+            self.assertGreater(a,0.5)
+            self.assertGreater(c,a)
+            self.assertLessEqual(actor.grad.norm().item(),0.5001)
+            self.assertLessEqual(critic.grad.norm().item(),0.5001)
+            # A critic-only loss must not touch the actor feature extractor.
+            model.policy.optimizer.zero_grad()
+            obs={"global":torch.ones((1,16)),"mb":torch.ones((1,4,20,30))}
+            value=model.policy.value_net(model.policy.vf_features_extractor(obs))
+            value.square().mean().backward()
+            self.assertTrue(any(p.grad is not None for p in model.policy.vf_features_extractor.parameters()))
+            self.assertTrue(all(p.grad is None for p in model.policy.pi_features_extractor.parameters()))
+        finally:model.get_env().close()
+
     def test_target_kl_guard_reports_rejected_minibatch(self):
         model=build(DummyVecEnv([Fixture]),7,n_steps=4,batch_size=4,n_epochs=10,
                     learning_rate=1e-3,target_kl=1e-10,device="cpu")

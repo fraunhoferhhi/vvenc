@@ -1,4 +1,4 @@
-"""Stable-Baselines3 2.7.0 PPO + the paper's 0.1 block-reward MSE.
+"""Stable-Baselines3 2.7.0 PPO with isolated critic and bounded auxiliary target.
 
 The PPO optimization follows SB3's MIT-licensed PPO update. Environment,
 buffer and finite-value checks bind rewards to the action consumed by VVenC.
@@ -20,6 +20,30 @@ from .method import action_map,wire_map
 OBSERVATIONS=spaces.Dict({"global":spaces.Box(-np.inf,np.inf,(16,),dtype=np.float32),
                          "mb":spaces.Box(-np.inf,np.inf,(4,20,30),dtype=np.float32)})
 ACTIONS=spaces.Box(-10,10,(35,),dtype=np.float32)
+
+def clip_actor_critic_gradients(policy,max_norm):
+    """Clip independent policy+auxiliary and value branches independently.
+
+    One global SB3 clip norm suppresses actor gradients when unscaled critic
+    return-MSE gradients are orders of magnitude larger. Sharing either feature
+    extractor would re-introduce that coupling, so reject it explicitly.
+    """
+    actor_modules=(policy.pi_features_extractor,policy.mlp_extractor.policy_net,
+                   policy.action_net,policy.reward_head)
+    critic_modules=(policy.vf_features_extractor,policy.mlp_extractor.value_net,
+                    policy.value_net)
+    actor=[p for module in actor_modules for p in module.parameters() if p.requires_grad]
+    actor.append(policy.log_std)
+    critic=[p for module in critic_modules for p in module.parameters() if p.requires_grad]
+    actor_ids={id(p) for p in actor}
+    critic_ids={id(p) for p in critic}
+    all_ids={id(p) for p in policy.parameters() if p.requires_grad}
+    if actor_ids & critic_ids or len(actor_ids)!=len(actor) or len(critic_ids)!=len(critic) or actor_ids|critic_ids!=all_ids:
+        raise ValueError("Actor/Critic parameter groups overlap or omit trainable parameters")
+    a=nn.utils.clip_grad_norm_(actor,max_norm,error_if_nonfinite=True)
+    c=nn.utils.clip_grad_norm_(critic,max_norm,error_if_nonfinite=True)
+    return float(a.item()),float(c.item())
+
 
 def finite(name,*values):
     for value in values:
@@ -89,6 +113,8 @@ class AuxBuffer(DictRolloutBuffer):
 
 class AuxPPO(PPO):
     def __init__(self,*args,aux_loss_coef=.1,**kwargs):
+        if not np.isfinite(aux_loss_coef) or not 0<=aux_loss_coef<=1:
+            raise ValueError("Auxiliary MSE coefficient must be in [0,1]")
         self.aux_loss_coef=aux_loss_coef
         self.completed_rollouts=0
         self.trained_frames=0
@@ -97,7 +123,7 @@ class AuxPPO(PPO):
         super().__init__(*args,**kwargs)
     def _setup_model(self):
         super()._setup_model()
-        self.policy.reward_head=nn.Sequential(nn.Linear(64,128),nn.ReLU(),nn.Linear(128,600)).to(self.device)
+        self.policy.reward_head=nn.Sequential(nn.Linear(64,128),nn.ReLU(),nn.Linear(128,600),nn.Sigmoid()).to(self.device)
         self.policy.optimizer.add_param_group({"params":self.policy.reward_head.parameters()})
     def collect_rollouts(self,env,callback,rollout_buffer,n_rollout_steps):
         # PPO resets the buffer inside collect_rollouts; retain its wrapper
@@ -149,7 +175,11 @@ class AuxPPO(PPO):
                 predicted=values if clip_vf is None else data.old_values+(values-data.old_values).clamp(-clip_vf,clip_vf)
                 value_loss=F.mse_loss(predicted,data.returns)
                 entropy_loss=-entropy.mean() if entropy is not None else logp.mean()
-                auxiliary=F.mse_loss(self.policy.reward_head(self.policy.extract_features(data.observations)),data.auxiliary)
+                # Only the actor branch sees auxiliary gradients. The value branch must
+                # not be allowed to inflate shared features and auxiliary logits.
+                auxiliary_prediction=self.policy.reward_head(
+                    self.policy.pi_features_extractor(data.observations))
+                auxiliary=F.mse_loss(auxiliary_prediction,data.auxiliary)
                 loss=policy_loss+self.vf_coef*value_loss+self.ent_coef*entropy_loss+self.aux_loss_coef*auxiliary
                 log_ratio=logp-data.old_log_prob
                 kl=(torch.exp(log_ratio)-1-log_ratio).mean()
@@ -160,12 +190,17 @@ class AuxPPO(PPO):
                     break
                 self.policy.optimizer.zero_grad()
                 loss.backward()
-                norm=nn.utils.clip_grad_norm_(self.policy.parameters(),self.max_grad_norm,error_if_nonfinite=True)
+                actor_norm,critic_norm=clip_actor_critic_gradients(self.policy,self.max_grad_norm)
+                norm=float(np.hypot(actor_norm,critic_norm))
                 self.policy.optimizer.step()
                 self.assert_checkpoint_finite()
                 records.append({"loss":loss.item(),"policy_loss":policy_loss.item(),"value_loss":value_loss.item(),
                     "auxiliary_loss":auxiliary.item(),"entropy_loss":entropy_loss.item(),"approx_kl":kl.item(),
-                    "clip_fraction":((ratio-1).abs()>clip).float().mean().item(),"gradient_norm":norm.item()})
+                    "clip_fraction":((ratio-1).abs()>clip).float().mean().item(),"gradient_norm":norm,
+                    "actor_gradient_norm":actor_norm,"critic_gradient_norm":critic_norm,
+                    "auxiliary_prediction_mean":auxiliary_prediction.detach().mean().item(),
+                    "auxiliary_prediction_std":auxiliary_prediction.detach().std(unbiased=False).item(),
+                    "auxiliary_target_mean":data.auxiliary.mean().item()})
             self._n_updates+=1
             if time.monotonic()-heartbeat>=15:
                 print("PPO_OPTIMIZING",f"epoch={epoch+1}/{self.n_epochs}",f"optimizer_steps={len(records)}",flush=True)
@@ -183,14 +218,27 @@ class AuxPPO(PPO):
         self.last_update_metrics.update(policy_std=self.policy.log_std.exp().mean().item(),
             coarse_delta_mean=float(coarse.mean()),coarse_delta_std=float(coarse.std()),
             coarse_delta_saturated_fraction=float((np.abs(coarse)>=11.5).mean()))
-        for key,value in self.last_update_metrics.items():self.logger.record("train/"+key,value)
+        # Persist diagnostics to metrics/updates.jsonl (not only SB3's console logger).
+        old_values=self.rollout_buffer.values.flatten()
+        returns=self.rollout_buffer.returns.flatten()
+        ev=explained_variance(old_values,returns)
+        self.last_update_metrics.update(
+            explained_variance=float(ev) if np.isfinite(ev) else 0.0,
+            explained_variance_defined=int(np.isfinite(ev)),
+            old_value_mean=float(np.mean(old_values)),
+            old_value_std=float(np.std(old_values)),
+            return_mean=float(np.mean(returns)),
+            return_std=float(np.std(returns)),
+            return_rmse=float(np.sqrt(np.mean((returns-old_values)**2))),
+            advantage_mean=float(np.mean(self.rollout_buffer.advantages)),
+            advantage_std=float(np.std(self.rollout_buffer.advantages)))
+        for key,value in self.last_update_metrics.items():
+            if not np.isfinite(value):raise ValueError(f"Nonfinite diagnostic {key}")
+            self.logger.record("train/"+key,value)
         self.logger.record("train/std",self.policy.log_std.exp().mean().item())
-        ev=explained_variance(self.rollout_buffer.values.flatten(),self.rollout_buffer.returns.flatten())
-        if np.isfinite(ev):self.logger.record("train/explained_variance",float(ev))
-        self.logger.record("train/explained_variance_defined",int(np.isfinite(ev)))
 
 def build(env,seed,device="cpu",**options):
     if env.observation_space!=OBSERVATIONS or env.action_space!=ACTIONS:raise ValueError("Method space differs")
     return AuxPPO("MultiInputPolicy",AuxiliaryLabels(env),seed=seed,device=device,
                   policy_kwargs={"features_extractor_class":StatsCNNExtractor,"net_arch":[],
-                                 "share_features_extractor":True,"normalize_images":False},**options)
+                                 "share_features_extractor":False,"normalize_images":False},**options)

@@ -134,10 +134,12 @@ def ppo_options(args):
     """Validate and seal policy-update hyperparameters before constructing SB3."""
     if (not np.isfinite(args.ppo_learning_rate) or args.ppo_learning_rate<=0
             or args.ppo_epochs<1 or not np.isfinite(args.ppo_target_kl)
-            or args.ppo_target_kl<=0):
-        raise ValueError("PPO requires finite positive learning rate/target KL and at least one optimization epoch")
+            or args.ppo_target_kl<=0 or not np.isfinite(args.ppo_aux_loss_coef)
+            or not 0<=args.ppo_aux_loss_coef<=1):
+        raise ValueError("PPO requires finite positive learning rate/target KL, aux coefficient [0,1] and at least one optimization epoch")
     return {"learning_rate":float(args.ppo_learning_rate),
-            "n_epochs":int(args.ppo_epochs),"target_kl":float(args.ppo_target_kl)}
+            "n_epochs":int(args.ppo_epochs),"target_kl":float(args.ppo_target_kl),
+            "aux_loss_coef":float(args.ppo_aux_loss_coef)}
 
 def contract_for(spec):
     return {"schema":RUN_SCHEMA,"native_schema":SCHEMA,"source_fingerprint":source_fingerprint(),
@@ -145,7 +147,7 @@ def contract_for(spec):
             "encoder_sha256":digest(spec["encoder"]),"detector_weights_sha256":digest(spec["weights"]),
             "profile":"480x320_30fps_medium_ctu32_dqp2_fpp0_10bit_lookahead10",
             "frames":spec["frames"],"seed":spec["seed"],"workers":spec["workers"],"rollout_steps":spec["rollout_steps"],
-            "encoder_threads":spec["encoder_threads"],"algorithm":"stable-baselines3==2.7.0 PPO + 0.1 uniform block MSE; stabilized PPO update",
+            "encoder_threads":spec["encoder_threads"],"algorithm":"SB3 2.7.0 PPO; isolated actor/critic; per-branch gradient clip; bounded auxiliary reward",
             "ppo":spec["ppo"],
             "reward":"20*confidence_ordered_precision-abs(log(prefix_actual_bps/target_bps))",
             "rate_sampling":"uniform integer kbps [50,200]","action":"Gaussian35;clip10;tanh*12;bilinear20x30;native QG pooling",
@@ -163,6 +165,7 @@ def parser():
     p.add_argument("--ppo-learning-rate",type=float,default=3e-5,help="Conservative post-smoke PPO optimizer learning rate")
     p.add_argument("--ppo-epochs",type=int,default=3,help="Optimizer passes per PPO rollout")
     p.add_argument("--ppo-target-kl",type=float,default=0.05,help="Stop PPO epoch early above 1.5 times this approximate KL")
+    p.add_argument("--ppo-aux-loss-coef",type=float,default=0.1,help="Bounded block-reward MSE weight; set 0 for a controlled ablation")
     p.add_argument("--frames",type=int,default=0,help="0 = entire source clip; a limit is an explicitly reduced experiment")
     p.add_argument("--validation-frames",type=int,default=0)
     p.add_argument("--validation-videos",type=int,default=7)

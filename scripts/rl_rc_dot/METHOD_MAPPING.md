@@ -51,7 +51,7 @@ Training/reward still require the frozen detector.
 
 ## State and action definitions
 
-Globals use fixed scaling: QPs/63, POC/clip frames, completed bits/100000,
+Globals use fixed scaling: QPs/63, POC/clip frames, log1p(completed bits/100000),
 PSNR/60, tanh(rate error), type/2 and tanh(complexity/1500).
 For each local channel: log1p on energy/intra/propagation, then per-channel
 spatial z-score with epsilon1e-6. These normalization choices are explicit
@@ -67,6 +67,28 @@ QPA with the slice-QP reference; it is not a vanilla-parity assertion.
 CTU32 / DQPsubdiv2 limits coalescing compared with the old CTU128 path.
 Native legal CU/QG partition and zero-residual QP prediction still govern
 the effective signalling resolution. Final CU traces are the evidence.
+
+## Post-Trial gradient isolation (new source; new checkpoints)
+
+The 4,096-transition real-video Trial on the previous shared-backbone method
+reported auxiliary MSE rising 0.71 to 426.78 and global gradient norms up to
+220,549 before clipping. Direct inspection of policy weights against saved VVC
+states shows the 64-D shared latent magnitude and auxiliary predictions
+inflating while the critic learns large discounted returns. Global clipping of
+all branch gradients then suppresses policy/auxiliary updates relative to
+critic gradients. This is strong evidence of optimization interference, not
+proof that the reported bitrate/precision gains generalize.
+
+The new controlled architecture uses independent actor and critic CNN features,
+routes auxiliary gradients to the actor branch, clips each branch separately
+at the existing max_grad_norm and bounds the [0,1] auxiliary predictions by
+sigmoid. The 16-D cumulative-bit observation also uses log1p compression to
+avoid 30-plus-valued features dominating other normalized global inputs.
+**Unscaled task reward and rollout returns are deliberately unchanged.**
+The PPO update JSONL now includes explained variance, return/value statistics
+and per-branch gradient norms; aux_loss_coef is a sealed optional ablation.
+The change affects the policy architecture and input semantics, so OLD
+checkpoints are comparison evidence ONLY and cannot be resumed into this run.
 
 ## Reward, auxiliary target and PPO
 
@@ -91,7 +113,7 @@ learning_rate=3e-5, n_epochs=3, target_kl=0.05 (early-stop threshold is
 1.5 × target_kl). These are experiment-specific adaptations, **not claimed
 paper hyperparameters or proof of convergence**. The runner records the
 maximum attempted minibatch KL and whether the KL guard stopped optimization;
-the checkpoint/resume contract seals these settings. The shared CNN is
+the checkpoint/resume contract seals these settings. The actor and critic now use *independent* CNN feature extractors; the CNN is
 3×3,3×3,4×4, stride1, channels16/32/32;
 flatten +16 globals →128 →64; Gaussian actor and value head use this latent;
 auxiliary head is64 →128 →600. Intermediate widths/coarse5×7 action follow

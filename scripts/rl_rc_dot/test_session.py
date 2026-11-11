@@ -17,9 +17,10 @@ class Session(unittest.TestCase):
         from scripts.rl_rc_dot.session import parser,ppo_options
         args=parser().parse_args(["--input-root","data","--encoder","enc","--decoder","dec",
                                   "--yolo-repo","yolo","--weights","weights","--output","run"])
-        self.assertEqual(ppo_options(args),{"learning_rate":3e-5,"n_epochs":3,"target_kl":0.05})
+        self.assertEqual(ppo_options(args),{"learning_rate":3e-5,"n_epochs":3,"target_kl":0.05,"aux_loss_coef":0.1})
         for field,bad in (("ppo_learning_rate",0),("ppo_learning_rate",float("nan")),
-                          ("ppo_epochs",0),("ppo_target_kl",-0.1),("ppo_target_kl",float("inf"))):
+                          ("ppo_epochs",0),("ppo_target_kl",-0.1),("ppo_target_kl",float("inf")),
+                          ("ppo_aux_loss_coef",-0.1),("ppo_aux_loss_coef",float("nan")),("ppo_aux_loss_coef",1.1)):
             original=getattr(args,field);setattr(args,field,bad)
             with self.assertRaisesRegex(ValueError,"PPO requires"):ppo_options(args)
             setattr(args,field,original)
@@ -30,7 +31,7 @@ class Session(unittest.TestCase):
         spec={"encoder":"enc","weights":"weights","frames":0,"seed":7,"workers":2,
               "rollout_steps":64,"encoder_threads":2,"validation_videos":2,
               "validation_rates":[50,120],"validation_frames":64,
-              "ppo":{"learning_rate":3e-5,"n_epochs":3,"target_kl":0.05}}
+              "ppo":{"learning_rate":3e-5,"n_epochs":3,"target_kl":0.05,"aux_loss_coef":0.1}}
         with patch("scripts.rl_rc_dot.session.digest",return_value="test-hash"), \
              patch("scripts.rl_rc_dot.session.source_fingerprint",return_value="source"):
             first=contract_for(spec)

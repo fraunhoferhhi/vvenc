@@ -28,6 +28,13 @@ class Method(unittest.TestCase):
         reward,labels,m=score([],[],120000,30,120000)
         self.assertEqual(reward,0);self.assertEqual(m["precision"],0);self.assertEqual(labels.sum(),0)
         with self.assertRaises(ValueError):score([],[],0,1,120000)
+    def test_cumulative_bits_use_bounded_scale_not_unbounded_linear_value(self):
+        g=[0.]*16
+        g[2]=3_500_000
+        event={"schema":SCHEMA,"global":g,"maps":np.zeros((4,600)).tolist(),
+               "history_poc":-1,"poc":0,"lookahead_last_poc":0}
+        self.assertAlmostEqual(observation(event,1200)["global"][2],np.log1p(35),places=5)
+
     def test_completed_history_cannot_silently_have_zero_modes(self):
         event={"schema":SCHEMA,"global":[0.]*16,"maps":np.zeros((4,600)).tolist(),
                "history_poc":0,"poc":1,"lookahead_last_poc":3}

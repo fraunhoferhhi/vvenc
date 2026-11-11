@@ -23,7 +23,7 @@ def observation(event,frames):
         raise ValueError("Completed history has no valid mode fractions")
     g[[0,3,4]]/=63
     g[1]/=frames
-    g[2]/=100000
+    g[2]=np.log1p(max(0.,g[2])/100000)
     g[8]/=60
     g[13]=np.tanh(g[13])
     g[14]/=2
