@@ -117,10 +117,10 @@ class PPOTrainer:
                 if chosen:
                     targets=torch.stack([steps[idx[j].item()].aux_target for j in chosen]).float()
                     mask=torch.stack([steps[idx[j].item()].aux_mask for j in chosen]).float()
-                    if mask.sum().item()>0:
-                        # Downweight unoccupied cells rather than removing them,
-                        # matching the public reproduction's auxiliary weighting.
-                        weights=mask+self.aux_empty_weight*(1.-mask)
+                    # Empty minibatches still supervise zero-valued cells when
+                    # aux_empty_weight > 0. Only skip a genuinely zero weight.
+                    weights=mask+self.aux_empty_weight*(1.-mask)
+                    if weights.sum().item()>0:
                         loss=loss+self.aux_weight*(((aux[chosen]-targets).square()*weights).sum()/weights.sum())
                 self.opt.zero_grad()
                 loss.backward()
@@ -128,3 +128,4 @@ class PPOTrainer:
                 self.opt.step()
                 losses.append(loss.detach().item())
         return {"loss":sum(losses)/len(losses),"optimizer_steps":len(losses),"transitions":len(steps)}
+
