@@ -130,13 +130,23 @@ class SaveAndValidate(BaseCallback):
     def _on_training_end(self):
         self.synchronize(force_validation=True)
 
+def ppo_options(args):
+    """Validate and seal policy-update hyperparameters before constructing SB3."""
+    if (not np.isfinite(args.ppo_learning_rate) or args.ppo_learning_rate<=0
+            or args.ppo_epochs<1 or not np.isfinite(args.ppo_target_kl)
+            or args.ppo_target_kl<=0):
+        raise ValueError("PPO requires finite positive learning rate/target KL and at least one optimization epoch")
+    return {"learning_rate":float(args.ppo_learning_rate),
+            "n_epochs":int(args.ppo_epochs),"target_kl":float(args.ppo_target_kl)}
+
 def contract_for(spec):
     return {"schema":RUN_SCHEMA,"native_schema":SCHEMA,"source_fingerprint":source_fingerprint(),
             "dataset_sha256":digest(ASSETS/"dataset_lock.json"),"baseline_lock_sha256":digest(ASSETS/"baseline_lock.json"),
             "encoder_sha256":digest(spec["encoder"]),"detector_weights_sha256":digest(spec["weights"]),
             "profile":"480x320_30fps_medium_ctu32_dqp2_fpp0_10bit_lookahead10",
             "frames":spec["frames"],"seed":spec["seed"],"workers":spec["workers"],"rollout_steps":spec["rollout_steps"],
-            "encoder_threads":spec["encoder_threads"],"algorithm":"stable-baselines3==2.7.0 PPO defaults + 0.1 uniform block MSE",
+            "encoder_threads":spec["encoder_threads"],"algorithm":"stable-baselines3==2.7.0 PPO + 0.1 uniform block MSE; stabilized PPO update",
+            "ppo":spec["ppo"],
             "reward":"20*confidence_ordered_precision-abs(log(prefix_actual_bps/target_bps))",
             "rate_sampling":"uniform integer kbps [50,200]","action":"Gaussian35;clip10;tanh*12;bilinear20x30;native QG pooling",
             "validation":{"videos":spec["validation_videos"],"rates":spec["validation_rates"],"frames":spec["validation_frames"]}}
@@ -150,6 +160,9 @@ def parser():
     p.add_argument("--total-timesteps",type=int,default=20_000_000)
     p.add_argument("--additional-timesteps",type=int,default=0,help="Optional session interaction budget, capped by total-timesteps")
     p.add_argument("--rollout-steps",type=int,default=2048)
+    p.add_argument("--ppo-learning-rate",type=float,default=3e-5,help="Conservative post-smoke PPO optimizer learning rate")
+    p.add_argument("--ppo-epochs",type=int,default=3,help="Optimizer passes per PPO rollout")
+    p.add_argument("--ppo-target-kl",type=float,default=0.05,help="Stop PPO epoch early above 1.5 times this approximate KL")
     p.add_argument("--frames",type=int,default=0,help="0 = entire source clip; a limit is an explicitly reduced experiment")
     p.add_argument("--validation-frames",type=int,default=0)
     p.add_argument("--validation-videos",type=int,default=7)
@@ -175,7 +188,10 @@ def main():
             or a.max_hours<0 or a.reserve_minutes<0):p.error("Invalid training budget or configuration")
     if importlib.metadata.version("stable-baselines3")!="2.7.0":raise RuntimeError("Install stable-baselines3==2.7.0")
     torch.set_num_threads(2)
+    try:ppo=ppo_options(a)
+    except ValueError as error:p.error(str(error))
     spec={k:str(v.resolve()) if isinstance(v,Path) else v for k,v in vars(a).items()}
+    spec["ppo"]=ppo
     spec["gpu_ids"]=[v.strip() for v in a.gpu_ids.split(",") if v.strip()]
     spec["validation_rates"]=[int(v) for v in a.validation_rates.split(",")]
     if not spec["validation_rates"] or len(set(spec["validation_rates"]))!=len(spec["validation_rates"]) or any(v not in (50,80,120,160,200) for v in spec["validation_rates"]):
@@ -216,7 +232,7 @@ def main():
         env=SubprocVecEnv([partial(make_env,spec,rank) for rank in range(a.workers)],start_method="spawn")
         if a.mode=="resume":model,_=load_resume(output,contract,env,a.ppo_device)
         else:
-            model=build(env,a.seed,a.ppo_device,n_steps=a.rollout_steps,verbose=1)
+            model=build(env,a.seed,a.ppo_device,n_steps=a.rollout_steps,verbose=1,**spec["ppo"])
             for rank in range(a.workers):env.env_method("seed_sampler",a.seed+rank,indices=rank)
             env._reset_seeds()
         callback=SaveAndValidate(spec,contract,deadline)

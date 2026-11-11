@@ -134,6 +134,7 @@ class AuxPPO(PPO):
                 if (logp-data.old_log_prob).abs().max().item()>1e-3 or (values.flatten()-data.old_values).abs().max().item()>1e-3:
                     raise ValueError("Off-policy rollout; no update performed")
         records=[]
+        observed_kl=[]
         stop=False
         heartbeat=time.monotonic()
         for epoch in range(self.n_epochs):
@@ -153,6 +154,7 @@ class AuxPPO(PPO):
                 log_ratio=logp-data.old_log_prob
                 kl=(torch.exp(log_ratio)-1-log_ratio).mean()
                 finite("PPO objective",ratio,loss,kl)
+                observed_kl.append(float(kl.item()))
                 if self.target_kl is not None and kl.item()>1.5*self.target_kl:
                     stop=True
                     break
@@ -174,7 +176,9 @@ class AuxPPO(PPO):
         self.trained_frames+=self.n_steps*self.n_envs
         self.last_update_metrics={key:float(np.mean([r[key] for r in records])) for key in records[0]}
         self.last_update_metrics.update(optimizer_steps=len(records),completed_rollouts=self.completed_rollouts,
-                                        trained_frames=self.trained_frames,num_timesteps=self.num_timesteps)
+                                        trained_frames=self.trained_frames,num_timesteps=self.num_timesteps,
+                                        max_approx_kl_observed=float(max(observed_kl)),
+                                        stopped_by_target_kl=int(stop),target_kl=float(self.target_kl or 0.0))
         coarse=12*np.tanh(np.clip(self.rollout_buffer.actions,-10,10))
         self.last_update_metrics.update(policy_std=self.policy.log_std.exp().mean().item(),
             coarse_delta_mean=float(coarse.mean()),coarse_delta_std=float(coarse.std()),

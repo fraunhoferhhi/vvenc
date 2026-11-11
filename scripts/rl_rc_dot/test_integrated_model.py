@@ -66,6 +66,20 @@ class IntegratedModel(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"Nonfinite"):model.train()
             for k,v in saved.items():self.assertTrue(torch.equal(v,model.policy.state_dict()[k]))
         finally:model.get_env().close()
+    def test_target_kl_guard_reports_rejected_minibatch(self):
+        model=build(DummyVecEnv([Fixture]),7,n_steps=4,batch_size=4,n_epochs=10,
+                    learning_rate=1e-3,target_kl=1e-10,device="cpu")
+        try:
+            model.learn(4)
+            metrics=model.last_update_metrics
+            self.assertEqual(metrics["completed_rollouts"],1)
+            self.assertEqual(metrics["stopped_by_target_kl"],1)
+            self.assertGreater(metrics["max_approx_kl_observed"],1.5e-10)
+            self.assertGreaterEqual(metrics["max_approx_kl_observed"],metrics["approx_kl"])
+            self.assertLess(metrics["optimizer_steps"],10)
+            model.assert_checkpoint_finite()
+        finally:model.get_env().close()
+
     def test_wrong_consumed_map_is_rejected_before_training(self):
         model=build(DummyVecEnv([lambda:Fixture(True)]),7,n_steps=4,batch_size=4,n_epochs=1,device="cpu")
         try:

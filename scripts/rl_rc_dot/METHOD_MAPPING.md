@@ -83,8 +83,16 @@ Empty cells have target0 and **uniform** MSE weight. False positives remain
 supervised at0. This label placement/matching convention is disclosed; exact
 author block-assignment code is unavailable.
 
-PPO is SB3 v2.7.0 with its defaults (including GAE), except for the additional
-0.1 auxiliary MSE. The shared CNN is3×3,3×3,4×4, stride1, channels16/32/32;
+PPO uses SB3 v2.7.0 GAE, clipped surrogate objective, normalized advantages
+and gradient clipping, with the additional 0.1 auxiliary MSE. Following a
+256-interaction real-video smoke run showing excessive approximate KL and
+clipped update fractions, the **provisional stability configuration** is
+learning_rate=3e-5, n_epochs=3, target_kl=0.05 (early-stop threshold is
+1.5 × target_kl). These are experiment-specific adaptations, **not claimed
+paper hyperparameters or proof of convergence**. The runner records the
+maximum attempted minibatch KL and whether the KL guard stopped optimization;
+the checkpoint/resume contract seals these settings. The shared CNN is
+3×3,3×3,4×4, stride1, channels16/32/32;
 flatten +16 globals →128 →64; Gaussian actor and value head use this latent;
 auxiliary head is64 →128 →600. Intermediate widths/coarse5×7 action follow
 the public reconstruction where the publication is underspecified.
