@@ -98,6 +98,23 @@ class PPOTrainer:
         self.aux_empty_weight=aux_empty_weight
 
     def update(self,steps:list[Transition]):
+        if not steps:raise ValueError("Empty PPO rollout")
+        for step in steps:
+            if tuple(step.local.shape)!=(4,20,30) or tuple(step.global_.shape)!=(16,) or tuple(step.raw.shape)!=(35,):
+                raise ValueError("Invalid legacy transition dimensions")
+            if not all(math.isfinite(v) for v in (step.old_logp,step.old_value,step.reward)):
+                raise ValueError("Nonfinite PPO transition")
+            for value in (step.local,step.global_,step.raw,step.aux_target,step.aux_mask):
+                if value is not None and not torch.isfinite(value).all():raise ValueError("Nonfinite rollout tensor")
+            if (step.aux_target is None)!=(step.aux_mask is None):raise ValueError("Missing auxiliary target or mask")
+            if step.aux_target is not None:
+                if tuple(step.aux_target.shape)!=(20,30) or tuple(step.aux_mask.shape)!=(20,30):raise ValueError("Invalid auxiliary dimensions")
+                if ((step.aux_target<0)|(step.aux_target>1)).any() or ((step.aux_mask<0)|(step.aux_mask>1)).any():raise ValueError("Invalid auxiliary labels")
+        with torch.no_grad():
+            lp,values,_,_=self.model.evaluate(torch.stack([s.local for s in steps]),torch.stack([s.global_ for s in steps]),torch.stack([s.raw for s in steps]))
+            if not torch.isfinite(lp).all() or not torch.isfinite(values).all():raise ValueError("Nonfinite collecting policy")
+            if max(abs(lp[i].item()-s.old_logp) for i,s in enumerate(steps))>1e-3 or max(abs(values[i].item()-s.old_value) for i,s in enumerate(steps))>1e-3:
+                raise ValueError("Off-policy legacy rollout")
         adv,returns=gae(steps)
         adv=(adv-adv.mean())/(adv.std(unbiased=False)+1e-8)
         local=torch.stack([s.local for s in steps]).float()
@@ -123,9 +140,11 @@ class PPOTrainer:
                     if weights.sum().item()>0:
                         loss=loss+self.aux_weight*(((aux[chosen]-targets).square()*weights).sum()/weights.sum())
                 self.opt.zero_grad()
+                if not torch.isfinite(loss):raise ValueError("Nonfinite PPO loss")
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.model.parameters(),.5)
+                nn.utils.clip_grad_norm_(self.model.parameters(),.5,error_if_nonfinite=True)
                 self.opt.step()
+                if not all(torch.isfinite(p).all() for p in self.model.parameters()):raise ValueError("Nonfinite PPO parameters")
                 losses.append(loss.detach().item())
         return {"loss":sum(losses)/len(losses),"optimizer_steps":len(losses),"transitions":len(steps)}
 
