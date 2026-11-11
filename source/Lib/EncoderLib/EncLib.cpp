@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/Rom.h"
 #include "CommonLib/MCTF.h"
+#include "RCDot.h"
 #include "Utilities/NoMallocThreadPool.h"
 #include "Utilities/MsgLog.h"
 #include "EncStage.h"
@@ -78,6 +79,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_rateCtrl       ( nullptr )
   , m_preProcess     ( nullptr )
   , m_MCTF           ( nullptr )
+  , m_rcDotAnalysis  ( nullptr )
   , m_preEncoder     ( nullptr )
   , m_gopEncoder     ( nullptr )
   , m_threadPool     ( nullptr )
@@ -242,6 +244,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_maxNumPicShared = 0;
 
   // pre processing
+  if( m_rateCtrl->rcIsFinalPass ) rcdot::reset(m_encCfg);
   m_preProcess = new PreProcess( msg );
   m_preProcess->initStage( m_encCfg, 1, -m_encCfg.m_leadFrames, true, true, false );
   m_preProcess->init( m_encCfg, m_rateCtrl->rcIsFinalPass );
@@ -249,6 +252,13 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_maxNumPicShared += 1;
 
   // MCTF
+  if( rcdot::enabled() && m_rateCtrl->rcIsFinalPass )
+  {
+    m_rcDotAnalysis = new rcdot::LookAhead(m_encCfg.m_internalBitDepth[CH_L]);
+    m_rcDotAnalysis->initStage(m_encCfg,11,0,false,true,false);
+    m_encStages.push_back(m_rcDotAnalysis);
+    m_maxNumPicShared += 11;
+  }
   if( m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA )
   {
     m_MCTF = new MCTF();
@@ -323,6 +333,11 @@ void EncLib::xUninitLib()
   {
     delete m_MCTF;
     m_MCTF = nullptr;
+  }
+  if( m_rcDotAnalysis )
+  {
+    delete m_rcDotAnalysis;
+    m_rcDotAnalysis = nullptr;
   }
   if( m_preEncoder )
   {
