@@ -18,13 +18,15 @@ class RLRCDoT(nn.Module):
         self.cnn=nn.Sequential(
           nn.Conv2d(4,16,3,padding=1),nn.ReLU(),
           nn.Conv2d(16,32,3,padding=1),nn.ReLU(),
-          nn.Conv2d(32,32,3,padding=1),nn.ReLU(),
-          nn.AdaptiveAvgPool2d((4,6)),nn.Flatten())
-        self.fuse=nn.Sequential(nn.Linear(32*4*6+16,64),nn.ReLU())
+          nn.Conv2d(32,32,4,padding=1),nn.ReLU(),
+          nn.Flatten())
+        # 480x320 -> 30x20 (16x16 blocks). Third 4x4 conv gives 29x19.
+        self.fuse=nn.Sequential(nn.Linear(32*19*29+16,128),nn.ReLU(),
+                                 nn.Linear(128,64),nn.ReLU())
         self.actor=nn.Linear(64,35)
         self.log_std=nn.Parameter(torch.full((35,),-.5))
         self.critic=nn.Linear(64,1)
-        self.reward_head=nn.Linear(64,600)
+        self.reward_head=nn.Sequential(nn.Linear(64,128),nn.ReLU(),nn.Linear(128,600))
 
     def forward(self,local:Tensor,global_:Tensor):
         if local.ndim!=4 or tuple(local.shape[1:])!=(4,20,30):
@@ -86,13 +88,14 @@ def gae(steps:list[Transition],gamma=.99,lam=.95,bootstrap=0.):
     return advantages,returns
 
 class PPOTrainer:
-    def __init__(self,model:RLRCDoT,lr=3e-4,clip=.2,epochs=5,minibatch=64,aux_weight=.1):
+    def __init__(self,model:RLRCDoT,lr=3e-4,clip=.2,epochs=5,minibatch=64,aux_weight=.1,aux_empty_weight=.05):
         self.model=model
         self.opt=torch.optim.Adam(model.parameters(),lr=lr)
         self.clip=clip
         self.epochs=epochs
         self.minibatch=minibatch
         self.aux_weight=aux_weight
+        self.aux_empty_weight=aux_empty_weight
 
     def update(self,steps:list[Transition]):
         adv,returns=gae(steps)
@@ -115,7 +118,10 @@ class PPOTrainer:
                     targets=torch.stack([steps[idx[j].item()].aux_target for j in chosen]).float()
                     mask=torch.stack([steps[idx[j].item()].aux_mask for j in chosen]).float()
                     if mask.sum().item()>0:
-                        loss=loss+self.aux_weight*(((aux[chosen]-targets).square()*mask).sum()/mask.sum())
+                        # Downweight unoccupied cells rather than removing them,
+                        # matching the public reproduction's auxiliary weighting.
+                        weights=mask+self.aux_empty_weight*(1.-mask)
+                        loss=loss+self.aux_weight*(((aux[chosen]-targets).square()*weights).sum()/weights.sum())
                 self.opt.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(),.5)

@@ -38,6 +38,12 @@ Action is a 30x20 requested map, but actual QP signalling follows v1.14.0
 QPA/QG constraints. The mapping is area-averaged over the available QG;
 it is not independent 16x16 Inter QP signalling.
 
+Agent architecture now follows the public reimplementation's 3 convolutions
+(3x3, 3x3, 4x4), flatten, FC128, FC64 and 64->128->600 reward head.
+Prior 4x6 adaptive pooling and the direct FC64 have been removed.
+This changes checkpoint tensor dimensions: existing experimental checkpoints
+from the previous 16+4 implementation are not compatible.
+
 The masked auxiliary reward head now receives a centre-of-detection surrogate
 block target: one-to-one matched YOLO predictions score 1; unmatched boxes
 score 0, with occupied-cell masks including zero-reward false positives.
