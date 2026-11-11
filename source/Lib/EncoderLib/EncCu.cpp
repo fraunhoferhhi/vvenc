@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "BitAllocation.h"
 #include "EncStage.h"
 #include "RLQpAction.h"
+#include "RLDotAction.h"
 
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/Picture.h"
@@ -883,6 +884,34 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
                             (unsigned) partitioner.currSubdiv,
                             (unsigned) partitioner.currDepth,
                             (unsigned) lumaArea.width, (unsigned) lumaArea.height );
+  }
+
+  // Separate RL-RC-DoT 30x20 action adapter; no legacy PPO map may coexist.
+  // This path is explicitly CTU/QG-area averaged, not native 16x16 QP signalling.
+  if( rl::DotAction::enabled() && !slice.pic->isPreAnalysis &&
+      m_pcEncCfg->m_usePerceptQPA && pps.useDQP &&
+      isLuma(partitioner.chType) && partitioner.currQgEnable() &&
+      (partitioner.currSubdiv == 0 || slice.isIntra()) )
+  {
+    if( rl::QpActionMap::enabled() )
+      throw std::runtime_error("RL-RC-DoT: disable legacy VVENC_RL_* action variables");
+    const auto& pcv = *pps.pcv;
+    auto* pic = bestCS->picture;
+    const auto ctuAddr = getCtuAddr(partitioner.currQgPos, pcv);
+    const int delta = rl::DotAction::deltaFor(slice.poc,
+      (unsigned)partitioner.currQgPos.x,
+      (unsigned)partitioner.currQgPos.y,
+      (unsigned)lumaArea.width,
+      (unsigned)lumaArea.height);
+    const int baseQp = tempCS->baseQP;
+    const int applied = Clip3(-sps.qpBDOffset[CH_L], MAX_QP, baseQp + delta);
+    if( applied != baseQp )
+    {
+      tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+      bestCS->currQP[partitioner.chType] = bestCS->baseQP = applied;
+      updateLambda(slice, pic->ctuQpaLambda[ctuAddr],
+                   pic->ctuAdaptedQP[ctuAddr], applied, true);
+    }
   }
 
   if (partitioner.currQtDepth == 0)

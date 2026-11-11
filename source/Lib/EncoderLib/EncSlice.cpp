@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncPicture.h"
 #include "BitAllocation.h"
 #include "RLObservation.h"
+#include "RLDotObservation.h"
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/TimeProfiler.h"
@@ -313,6 +314,7 @@ void EncSlice::initPic( Picture* pic )
   // but BEFORE the CTU search; no current-picture coded bits or final CU
   // decisions can leak into the PPO observation.
   rl::Observation::emit( *slice, *m_pcEncCfg, m_pcRateCtrl );
+  rl::DotObservation::emit( *slice, *m_pcEncCfg, m_pcRateCtrl );
 
   for( auto* thrRsc : m_ThreadRsrc )
   {
