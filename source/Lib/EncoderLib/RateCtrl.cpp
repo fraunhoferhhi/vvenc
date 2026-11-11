@@ -75,9 +75,6 @@ EncRCSeq::EncRCSeq()
   rlLastPctIntra     = 0.0;
   rlLastPctInter     = 0.0;
   rlLastPctSkip      = 0.0;
-  rlLastPctIntra     = 0.0;
-  rlLastPctInter     = 0.0;
-  rlLastPctSkip      = 0.0;
   bitsUsedQPLimDiff   = 0;
   estimatedBitUsage   = 0;
   rateBoostFac        = 1.0;
