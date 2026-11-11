@@ -14,3 +14,8 @@ jobs:
         run: cmake -S . -B build/dot -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0
       - name: Compile
         run: cmake --build build/dot --parallel 2
+      - name: Real VVenC deltaQP smoke
+        run: |
+          ENCODER=$(find bin build -type f -name vvencapp | head -n 1)
+          test -n "$ENCODER"
+          python3 scripts/rl_rc_dot/smoke_codec.py --encoder "$ENCODER" --output /tmp/rl-dot-codec-smoke
