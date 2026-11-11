@@ -25,7 +25,15 @@ def run(encoder,source,folder,name,action=None,frames=6):
     if action is not None:
         action_dir=folder/(name+"_maps")
         for poc in range(frames):
-            write_action(action_dir,poc,[action]*MAP_ELEMENTS)
+            # A list requests spatially heterogeneous QP; an integer
+            # requests constant QP; a sequence of full maps verifies POC use.
+            if isinstance(action,int):
+                values=[action]*MAP_ELEMENTS
+            elif callable(action):
+                values=action(poc)
+            else:
+                values=action
+            write_action(action_dir,poc,values)
         env["VVENC_DOT_ACTION_DIR"]=str(action_dir)
         env["VVENC_DOT_STATE_FILE"]=str(state)
     cmd=[str(encoder),"-i",str(source),"-s","480x320","-r","30","-f",str(frames),
@@ -68,10 +76,16 @@ def main():
     vanilla=run(args.encoder,video,args.output,"vanilla",frames=args.frames)
     zero=run(args.encoder,video,args.output,"zero",action=0,frames=args.frames)
     plus=run(args.encoder,video,args.output,"plus",action=6,frames=args.frames)
+    minus=run(args.encoder,video,args.output,"minus",action=-6,frames=args.frames)
+    half=[6 if col<15 else -6 for row in range(20) for col in range(30)]
+    spatial=run(args.encoder,video,args.output,"spatial",action=half,frames=args.frames)
+    alternate=run(args.encoder,video,args.output,"alternating",
+                  action=lambda poc: [6 if poc%2 else -6]*MAP_ELEMENTS,
+                  frames=args.frames)
     if vanilla!=zero:
         raise AssertionError("Disabled hook and zero DeltaQP were not bit-identical")
-    if plus==vanilla:
-        raise AssertionError("Nonzero DeltaQP produced no encoded bitstream change")
-    print(f"DOT_CODEC_SMOKE_PASS frames={args.frames} zero_equal=True plus_differs=True")
+    if len({vanilla,plus,minus,spatial,alternate})!=5:
+        raise AssertionError("Positive/negative/spatial/POC actions not all distinct")
+    print(f"DOT_CODEC_SMOKE_PASS frames={args.frames} zero_equal=True plus_minus_spatial_poc_distinct=True")
 if __name__=="__main__":
     main()

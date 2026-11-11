@@ -20,11 +20,15 @@ Baseline: VVenC v1.14.0 at 9428ea8636ae7f443ecde89999d16b2dfc421524.
 ## Scientific status: PROTOTYPE, not full reproduction
 
 The encoder writes DOT_PROXY, not DOT_STATE, to make gaps explicit. The
-current 16-entry observation has zero placeholders for G03 and G06-G12.
+current 16-entry observation has zero placeholders for G06-G12.
 L01 is luma-only AC variance; L02 is spatial prediction error rather than
 true lookahead intra SATD; L03 is temporal SAD rather than MB-tree propagated
 cost; L04 is QPA scale proxy rather than x264 inverse qscale. G15 is an
 Intra flag, not full I/P/B encoding.
+
+An encoder-statistics patch now uses actual RC-completed picture counts
+(not POC) to estimate G13/G14, and records last picture bit count and QP for
+G03/G04. These still do not equal final AU-size or all paper-defined metrics.
 
 The bridge and the trainer REJECT DOT_PROXY unless --allow-proxy-state is
 explicitly provided. That flag is for transport and optimizer smoke tests
@@ -64,8 +68,10 @@ encoder environment variables:
     export VVENC_DOT_ACTION_DIR=/tmp/dot_actions
 
 Then run the locked 480x320, 30fps, QPA-on VVenC command for 16 frames.
-Zero-action/vanilla bitstream parity, +/- action response, correct POC
-matching and VVdeC decode must be demonstrated BEFORE training.
+CI now verifies zero-action/vanilla bitstream parity and distinct positive,
+negative, spatially varied and per-POC action outcomes on synthetic YUV.
+These hash tests do NOT verify independent 16x16 QP control or VVdeC decode;
+those checks and full baseline parity remain mandatory BEFORE training.
 
 Do not simultaneously set VVENC_RL_QP_MAP / VVENC_RL_ACTION_DIR and
 VVENC_DOT_ACTION_DIR.
