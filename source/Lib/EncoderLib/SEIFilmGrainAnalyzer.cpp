@@ -208,7 +208,8 @@ constexpr double MAX_REPEATED_GRAIN_RATIO  = 16.0;  // largest variance scale (4
 
 constexpr double LOW_THRESHOLD_RATIO       = 0.1;   // Canny: low threshold relative to the strongest gradient
 constexpr int    HIGH_THRESHOLD_RATIO      = 3;     // Canny: high threshold relative to the low threshold
-constexpr double LOW_INTENSITY_RATIO       = 0.1;   // samples below this share of the range are not analysed
+constexpr double LOW_INTENSITY_RATIO       = 0.1;   // VTM: samples below this share of the range are not analysed
+constexpr int    LOW_INTENSITY_8BIT        = 18;    // improved analysis: samples below this (8-bit; black is 16) are not analysed
 
 constexpr double TAP_FILTER[ 3 ]           = { 1, 2, 1 };
 constexpr double NORM_TAP                  = 4.0;
@@ -315,11 +316,17 @@ void edgeTracking( const FgaRowKernels& k, Plane& edges, int bitDepth, ScratchT&
   }
 }
 
-// Sets the binary mask to "edge" where the picture is too dark to be analysed.
-void suppressLowIntensity( const Plane& p, Plane& mask, int bitDepth )
+// Sets the binary mask to "edge" where the picture is too dark to be analysed. VTM leaves out the darkest 10 % of the
+// range; with the dilations of every scale that hides intensities up to about 10-bit 135, the first 70 code values
+// above limited-range black (64), where PQ films keep much of their picture and their grain. With nothing measured
+// there, the improved analysis held the darkest measured strength down to black: 1.66x the grain the coding lost on
+// Beekeeper's 8-bit 17-32. The improved analysis leaves out only black and the code values just above it (letterbox
+// bars, crushed shadows), which carry no grain to measure.
+void suppressLowIntensity( const Plane& p, Plane& mask, int bitDepth, bool improved )
 {
   const Pel maxIntensity = (Pel) ( ( 1 << bitDepth ) - 1 );
-  const Pel threshold    = (Pel) ( LOW_INTENSITY_RATIO * maxIntensity );
+  const Pel threshold    = improved ? (Pel) ( LOW_INTENSITY_8BIT << ( bitDepth - BIT_DEPTH_8 ) )
+                                    : (Pel) ( LOW_INTENSITY_RATIO * maxIntensity );
   const size_t n = (size_t) mask.width * mask.height;
   const Pel* src = p.samples.data();
   Pel* dst = mask.samples.data();
@@ -1256,7 +1263,7 @@ void FGAnalyzer::maskForScale( const Plane& picture, Plane& mask, int bitDepth, 
   gradientWithNonMaxSuppression( m_kernels, picture, mask, bitDepth, s.magnitude, s.direction );
   doubleThreshold( m_kernels, mask, bitDepth );
   edgeTracking( m_kernels, mask, bitDepth, s );
-  suppressLowIntensity( picture, mask, bitDepth );
+  suppressLowIntensity( picture, mask, bitDepth, m_improved );
   for( int i = 0; i < numDilations; i++ )
   {
     morphStep( m_kernels, mask, s.morph, true );
