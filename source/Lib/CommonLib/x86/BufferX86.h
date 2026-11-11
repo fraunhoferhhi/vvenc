@@ -1334,7 +1334,7 @@ void sub_SSE( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, 
   {
     while( height-- )
     {
-      for( int x = 0; x < width; x += 8 )
+      for( int x = 0; x < width; x += 4 )
       {
         __m128i vsrc0 = _vv_loadl_epi64( ( const __m128i* ) &src0[x] );
         __m128i vsrc1 = _vv_loadl_epi64( ( const __m128i* ) &src1[x] );
