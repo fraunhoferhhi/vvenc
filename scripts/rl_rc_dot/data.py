@@ -1,6 +1,9 @@
 """Locked BDD100K source discovery and baseline-matched preprocessing."""
 
 import hashlib
+import importlib
+import sys
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -38,6 +41,8 @@ def source_fingerprint():
     value.update((root/"CMakeLists.txt").read_bytes())
     for directory in ("source", "include", "scripts/rl_rc_dot", "cmake"):
         for path in sorted((root / directory).rglob("*")):
+            if directory=="scripts/rl_rc_dot" and (path.name.startswith("test_") or path.name in ("evaluate.py","setup_kaggle.py","preflight.py")):
+                continue # QA/report-only changes do not invalidate trained weights.
             if path.is_file() and (path.suffix in (".h", ".cpp", ".py", ".json", ".cmake", ".in") or path.name=="CMakeLists.txt"):
                 value.update(path.relative_to(root).as_posix().encode())
                 value.update(path.read_bytes())
@@ -110,6 +115,38 @@ class VideoCatalog:
         return size // FRAME_BYTES
 
 
+@contextmanager
+def detector_device(repo, device):
+    """Load/fuse on the explicit logical GPU without YOLO remasking CUDA.
+
+    The pinned select_device remasks the process then returns cuda:0. That
+    is unsafe after SB3/another library has initialized CUDA.
+    """
+    import torch
+    target = torch.device(device)
+    if target.type == "cuda":
+        index = 0 if target.index is None else target.index
+        if not torch.cuda.is_available() or index >= torch.cuda.device_count():
+            raise ValueError(f"Detector GPU unavailable: {target}")
+        target = torch.device("cuda", index)
+        torch.cuda.set_device(target)
+    elif target.type != "cpu":
+        raise ValueError("Detector supports explicit CPU or CUDA devices only")
+    sys.path.insert(0, str(Path(repo).resolve()))
+    helper = original = None
+    try:
+        helper = importlib.import_module("utils.torch_utils")
+        if Path(helper.__file__).resolve() != (Path(repo)/"utils/torch_utils.py").resolve():
+            raise ValueError("A different YOLO utils module is already imported")
+        original = helper.select_device
+        helper.select_device = lambda *args, **kwargs: target
+        yield target
+    finally:
+        if original is not None:
+            helper.select_device = original
+        sys.path.pop(0)
+
+
 class FrozenDetector:
     def __init__(self, repo, weights, device="cuda:0"):
         import inspect
@@ -134,10 +171,14 @@ class FrozenDetector:
                     kwargs.setdefault("weights_only", False)
                     return original(*args, **kwargs)
                 torch.load = trusted_load
-            self.model = torch.hub.load(str(repo), "custom", path=str(weights), source="local", device=device, autoshape=True)
+            with detector_device(repo, device) as target:
+                self.model = torch.hub.load(str(repo), "custom", path=str(weights), source="local", device=target, autoshape=True)
         finally:
             torch.load = original
         self.model.eval()
+        if next(self.model.parameters()).dtype!=torch.float32:raise ValueError("Frozen detector must use FP32")
+        if next(self.model.parameters()).device!=target:raise ValueError("Frozen detector loaded onto the wrong device")
+        self.device=str(target)
         for parameter in self.model.parameters():
             parameter.requires_grad_(False)
         self.model.conf, self.model.iou, self.model.classes = .25, .45, [2]
