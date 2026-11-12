@@ -735,266 +735,57 @@ void offsetBlock_SIMD( const int     channelBitDepth,
 template <X86_VEXT vext>
 void calcSaoStatisticsBo_SIMD(int width,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
 {
-  if ( width % 16 == 0 )
+  // The statistics are gathered in eight tables, table k taking the samples at x % 8 == k: neighbouring samples, which on
+  // smooth content fall into the same band, then update different entries instead of each waiting for the previous
+  // update of the same one. Each entry packs both statistics as count * 2^32 + diffSum, one read-modify-write per
+  // sample: with at most 128 x 128 samples and |org - rec| < 2^15, |diffSum| < 2^29, so the low 32 bits read as a signed
+  // integer are the difference sum and the rest is the count. The results are added to count[] and diff[].
+  CHECKD( endX > width || endX * endY > MAX_CU_SIZE * MAX_CU_SIZE, "the packed difference sums could overflow" );
+  const int shift = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+  int64_t packed[8][NUM_SAO_BO_CLASSES] = {};
+  const auto addSample = [&packed]( const int column, const int bandIdx, const int orgMinusRec )
   {
-    int iNaRight=width-endX;
-    int x;
-    int i_bo_range_shift = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
-    __m128i vzero = _mm_setzero_si128();
-    for (int y=0; y<endY; y++)
+    packed[column & 7][bandIdx] += ( int64_t( 1 ) << 32 ) + orgMinusRec;
+  };
+
+  for( int y = 0; y < endY; y++, srcLine += srcStride, orgLine += orgStride )
+  {
+    int x = 0;
+    for( ; x + 16 <= endX; x += 16 )
     {
-      for (x=0; x<endX-16; x+=16)
+      // the bands and differences of 16 samples computed as vectors, then read back from the stack sample by sample
+      int16_t band[16], delta[16];
+      const __m128i rec0 = _mm_loadu_si128( ( const __m128i* ) &srcLine[x] );
+      const __m128i rec1 = _mm_loadu_si128( ( const __m128i* ) &srcLine[x + 8] );
+      const __m128i org0 = _mm_loadu_si128( ( const __m128i* ) &orgLine[x] );
+      const __m128i org1 = _mm_loadu_si128( ( const __m128i* ) &orgLine[x + 8] );
+      _mm_storeu_si128( ( __m128i* ) &band[0],  _mm_srai_epi16( rec0, shift ) );
+      _mm_storeu_si128( ( __m128i* ) &band[8],  _mm_srai_epi16( rec1, shift ) );
+      _mm_storeu_si128( ( __m128i* ) &delta[0], _mm_sub_epi16( org0, rec0 ) );
+      _mm_storeu_si128( ( __m128i* ) &delta[8], _mm_sub_epi16( org1, rec1 ) );
+      for( int k = 0; k < 16; k++ )
       {
-        __m128i vsrca, vsrcb;
-        __m128i vdiffa,vdiffb;
-        if (sizeof(Pel) == 1){
-          __m128i vsrc = _mm_loadu_si128((__m128i*)&srcLine[x]);
-          vsrca = _mm_unpacklo_epi8(vsrc, vzero);
-          vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
-          __m128i vorg  = _mm_loadu_si128((__m128i*)&orgLine[x]);
-          __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
-          __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
-          vdiffa = _mm_sub_epi16(vorga, vsrca);
-          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
-        }
-        else
-        {
-          vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
-          vsrcb = _mm_loadu_si128((__m128i*)&srcLine[x+8]);
-          __m128i vorga = _mm_loadu_si128((__m128i*)&orgLine[x]);
-          __m128i vorgb = _mm_loadu_si128((__m128i*)&orgLine[x+8]);
-          vdiffa = _mm_sub_epi16(vorga, vsrca);
-          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
-        }
-        __m128i vbanda = _mm_srai_epi16(vsrca, i_bo_range_shift);
-        __m128i vbandb = _mm_srai_epi16(vsrcb, i_bo_range_shift);
-        int iBand;
-        // since gcc 4.6 synopsis of _mm_extract_epi16 has changed to (int)(unsigned short)_mm_extract_epi16()
-        // therefore cast result to short to have signed values
-        short iDiff;
-        iBand = _mm_extract_epi16(vbanda, 0);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 0);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbanda, 1);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 1);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbanda, 2);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 2);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbanda, 3);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 3);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbanda, 4);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 4);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbanda, 5);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 5);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbanda, 6);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 6);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbanda, 7);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 7);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbandb, 0);
-        iDiff = (short)_mm_extract_epi16(vdiffb, 0);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbandb, 1);
-        iDiff = (short)_mm_extract_epi16(vdiffb, 1);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbandb, 2);
-        iDiff = (short)_mm_extract_epi16(vdiffb, 2);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbandb, 3);
-        iDiff = (short)_mm_extract_epi16(vdiffb, 3);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbandb, 4);
-        iDiff = (short)_mm_extract_epi16(vdiffb, 4);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbandb, 5);
-        iDiff = (short)_mm_extract_epi16(vdiffb, 5);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbandb, 6);
-        iDiff = (short)_mm_extract_epi16(vdiffb, 6);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        iBand = _mm_extract_epi16(vbandb, 7);
-        iDiff = (short)_mm_extract_epi16(vdiffb, 7);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
+        addSample( k, band[k], delta[k] );   // x is a multiple of 16: sample k goes to table k % 8
       }
-      //last colum
-      {
-        __m128i vsrca, vsrcb;
-        __m128i vdiffa,vdiffb;
-        if (sizeof(Pel) == 1){
-          __m128i vsrc = _mm_loadu_si128((__m128i*)&srcLine[x]);
-          vsrca = _mm_unpacklo_epi8(vsrc, vzero);
-          vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
-          __m128i vorg  = _mm_loadu_si128((__m128i*)&orgLine[x]);
-          __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
-          __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
-          vdiffa = _mm_sub_epi16(vorga, vsrca);
-          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
-        }
-        else
-        {
-          vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
-          vsrcb = _mm_loadu_si128((__m128i*)&srcLine[x+8]);
-          __m128i vorga = _mm_loadu_si128((__m128i*)&orgLine[x]);
-          __m128i vorgb = _mm_loadu_si128((__m128i*)&orgLine[x+8]);
-          vdiffa = _mm_sub_epi16(vorga, vsrca);
-          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
-        }
-        __m128i vbanda = _mm_srai_epi16(vsrca, i_bo_range_shift);
-        __m128i vbandb = _mm_srai_epi16(vsrcb, i_bo_range_shift);
-        int iBand;
-        // since gcc 4.6 synopsis of _mm_extract_epi16 has changed to (int)(unsigned short)_mm_extract_epi16()
-        // therefore cast result to short to have signed values
-        short iDiff;
-        iBand = _mm_extract_epi16(vbanda, 0);
-        iDiff = (short)_mm_extract_epi16(vdiffa, 0);
-        diff[iBand]  += iDiff;
-        count[iBand] += 1;
-        if (iNaRight<15)
-        {
-          iBand = _mm_extract_epi16(vbanda, 1);
-          iDiff = (short)_mm_extract_epi16(vdiffa, 1);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<14)
-        {
-          iBand = _mm_extract_epi16(vbanda, 2);
-          iDiff = (short)_mm_extract_epi16(vdiffa, 2);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<13)
-        {
-          iBand = _mm_extract_epi16(vbanda, 3);
-          iDiff = (short)_mm_extract_epi16(vdiffa, 3);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<12)
-        {
-          iBand = _mm_extract_epi16(vbanda, 4);
-          iDiff = (short)_mm_extract_epi16(vdiffa, 4);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<11)
-        {
-          iBand = _mm_extract_epi16(vbanda, 5);
-          iDiff = (short)_mm_extract_epi16(vdiffa, 5);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<10)
-        {
-          iBand = _mm_extract_epi16(vbanda, 6);
-          iDiff = (short)_mm_extract_epi16(vdiffa, 6);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<9)
-        {
-          iBand = _mm_extract_epi16(vbanda, 7);
-          iDiff = (short)_mm_extract_epi16(vdiffa, 7);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<8)
-        {
-          iBand = _mm_extract_epi16(vbandb, 0);
-          iDiff = (short)_mm_extract_epi16(vdiffb, 0);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<7)
-        {
-          iBand = _mm_extract_epi16(vbandb, 1);
-          iDiff = (short)_mm_extract_epi16(vdiffb, 1);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<6)
-        {
-          iBand = _mm_extract_epi16(vbandb, 2);
-          iDiff = (short)_mm_extract_epi16(vdiffb, 2);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<5)
-        {
-          iBand = _mm_extract_epi16(vbandb, 3);
-          iDiff = (short)_mm_extract_epi16(vdiffb, 3);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<=4)
-        {
-          iBand = _mm_extract_epi16(vbandb, 4);
-          iDiff = (short)_mm_extract_epi16(vdiffb, 4);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<3)
-        {
-          iBand = _mm_extract_epi16(vbandb, 5);
-          iDiff = (short)_mm_extract_epi16(vdiffb, 5);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<2)
-        {
-          iBand = _mm_extract_epi16(vbandb, 6);
-          iDiff = (short)_mm_extract_epi16(vdiffb, 6);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-        if (iNaRight<1)
-        {
-          iBand = _mm_extract_epi16(vbandb, 7);
-          iDiff = (short)_mm_extract_epi16(vdiffb, 7);
-          diff[iBand]  += iDiff;
-          count[iBand] += 1;
-        }
-      }
-      srcLine += srcStride;
-      orgLine += orgStride;
+    }
+    for( ; x < endX; x++ )
+    {
+      addSample( x, srcLine[x] >> shift, orgLine[x] - srcLine[x] );
     }
   }
-  else
+
+  for( int k = 1; k < 8; k++ )
   {
-    int i,j;
-    int iBoRangeShift = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
-    for ( i = 0; i < endY; i++ )
+    for( int b = 0; b < NUM_SAO_BO_CLASSES; b++ )
     {
-      for ( j = 0; j < endX; j++, srcLine++, orgLine++ )
-      {
-        int iBand            = *srcLine >> iBoRangeShift;
-        diff[iBand]  += (*orgLine - *srcLine);
-        count[iBand] += 1;
-      }
-      srcLine += srcStride - endX;
-      orgLine += orgStride - endX;
+      packed[0][b] += packed[k][b];
     }
+  }
+  for( int b = 0; b < NUM_SAO_BO_CLASSES; b++ )
+  {
+    const int32_t diffSum = int32_t( packed[0][b] );   // the low 32 bits, signed
+    diff [b] += diffSum;
+    count[b] += ( packed[0][b] - diffSum ) >> 32;
   }
 }
 
