@@ -11,7 +11,7 @@ import gymnasium as gym
 import numpy as np
 
 from .codec import NativeEpisode
-from .method import FRAME_BYTES, action_map, observation, score
+from .method import FRAME_BYTES, action_map, observation, score, auxiliary_supervision_mask, training_reward
 from .model import ACTIONS, OBSERVATIONS
 
 
@@ -103,7 +103,9 @@ class VVenCEnv(gym.Env):
         prediction = self.detector(reconstructed)
         self.decisions += 1
         reward, block, metrics = score(raw, prediction, self.native.bits, self.decisions, self.rate * 1000)
-        info = {"block_reward": block, "video_id": self.video_id, "poc": poc, "rate_kbps": self.rate,
+        mask = auxiliary_supervision_mask(raw, prediction)
+        info = {"block_reward": block, "block_mask": mask, "paper_reward": reward,
+                "video_id": self.video_id, "poc": poc, "rate_kbps": self.rate,
                 "consumed_action":np.asarray(post.get("consumed_action",np.zeros(600)),dtype=float).ravel().tolist(),**metrics}
         self.rewards.append(reward)
         self.precisions.append(metrics["precision"])
@@ -134,11 +136,12 @@ class VVenCEnv(gym.Env):
                                "tp": tp, "fp": fp, "fn": fn,
                                "f1": 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.,
                                "psnr_y": float(np.mean([row["psnr"] for row in self.native.posts])),
+                               "mean_qp": float(np.mean([row["mean_qp"] for row in self.native.posts])),
                                "actual_kbps": self.native.bits * 30 / self.frames / 1000}
             obs = {name: np.zeros(space.shape, dtype=np.float32) for name, space in OBSERVATIONS.spaces.items()}
         else:
             obs = observation(next_state, self.frames)
-        return obs, reward, terminated, False, info
+        return obs, training_reward(reward), terminated, False, info
 
     def close(self):
         self._close_episode()
