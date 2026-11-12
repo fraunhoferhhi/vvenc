@@ -511,6 +511,41 @@ void Picture::extendPicBorder()
   isBorderExtended = true;
 }
 
+// m_ctuLineBottoms keeps the bottom rows of CTU line n at its rows n * rows .. ( n + 1 ) * rows - 1: the row of picture row y
+static int ctuLineBottomsRow( const int y, const int ctuHeight, const int rows )
+{
+  const int line = y / ctuHeight;
+  CHECKD( y < ( line + 1 ) * ctuHeight - rows, "row not kept: above the bottom rows of its CTU line" );
+  return y - ( line + 1 ) * ( ctuHeight - rows );
+}
+
+const CPelBuf Picture::getRecoAboveCtuTop( const CompArea& blk ) const
+{
+  if( !m_ctuLineBottoms )
+  {
+    return getRecoBuf( blk );
+  }
+  const int scaleY    = getComponentScaleY( blk.compID, chromaFormat );
+  const int ctuHeight = cs->pcv->maxCUSize >> scaleY;
+  const int rows      = CTU_LINE_BOTTOM_ROWS >> scaleY;
+  CHECKD( blk.y / ctuHeight != ( blk.y + (int)blk.height - 1 ) / ctuHeight, "rows of two CTU lines" );
+  return m_ctuLineBottoms->get( blk.compID ).subBuf( blk.x, ctuLineBottomsRow( blk.y, ctuHeight, rows ), blk.width, blk.height );
+}
+
+void Picture::keepCtuBottomRows( const UnitArea& ctuArea )
+{
+  for( uint32_t c = 0; c < getNumberValidComponents( chromaFormat ); c++ )
+  {
+    const CompArea& ctu = ctuArea.blocks[c];
+    const int scaleY    = getComponentScaleY( ctu.compID, chromaFormat );
+    const int ctuHeight = cs->pcv->maxCUSize >> scaleY;
+    const int rows      = CTU_LINE_BOTTOM_ROWS >> scaleY;
+    const int y         = ctu.y + ctu.height - rows;
+    const CompArea bottom( ctu.compID, chromaFormat, Area( ctu.x, y, ctu.width, rows ) );
+    m_ctuLineBottoms->get( ctu.compID ).subBuf( ctu.x, ctuLineBottomsRow( y, ctuHeight, rows ), ctu.width, rows ).copyFrom( getRecoBuf( bottom ) );
+  }
+}
+
 PelUnitBuf Picture::getPicBuf( const UnitArea& unit, const PictureType type )
 {
   if( chromaFormat == CHROMA_400 )

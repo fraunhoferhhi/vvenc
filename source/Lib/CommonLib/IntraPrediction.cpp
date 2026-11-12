@@ -915,9 +915,17 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
   const Pel*  srcBuf    = recoBuf.buf;
   const int   srcStride = recoBuf.stride;
         Pel*  ptrDst    = refBufUnfiltered;
-  const Pel*  ptrSrc;
   const Pel   valueDC   = 1 << (sps.bitDepths[ chType ] - 1);
 
+  // srcRef: the top-left reference sample, left row r at srcRef[r * srcStride]. The above row with that corner, srcTop[c], lies
+  // at a CTU top in the CTU line above, which may be deblocked meanwhile: it is read as that line was encoded.
+  const Pel* srcRef = srcBuf - ( 1 + multiRefIdx ) * srcStride - ( 1 + multiRefIdx );
+  const Pel* srcTop = srcRef;
+  if( area.y > 0 && ( area.y & ( ( pcv.maxCUSize >> getComponentScaleY( area.compID, sps.chromaFormatIdc ) ) - 1 ) ) == 0 )
+  {
+    CHECKD( multiRefIdx, "multiple reference lines at a CTU top" );
+    srcTop = cs.picture->getRecoAboveCtuTop( CompArea( area.compID, area.chromaFormat, Position( area.x - 1, area.y - 1 ), Size( predSize + 1, 1 ) ) ).buf;
+  }
 
   if( m_numIntraNeighbor == 0 )
   {
@@ -928,11 +936,11 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
   else if( m_numIntraNeighbor == totalUnits )
   {
     // Fill top-left border and top and top right with rec. samples
-    ptrSrc = srcBuf - (1 + multiRefIdx) * srcStride - (1 + multiRefIdx);
-    for (int j = 0; j <= predSize + multiRefIdx; j++) { ptrDst[j] = ptrSrc[j]; }
-    for (int i = 0; i <= predHSize + multiRefIdx; i++)
+    for (int j = 0; j <= predSize + multiRefIdx; j++) { ptrDst[j] = srcTop[j]; }
+    ptrDst[predStride] = srcTop[0];
+    for (int i = 1; i <= predHSize + multiRefIdx; i++)
     {
-      ptrDst[i + predStride] = ptrSrc[i * srcStride];
+      ptrDst[i + predStride] = srcRef[i * srcStride];
     }
   }
   else // reference samples are partially available
@@ -940,7 +948,7 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
     // Substitution in scan order: up the left column (below-left first), the top-left corner, then along the above row.
     // A unit that is not available takes the last sample before it, the units before the first available one the first
     // sample of that one. Units are handled in runs of equal availability, each run with one copy or one fill.
-    const Pel* srcRef  = srcBuf - ( 1 + multiRefIdx ) * srcStride - ( 1 + multiRefIdx );   // left row r: srcRef[r * srcStride], above column c: srcRef[c]
+    // left row r >= 1: srcRef[r * srcStride], above column c (row 0, the corner c = 0): srcTop[c]
     Pel* const dstLeft = refBufUnfiltered + predStride;
     Pel* const dstTop  = refBufUnfiltered;
     const bool* flags  = m_neighborFlags;
@@ -957,8 +965,8 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
       firstAvail++;
     }
     Pel last = firstAvail < totalLeftUnits  ? srcRef[leftBottom( firstAvail ) * srcStride]
-             : firstAvail == totalLeftUnits ? srcRef[multiRefIdx * srcStride]
-             :                                srcRef[aboveFirst( firstAvail )];
+             : firstAvail == totalLeftUnits ? ( multiRefIdx ? srcRef[multiRefIdx * srcStride] : srcTop[0] )
+             :                                srcTop[aboveFirst( firstAvail )];
 
     int u = 0;
     while( u < totalLeftUnits )
@@ -989,8 +997,8 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
     {
       for( int i = 0; i <= multiRefIdx; i++ )
       {
-        dstLeft[i] = srcRef[i * srcStride];
-        dstTop [i] = srcRef[i];
+        dstLeft[i] = i ? srcRef[i * srcStride] : srcTop[0];
+        dstTop [i] = srcTop[i];
       }
       last = dstTop[multiRefIdx];
     }
@@ -1011,7 +1019,7 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
       const int first = aboveFirst( u ), lastCol = aboveLast( end );
       if( flags[u] )
       {
-        memcpy( dstTop + first, srcRef + first, ( lastCol - first + 1 ) * sizeof( Pel ) );
+        memcpy( dstTop + first, srcTop + first, ( lastCol - first + 1 ) * sizeof( Pel ) );
         last = dstTop[lastCol];
       }
       else
@@ -1280,17 +1288,24 @@ void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& ch
     }
     else
     {
+      // the luma row above; at a CTU top it lies in the CTU line above, which may be deblocked meanwhile: read it as encoded
+      const Pel* lumaAbove = pRecSrc0 - iRecStride;
+      if( isFirstRowOfCtu )
+      {
+        const CompArea rowAbove( COMP_Y, cu.chromaFormat, Position( lumaArea.x - 1, lumaArea.y - 1 ), Size( 2 * ( uiCWidth + addedAboveRight ) + 1, 1 ) );
+        lumaAbove = cu.cs->picture->getRecoAboveCtuTop( rowAbove ).buf + 1;
+      }
       for (int i = 0; i < uiCWidth + addedAboveRight; i++)
       {
         const bool leftPadding = i == 0 && !leftIsAvailable;
         if (cu.chromaFormat == CHROMA_444)
         {
-          piSrc = pRecSrc0 - iRecStride;
+          piSrc = lumaAbove;
           pDst[i] = piSrc[i];
         }
         else if (isFirstRowOfCtu)
         {
-          piSrc   = pRecSrc0 - iRecStride;
+          piSrc   = lumaAbove;
           pDst[i] = (piSrc[2 * i] * 2 + piSrc[2 * i - (leftPadding ? 0 : 1)] + piSrc[2 * i + 1] + 2) >> 2;
         }
         else if (cu.chromaFormat == CHROMA_422)
