@@ -5814,17 +5814,18 @@ static bool check_SAOcalcSaoStatisticsBo( SampleAdaptiveOffset* ref, SampleAdapt
   sstm_test << "SampleAdaptiveOffset::calcSaoStatisticsBo " << bd << " bit";
   std::cout << "Testing " << sstm_test.str() << '\n';
 
-  for( unsigned width : { 32, 64, 128 } )
+  // widths 8, 24 and 40 leave samples beyond the last whole 16 (8: all of them)
+  for( unsigned width : { 8, 24, 32, 40, 64, 128 } )
   {
     for( unsigned height : { 32, 64, 128 } )
     {
+      std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
+      std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
+
       for( int skipLinesX : { 0, 3, 5 } )
       {
         for( int skipLinesY : { 0, 2, 4 } )
         {
-          std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
-          std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
-
           // endX is the same, or -3, or -5 of the width.
           int endX = width - skipLinesX;
           // endY is the same, or -2, or -4 of the height.
@@ -5995,6 +5996,9 @@ static bool test_SampleAdaptiveOffset()
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, max_gen, min_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, min_gen, max_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+    // samples in the four lowest bands: long runs of the same band
+    InputGenerator<Pel> low_gen{ bd - 3, /*is_signed=*/false };
+    passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, low_gen, rand_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsEo( &ref, &opt, bd ) && passed;
   }
 
