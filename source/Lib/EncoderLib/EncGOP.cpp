@@ -895,7 +895,7 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noMtsConstraintFlag                          = !(m_pcEncCfg->m_MTSImplicit || m_pcEncCfg->m_MTS);
   ci.noSbtConstraintFlag                          = m_pcEncCfg->m_SBT == 0;
   ci.noAffineMotionConstraintFlag                 = ! m_pcEncCfg->m_Affine;
-  ci.noBcwConstraintFlag                          = true;
+  ci.noBcwConstraintFlag                          = m_pcEncCfg->m_BCW == 0;
   ci.noIbcConstraintFlag                          = m_pcEncCfg->m_IBCMode == 0;
   ci.noCiipConstraintFlag                         = m_pcEncCfg->m_CIIP == 0;
   ci.noGeoConstraintFlag                          = m_pcEncCfg->m_Geo == 0;
@@ -904,7 +904,7 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noBDPCMConstraintFlag                        = m_pcEncCfg->m_useBDPCM==0;
   ci.noJointCbCrConstraintFlag                    = ! m_pcEncCfg->m_JointCbCrMode;
   ci.noMrlConstraintFlag                          = ! m_pcEncCfg->m_MRL;
-  ci.noIspConstraintFlag                          = true;
+  ci.noIspConstraintFlag                          = m_pcEncCfg->m_ISP == 0;
   ci.noMipConstraintFlag                          = ! m_pcEncCfg->m_MIP;
   ci.noQpDeltaConstraintFlag                      = false;
   ci.noDepQuantConstraintFlag                     = ! m_pcEncCfg->m_DepQuantEnabled;
