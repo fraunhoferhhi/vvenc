@@ -50,7 +50,13 @@ def validate(model,spec,deadline=float("inf"),detector_factory=FrozenDetector,ca
         for video in catalog.lock["splits"]["val"][:spec["validation_videos"]]:
             for rate in spec["validation_rates"]:
                 pair={}
-                for name,mode in (("anchor","anchor"),("agent","live")):
+                controls=Path(spec["output"])/"validation_controls"
+                controls.mkdir(parents=True,exist_ok=True)
+                for name,mode in (("anchor","anchor"),("zero","zero"),("agent","live")):
+                    cache=controls/f"{video}_{rate}_{name}.json"
+                    if name!="agent" and cache.exists():
+                        pair[name]=json.loads(cache.read_text())
+                        continue
                     if time.monotonic()>=deadline:raise BudgetStop("Validation interrupted by session budget")
                     env=VVenCEnv(catalog,detector,spec["encoder"],Path(spec["output"])/"validation_media"/str(model.completed_rollouts),
                                 split="val",frame_limit=spec["validation_frames"],threads=spec["encoder_threads"],
@@ -59,16 +65,21 @@ def validate(model,spec,deadline=float("inf"),detector_factory=FrozenDetector,ca
                         obs,_=env.reset(seed=spec["seed"])
                         while True:
                             if time.monotonic()>=deadline:raise BudgetStop("Validation interrupted by session budget")
-                            action=np.zeros(35) if mode=="anchor" else model.predict(obs,deterministic=True)[0]
+                            action=model.predict(obs,deterministic=True)[0] if mode=="live" else np.zeros(35)
                             obs,_,done,_,info=env.step(action)
                             if done:break
                         pair[name]=info["episode"]
+                        if name!="agent":atomic_json(cache,pair[name])
                     finally:env._close_episode()
                 points.append({"video_id":video,"rate_kbps":rate,**pair})
     finally:detector.close()
     return {"score":float(np.mean([p["agent"]["mean_reward"] for p in points])),
             "anchor_score":float(np.mean([p["anchor"]["mean_reward"] for p in points])),
+            "zero_score":float(np.mean([p["zero"]["mean_reward"] for p in points])),
             "macro_delta_precision":float(np.mean([p["agent"]["mean_precision"]-p["anchor"]["mean_precision"] for p in points])),
+            "macro_delta_precision_vs_zero":float(np.mean([p["agent"]["mean_precision"]-p["zero"]["mean_precision"] for p in points])),
+            "macro_rate_ratio_vs_anchor":float(np.mean([p["agent"]["actual_kbps"]/p["anchor"]["actual_kbps"]-1 for p in points])),
+            "macro_rate_ratio_vs_zero":float(np.mean([p["agent"]["actual_kbps"]/p["zero"]["actual_kbps"]-1 for p in points])),
             "points":points,"policy_sha256":policy_digest(model),"completed_rollouts":model.completed_rollouts,
             "num_timesteps":model.num_timesteps,"selection":"macro mean of per-frame training reward on Validation only"}
 
@@ -149,8 +160,8 @@ def contract_for(spec):
             "frames":spec["frames"],"seed":spec["seed"],"workers":spec["workers"],"rollout_steps":spec["rollout_steps"],
             "encoder_threads":spec["encoder_threads"],"algorithm":"SB3 2.7.0 PPO; isolated actor/critic; per-branch gradient clip; bounded auxiliary reward",
             "ppo":spec["ppo"],
-            "reward":"20*confidence_ordered_precision-abs(log(prefix_actual_bps/target_bps))",
-            "rate_sampling":"uniform integer kbps [50,200]","action":"Gaussian35;clip10;tanh*12;bilinear20x30;native QG pooling",
+            "reward":"paper=20*confidence_ordered_precision-abs(log(prefix_actual_bps/target_bps)); PPO_learning=0.05*paper",
+            "rate_sampling":"uniform integer kbps [50,200]","action":"Gaussian35;clip10;tanh*12;bilinear20x30;native-QPA-relative QG delta",
             "validation":{"videos":spec["validation_videos"],"rates":spec["validation_rates"],"frames":spec["validation_frames"]}}
 
 def parser():
