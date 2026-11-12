@@ -554,10 +554,12 @@ MCTF::MCTF( bool enableOpt )
 {
   m_motionErrorLumaIntX     = motionErrorLumaInt;
   m_motionErrorLumaInt8     = motionErrorLumaInt;
+  m_motionErrorLumaInt4     = nullptr;
   m_motionErrorLumaFracX[0] = motionErrorLumaFrac6;
   m_motionErrorLumaFrac8[0] = motionErrorLumaFrac6;
   m_motionErrorLumaFracX[1] = motionErrorLumaFrac4;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac4;
+  m_filterColumn4             = nullptr;
   m_motionErrorLumaFracColumn = nullptr;
   m_applyFrac[0][0]         = applyFrac8Core_6Tap;
   m_applyFrac[0][1]         = applyFrac8Core_4Tap;
@@ -1166,14 +1168,20 @@ static const Pel* copyClampedRefBlock( const CPelBuf& ref, const int x, const in
   return tmp + REF_TAPS_BEFORE * cols + REF_TAPS_BEFORE;
 }
 
+// Whether the w x h reference block at (x, y) and its filter taps lie inside the reference's border of margin samples.
+static inline bool refBlockInBorder( const CPelBuf& ref, const int margin, const int x, const int y, const int w, const int h )
+{
+  return x - REF_TAPS_BEFORE >= -margin && y - REF_TAPS_BEFORE >= -margin
+         && x + w + REF_TAPS_AFTER <= ( int ) ref.width + margin && y + h + REF_TAPS_AFTER <= ( int ) ref.height + margin;
+}
+
 // Returns the samples of the w x h reference block at (x, y) and sets stride. The input frames only
 // keep MCTF_FRAME_MARGIN samples of replicated border, while the motion search reaches up to about
 // 100 samples outside the frame. A block whose filter taps leave the border is copied with clamped
 // coordinates, which gives the same samples as a wider replicated border.
 static inline const Pel* getRefBlock( const CPelBuf& ref, const int margin, const int x, const int y, const int w, const int h, ptrdiff_t& stride )
 {
-  if( x - REF_TAPS_BEFORE >= -margin && y - REF_TAPS_BEFORE >= -margin
-      && x + w + REF_TAPS_AFTER <= ( int ) ref.width + margin && y + h + REF_TAPS_AFTER <= ( int ) ref.height + margin )
+  if( refBlockInBorder( ref, margin, x, y, w, h ) )
   {
     stride = ref.stride;
     return ref.buf + y * ref.stride + x;
@@ -1238,8 +1246,11 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 // error as testing them one by one, on every SIMD level: every per-vector kernel (C, SSE, AVX2, NEON, SVE) returns the exact
 // error when it is below the best error passed in and some value not below it otherwise, so a vector replaces the best
 // in exactly the same cases. Every other vector is tested as before, with the early exit against the best error so far.
+// The filtered rows of a column are kept in columns, so a later step of the same block that needs rows of the same
+// horizontal position (the column of the best vector so far) takes them from there: they depend only on that position
+// and the reference rows.
 void MCTF::testSubpelLattice( const PelStorage& orig, const PelStorage& buffer, const int refMargin, const int x, const int y, const int bs,
-                              const MotionVector& center, const int range, const int step, MotionVector& best ) const
+                              const MotionVector& center, const int range, const int step, FilteredColumns& columns, MotionVector& best ) const
 {
   static constexpr int MAX_VECTORS = 48;   // ( 2 * 12 / 4 + 1 )^2 - 1: the widest lattice (MCTFSpeed 0)
   static constexpr int MAX_COLUMN  = 4;    // vectors per column in the widest 4-tap lattice, y2 in { -6, -2, 2, 6 }
@@ -1264,8 +1275,9 @@ void MCTF::testSubpelLattice( const PelStorage& orig, const PelStorage& buffer, 
 
   const int w = std::min<int>( bs, orig.Y().width  - x ) & ~7;
   const int h = std::min<int>( bs, orig.Y().height - y ) & ~7;
-  if( m_motionErrorLumaFracColumn && m_lowResFltSearch && w >= 16 && ( w & 15 ) == 0 )
+  if( m_filterColumn4 && m_motionErrorLumaFracColumn && m_lowResFltSearch && w >= 16 && ( w & 15 ) == 0 )
   {
+    CHECKD( w > FilteredColumns::MAX_WIDTH || h > FilteredColumns::MAX_WIDTH, "The block is larger than MCTFUnitSize allows" );
     for( int i = 0; i < num; i++ )
     {
       if( known[i] || ( dx[i] & 15 ) == 0 )
@@ -1301,11 +1313,20 @@ void MCTF::testSubpelLattice( const PelStorage& orig, const PelStorage& buffer, 
         yFilter[k]   = m_interpolationFilter4[dy[column[k]] & 15];
         rowOffset[k] = ( dy[column[k]] >> 4 ) - top;
       }
-      // the reference rows of all vectors of the column: h plus the one-row spread of their vertical positions
-      ptrdiff_t  buffStride = 0;
-      const Pel* buf        = getRefBlock( buffer.Y(), refMargin, x + ( dx[i] >> 4 ), y + top, w, h + bottom - top, buffStride );
-      m_motionErrorLumaFracColumn( orig.Y().buf + x + y * orig.Y().stride, orig.Y().stride, buf, buffStride, w, h, m_interpolationFilter4[dx[i] & 15],
-                                   n, yFilter, rowOffset, m_encCfg->m_internalBitDepth[CH_L], columnError );
+      // the filtered rows of all vectors of the column: a kept column of this position whose rows include them, else
+      // the horizontal pass of h plus the one-row spread of their vertical positions (and the vertical taps), kept in a
+      // free slot or, with none left, in the last one
+      const Pel* filtered = columns.find( dx[i], top, bottom, w );
+      if( !filtered )
+      {
+        Pel* rows = columns.add( dx[i], top, bottom );
+        ptrdiff_t  buffStride = 0;
+        const Pel* buf        = getRefBlock( buffer.Y(), refMargin, x + ( dx[i] >> 4 ), y + top, w, h + bottom - top, buffStride );
+        m_filterColumn4( buf, buffStride, w, h + 3 + bottom - top, m_interpolationFilter4[dx[i] & 15], m_encCfg->m_internalBitDepth[CH_L], rows );
+        filtered = rows;
+      }
+      m_motionErrorLumaFracColumn( orig.Y().buf + x + y * orig.Y().stride, orig.Y().stride, filtered, w, h, n, yFilter, rowOffset,
+                                   m_encCfg->m_internalBitDepth[CH_L], columnError );
       for( int k = 0; k < n; k++ )
       {
         error[column[k]] = columnError[k];
@@ -1344,6 +1365,85 @@ static inline bool testedByIntegerSearch( const MotionVector& v, const int cente
   return ix >= 0 && ix <= 2 * range && iy >= 0 && iy <= 2 * range && ix % step == 0 && iy % step == 0;
 }
 
+namespace
+{
+// Full-sample vectors of one block, tested four at a time with the four-position kernel where it takes the block, and
+// compared in the order they were queued. That gives the same result as testing them one at a time: a partial sum is
+// above the best error at the call, later best errors are not larger, so it is above them too; only exact errors can
+// win. The queued reference blocks share one stride and must stay valid until flush() tests the last 1-3 of them.
+class IntegerVectorQueue
+{
+public:
+  IntegerVectorQueue( const MCTF& mctf, const Pel* org, const ptrdiff_t orgStride, const int w, const int h )
+    : m_mctf( mctf ), m_org( org ), m_orgStride( orgStride ), m_w( w ), m_h( h )
+    , m_enabled( mctf.m_motionErrorLumaInt4 && ( w & 15 ) == 0 && w * h <= MCTF::MAX_EXACT_INT_AREA )
+  {
+  }
+
+  bool enabled() const { return m_enabled; }
+
+  bool holds( const int vx, const int vy ) const
+  {
+    for( int k = 0; k < m_num; k++ )
+    {
+      if( m_x[k] == vx && m_y[k] == vy )
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void push( const int vx, const int vy, const Pel* ref, const ptrdiff_t refStride, MotionVector& best )
+  {
+    CHECKD( !m_enabled || ( m_num && refStride != m_refStride ), "The queue takes no vectors or another stride" );
+    m_x[m_num]   = vx;
+    m_y[m_num]   = vy;
+    m_ref[m_num] = ref;
+    m_refStride  = refStride;
+    if( ++m_num == 4 )
+    {
+      int errors[4];
+      m_mctf.m_motionErrorLumaInt4( m_org, m_orgStride, m_ref, m_refStride, m_w, m_h, best.error, errors );
+      for( int k = 0; k < 4; k++ )
+      {
+        if( errors[k] < best.error )
+        {
+          best.set( m_x[k], m_y[k], errors[k] );
+        }
+      }
+      m_num = 0;
+    }
+  }
+
+  void flush( MotionVector& best )
+  {
+    for( int k = 0; k < m_num; k++ )
+    {
+      const int error = m_mctf.m_motionErrorLumaInt8( m_org, m_orgStride, m_ref[k], m_refStride, m_w, m_h, best.error );
+      if( error < best.error )
+      {
+        best.set( m_x[k], m_y[k], error );
+      }
+    }
+    m_num = 0;
+  }
+
+private:
+  const MCTF&     m_mctf;
+  const Pel*      m_org;
+  const ptrdiff_t m_orgStride;
+  const int       m_w;
+  const int       m_h;
+  const bool      m_enabled;
+  int             m_x[4];
+  int             m_y[4];
+  const Pel*      m_ref[4];
+  ptrdiff_t       m_refStride = 0;
+  int             m_num       = 0;
+};
+} // namespace
+
 // The integer search: the full-sample vectors ( centerX + x2, centerY + y2 ) for x2 and y2 from -range to range in
 // steps of step, in row order, except the vector tested (tested already). All of them read inside one window around
 // the block, so the window is checked against the reference's border, and copied with clamped coordinates where it
@@ -1364,6 +1464,9 @@ void MCTF::testIntegerLattice( const PelStorage& orig, const PelStorage& buffer,
   const Pel* window     = nullptr;   // fetched at the first vector to test
   ptrdiff_t  windowStride = 0;
 
+  IntegerVectorQueue queue( *this, org, origStride, w, h );
+  const bool         queueVectors = oneWindow && queue.enabled();
+
   for( int y2 = -range; y2 <= range; y2 += step )
   {
     for( int x2 = -range; x2 <= range; x2 += step )
@@ -1381,6 +1484,11 @@ void MCTF::testIntegerLattice( const PelStorage& orig, const PelStorage& buffer,
         {
           window = getRefBlock( buffer.Y(), refMargin, x + centerX - range, y + centerY - range, windowW, windowH, windowStride );
         }
+        if( queueVectors )
+        {
+          queue.push( vx, vy, window + ( y2 + range ) * windowStride + x2 + range, windowStride, best );
+          continue;
+        }
         error = m_motionErrorLumaInt8( org, origStride, window + ( y2 + range ) * windowStride + x2 + range, windowStride, w, h, best.error );
       }
       else
@@ -1393,6 +1501,7 @@ void MCTF::testIntegerLattice( const PelStorage& orig, const PelStorage& buffer,
       }
     }
   }
+  queue.flush( best );
 }
 
 bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int blockSize,
@@ -1418,6 +1527,35 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     }
     else
     {
+      // The start vectors: the previous level's vectors around the block, then the zero vector. The full-sample ones
+      // whose reference block lies inside the border are tested four at a time in the same order (the queue's rule); any
+      // other vector first tests the queued ones. A vector that is the best one or queued is a repeat: testing it again
+      // cannot change the search.
+      const int          w = std::min<int>( blockSize, origWidth - blockX ) & ~7;
+      const int          h = std::min<int>( blockSize, orig.Y().height - blockY ) & ~7;
+      const CPelBuf      ref = buffer.Y();
+      IntegerVectorQueue queue( *this, orig.Y().bufAt( blockX, blockY ), orig.Y().stride, w, h );
+      auto testStartVector = [&]( const int vx, const int vy )
+      {
+        if( isTestedVector( best, vx, vy ) || queue.holds( vx, vy ) )
+        {
+          return;
+        }
+        const int rx = blockX + ( vx >> 4 );
+        const int ry = blockY + ( vy >> 4 );
+        if( queue.enabled() && ( ( vx | vy ) & 15 ) == 0 && refBlockInBorder( ref, refMargin, rx, ry, w, h ) )
+        {
+          queue.push( vx, vy, ref.bufAt( rx, ry ), ref.stride, best );
+          return;
+        }
+        queue.flush( best );
+        const int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, vx, vy, blockSize, best.error );
+        if( error < best.error )
+        {
+          best.set( vx, vy, error );
+        }
+      };
+
       for( int py = -1; py <= 1; py++ )
       {
         int testy = blockY / (2 * blockSize) + py;
@@ -1429,27 +1567,13 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
             if ((testx >= 0) && (testx < previous->w()) )
             {
               const MotionVector& old = previous->get(testx, testy);
-              if( !isTestedVector( best, old.x * factor, old.y * factor ) )
-              {
-                int error = motionErrorLuma(orig, buffer, refMargin, blockX, blockY, old.x * factor, old.y * factor, blockSize, best.error);
-                if (error < best.error)
-                {
-                  best.set(old.x * factor, old.y * factor, error);
-                }
-              }
+              testStartVector( old.x * factor, old.y * factor );
             }
           }
         }
       }
-
-      if( !isTestedVector( best, 0, 0 ) )
-      {
-        int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, 0, 0, blockSize, best.error );
-        if( error < best.error )
-        {
-          best.set( 0, 0, error );
-        }
-      }
+      testStartVector( 0, 0 );
+      queue.flush( best );
     }
     MotionVector prevBest = best;
     const int d = previous == NULL && m_searchPttrn == 2 ? 2 : 1;
@@ -1460,18 +1584,19 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     if (doubleRes)
     { // merge into one loop, probably with precision array (here [12, 3] or maybe [4, 1]) with setable number of iterations
       PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH_SUBPEL );
+      FilteredColumns columns;   // the block's horizontally filtered columns, shared by the three iterations
 
       // first iteration, 49 - 1 or 16 checks or 9 - 1 checks
       prevBest = best;
-      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, m_searchPttrn ? 6 : 12, m_searchPttrn == 2 ? 6 : 4, best );
+      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, m_searchPttrn ? 6 : 12, m_searchPttrn == 2 ? 6 : 4, columns, best );
 
       // second iteration, 9 - 1 checks
       prevBest = best;
-      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, 2, 2, best );
+      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, 2, 2, columns, best );
 
       // third iteration, 9 - 1 checks
       prevBest = best;
-      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, 1, 1, best );
+      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, 1, 1, columns, best );
     } 
     if( blockY > 0 )
     {
