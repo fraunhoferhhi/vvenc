@@ -5814,17 +5814,18 @@ static bool check_SAOcalcSaoStatisticsBo( SampleAdaptiveOffset* ref, SampleAdapt
   sstm_test << "SampleAdaptiveOffset::calcSaoStatisticsBo " << bd << " bit";
   std::cout << "Testing " << sstm_test.str() << '\n';
 
-  for( unsigned width : { 32, 64, 128 } )
+  // widths 8, 24 and 40 leave samples beyond the last whole 16 (8: all of them)
+  for( unsigned width : { 8, 24, 32, 40, 64, 128 } )
   {
     for( unsigned height : { 32, 64, 128 } )
     {
+      std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
+      std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
+
       for( int skipLinesX : { 0, 3, 5 } )
       {
         for( int skipLinesY : { 0, 2, 4 } )
         {
-          std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
-          std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
-
           // endX is the same, or -3, or -5 of the width.
           int endX = width - skipLinesX;
           // endY is the same, or -2, or -4 of the height.
@@ -5854,6 +5855,131 @@ static bool check_SAOcalcSaoStatisticsBo( SampleAdaptiveOffset* ref, SampleAdapt
   return passed;
 }
 
+// The four edge offset statistics functions, called with the inputs EncSampleAdaptiveOffset::getBlkStats prepares: its
+// ranges for each neighbour availability, the sign line of the second row for Eo135 / Eo45, and for those two the stats
+// offset by 2 and already holding the first row's. Width 24 compares the scalar code with itself; the others compare it
+// with the SIMD level under test.
+static bool check_SAOcalcSaoStatisticsEo( SampleAdaptiveOffset* ref, SampleAdaptiveOffset* opt, int bd )
+{
+  bool passed = true;
+  std::cout << "Testing SampleAdaptiveOffset::calcSaoStatisticsEo0/90/135/45 " << bd << " bit\n";
+  // the functions read the rows above and below and a sample left and right of the block (a whole vector further
+  // right on the SIMD paths)
+  const int margin    = 16;
+  const int srcStride = MAX_CU_SIZE + 2 * margin;
+  const int orgStride = MAX_CU_SIZE;
+  std::vector<Pel> srcBuf( srcStride * ( MAX_CU_SIZE + 2 ) );
+  std::vector<Pel> orgBlk( orgStride * MAX_CU_SIZE );
+  Pel* const srcBlk = srcBuf.data() + srcStride + margin;
+  const int maxVal  = ( 1 << bd ) - 1;
+  // sample sets: values 0..3 (many equal neighbours: the plain and half-edge classes), flat, the two extremes, any value
+  const char* setNames[] = { "low", "flat", "extremes", "random" };
+  auto sample = [maxVal]( int set ) {
+    return Pel( set == 0 ? rand() & 3 : set == 1 ? maxVal / 2 : set == 2 ? ( rand() & 1 ) * maxVal : rand() & maxVal );
+  };
+
+  struct BlockSize
+  {
+    int width, height;
+  };
+  // width 24 takes the scalar code; height 4 leaves no row below a luma skip
+  const BlockSize sizes[] = { { 16, 4 }, { 16, 16 }, { 24, 8 }, { 32, 32 }, { 64, 64 }, { 128, 128 } };
+  const char* dirNames[]  = { "Eo0", "Eo90", "Eo135", "Eo45" };
+
+  for( int set = 0; set < 4; set++ )
+  {
+    std::generate( srcBuf.begin(), srcBuf.end(), [&] { return sample( set ); } );
+    std::generate( orgBlk.begin(), orgBlk.end(), [&] { return sample( set == 2 ? 2 : 3 ); } );
+
+    for( const BlockSize& size : sizes )
+    {
+      const int width = size.width, height = size.height;
+      for( const bool isLuma : { true, false } )
+      {
+        // neighbour availability bits: 1 left, 2 right, 4 above, 8 below
+        for( const int avail : { 15, 0, 5, 10 } )
+        {
+          const int skipLinesR = isLuma ? 5 : 3;
+          const int skipLinesB = isLuma ? 4 : 2;
+          const int startX     = ( avail & 1 ) ? 0 : 1;
+          const int endX       = ( avail & 2 ) ? width - skipLinesR : width - 1;
+          const int endXEo90   = ( avail & 2 ) ? width - skipLinesR : width;
+          const int startYEo90 = ( avail & 4 ) ? 0 : 1;
+          const int endYEo0    = ( avail & 8 ) ? height - skipLinesB : height;
+          const int endY       = ( avail & 8 ) ? height - skipLinesB : height - 1;
+
+          for( int dir = 0; dir < 4; dir++ )
+          {
+            // the first row's stats for Eo135 / Eo45, which their callers gather before; Eo0 / Eo90 start from 0
+            const bool diagonal = dir >= 2;
+            std::vector<int64_t> countRef( NUM_SAO_EO_CLASSES, diagonal ? 9 : 0 );
+            std::vector<int64_t> diffRef( NUM_SAO_EO_CLASSES, diagonal ? -21 : 0 );
+            std::vector<int64_t> countOpt = countRef, diffOpt = diffRef;
+            std::vector<int8_t> signUpRef( MAX_CU_SIZE + 2 ), signDownRef( MAX_CU_SIZE + 2 );
+            std::vector<int8_t> signDownOpt( MAX_CU_SIZE + 2 );
+
+            Pel* const secondRow    = srcBlk + srcStride;
+            Pel* const orgSecondRow = orgBlk.data() + orgStride;
+            if( dir == 2 )
+            {
+              for( int x = startX; x <= endX; x++ )
+              {
+                signUpRef[x] = int8_t( sgn( secondRow[x] - srcBlk[x - 1] ) );
+              }
+            }
+            else if( dir == 3 )
+            {
+              // Eo45's sign line starts at index -1
+              for( int x = startX - 1; x < endX; x++ )
+              {
+                signUpRef[x + 1] = int8_t( sgn( secondRow[x] - srcBlk[x + 1] ) );
+              }
+            }
+            std::vector<int8_t> signUpOpt = signUpRef;
+
+            SampleAdaptiveOffset* const sao[2] = { ref, opt };
+            int64_t* const count[2]            = { countRef.data(), countOpt.data() };
+            int64_t* const diff[2]             = { diffRef.data(), diffOpt.data() };
+            int8_t* const signUp[2]            = { signUpRef.data(), signUpOpt.data() };
+            int8_t* const signDown[2]          = { signDownRef.data(), signDownOpt.data() };
+            for( int i = 0; i < 2; i++ )
+            {
+              switch( dir )
+              {
+              case 0:
+                sao[i]->calcSaoStatisticsEo0( width, startX, endX, endYEo0, srcBlk, orgBlk.data(), srcStride, orgStride,
+                                              count[i], diff[i] );
+                break;
+              case 1:
+                // without the row above, the function starts at the second row
+                sao[i]->calcSaoStatisticsEo90( width, endXEo90, startYEo90, endY, srcBlk + startYEo90 * srcStride,
+                                               orgBlk.data() + startYEo90 * orgStride, srcStride, orgStride, count[i],
+                                               diff[i], signUp[i] );
+                break;
+              case 2:
+                sao[i]->calcSaoStatisticsEo135( width, startX, endX, endY, secondRow, orgSecondRow, srcStride, orgStride,
+                                                count[i] + 2, diff[i] + 2, signUp[i], signDown[i] );
+                break;
+              default:
+                sao[i]->calcSaoStatisticsEo45( width, startX, endX, endY, secondRow, orgSecondRow, srcStride, orgStride,
+                                               count[i] + 2, diff[i] + 2, signUp[i] + 1 );
+              }
+            }
+
+            std::ostringstream sstm_subtest;
+            sstm_subtest << "SampleAdaptiveOffset::calcSaoStatistics" << dirNames[dir] << " " << bd << " bit "
+                         << setNames[set] << " width=" << width << " height=" << height << " luma=" << isLuma
+                         << " avail=" << avail;
+            passed = compare_values_1d( sstm_subtest.str(), countRef.data(), countOpt.data(), NUM_SAO_EO_CLASSES ) && passed;
+            passed = compare_values_1d( sstm_subtest.str(), diffRef.data(), diffOpt.data(), NUM_SAO_EO_CLASSES ) && passed;
+          }
+        }
+      }
+    }
+  }
+  return passed;
+}
+
 static bool test_SampleAdaptiveOffset()
 {
   SampleAdaptiveOffset ref{ false };
@@ -5870,6 +5996,10 @@ static bool test_SampleAdaptiveOffset()
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, max_gen, min_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, min_gen, max_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+    // samples in the four lowest bands: long runs of the same band
+    InputGenerator<Pel> low_gen{ bd - 3, /*is_signed=*/false };
+    passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, low_gen, rand_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo( &ref, &opt, bd ) && passed;
   }
 
   return passed;
