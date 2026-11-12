@@ -45,6 +45,19 @@ def clip_actor_critic_gradients(policy,max_norm):
     return float(a.item()),float(c.item())
 
 
+def masked_auxiliary_mse(prediction, target, occupancy, positive_weight=4.0):
+    """Supervise object-related cells without 600 background zeros drowning out labels.
+
+    No-object minibatches correctly yield zero auxiliary gradient.
+    """
+    if prediction.shape!=target.shape or target.shape!=occupancy.shape:
+        raise ValueError("Auxiliary target/mask shape mismatch")
+    if positive_weight<0 or not np.isfinite(positive_weight):
+        raise ValueError("Invalid auxiliary positive weight")
+    weights=occupancy*(1.0+positive_weight*target)
+    return (weights*(prediction-target).square()).sum()/weights.sum().clamp_min(1.0)
+
+
 def finite(name,*values):
     for value in values:
         valid=torch.isfinite(value).all().item() if isinstance(value,torch.Tensor) else np.isfinite(value).all()
@@ -63,19 +76,25 @@ class AuxiliaryLabels(VecEnvWrapper):
     def __init__(self,env):
         super().__init__(env)
         self.last_block_reward=np.zeros((self.num_envs,20,30),dtype=np.float32)
+        self.last_block_mask=np.zeros((self.num_envs,20,30),dtype=np.float32)
         self.last_consumed_action=np.zeros((self.num_envs,20,30),dtype=np.float64)
     def reset(self):
         self.last_block_reward.fill(0)
+        self.last_block_mask.fill(0)
         self.last_consumed_action.fill(0)
         return self.venv.reset()
     def step_wait(self):
         obs,rewards,done,infos=self.venv.step_wait()
         labels=np.asarray([info["block_reward"] for info in infos],dtype=np.float32)
+        masks=np.asarray([info["block_mask"] for info in infos],dtype=np.float32)
         consumed=np.asarray([info["consumed_action"] for info in infos],dtype=np.float64).reshape(self.num_envs,20,30)
-        finite("auxiliary targets/actions",labels,consumed,rewards,*obs.values())
-        if labels.shape!=self.last_block_reward.shape or (labels<0).any() or (labels>1).any():
-            raise ValueError("Invalid block targets")
+        finite("auxiliary targets/actions",labels,masks,consumed,rewards,*obs.values())
+        if (labels.shape!=self.last_block_reward.shape or masks.shape!=labels.shape
+                or (labels<0).any() or (labels>1).any() or (masks<0).any()
+                or (masks>1).any() or (labels>masks+1e-6).any()):
+            raise ValueError("Invalid block targets/masks")
         np.copyto(self.last_block_reward,labels)
+        np.copyto(self.last_block_mask,masks)
         np.copyto(self.last_consumed_action,consumed)
         return obs,rewards,done,infos
 
@@ -87,11 +106,13 @@ class AuxSamples(NamedTuple):
     advantages:torch.Tensor
     returns:torch.Tensor
     auxiliary:torch.Tensor
+    auxiliary_mask:torch.Tensor
 
 class AuxBuffer(DictRolloutBuffer):
     def reset(self):
         super().reset()
         self.auxiliary=np.zeros((self.buffer_size,self.n_envs,20,30),dtype=np.float32)
+        self.auxiliary_mask=np.zeros_like(self.auxiliary)
         self.label_source=None
     def add(self,obs,action,reward,episode_start,value,log_prob):
         finite("rollout",action,reward,value,log_prob,*obs.values())
@@ -102,14 +123,17 @@ class AuxBuffer(DictRolloutBuffer):
         if not np.array_equal(expected,consumed):
             raise ValueError("Raw Gaussian action does not match the encoder-consumed map")
         self.auxiliary[self.pos]=labels
+        self.auxiliary_mask[self.pos]=self.label_source.last_block_mask.copy()
         super().add(obs,action,reward,episode_start,value,log_prob)
     def get(self,batch_size=None):
         if not self.generator_ready:
             self.auxiliary=self.swap_and_flatten(self.auxiliary)
+            self.auxiliary_mask=self.swap_and_flatten(self.auxiliary_mask)
         return super().get(batch_size)
     def _get_samples(self,batch_inds,env=None):
         data=super()._get_samples(batch_inds,env)
-        return AuxSamples(*data,self.to_torch(self.auxiliary[batch_inds].reshape(len(batch_inds),600)))
+        return AuxSamples(*data,self.to_torch(self.auxiliary[batch_inds].reshape(len(batch_inds),600)),
+                          self.to_torch(self.auxiliary_mask[batch_inds].reshape(len(batch_inds),600)))
 
 class AuxPPO(PPO):
     def __init__(self,*args,aux_loss_coef=.1,**kwargs):
@@ -154,7 +178,7 @@ class AuxPPO(PPO):
         with torch.no_grad():
             for data in self.rollout_buffer.get(self.batch_size):
                 finite("stored rollout",data.actions,data.old_log_prob,data.old_values,
-                       data.advantages,data.returns,data.auxiliary,*data.observations.values())
+                       data.advantages,data.returns,data.auxiliary,data.auxiliary_mask,*data.observations.values())
                 values,logp,_=self.policy.evaluate_actions(data.observations,data.actions)
                 finite("collecting-policy verification",values,logp)
                 if (logp-data.old_log_prob).abs().max().item()>1e-3 or (values.flatten()-data.old_values).abs().max().item()>1e-3:
@@ -179,7 +203,7 @@ class AuxPPO(PPO):
                 # not be allowed to inflate shared features and auxiliary logits.
                 auxiliary_prediction=self.policy.reward_head(
                     self.policy.pi_features_extractor(data.observations))
-                auxiliary=F.mse_loss(auxiliary_prediction,data.auxiliary)
+                auxiliary=masked_auxiliary_mse(auxiliary_prediction,data.auxiliary,data.auxiliary_mask)
                 loss=policy_loss+self.vf_coef*value_loss+self.ent_coef*entropy_loss+self.aux_loss_coef*auxiliary
                 log_ratio=logp-data.old_log_prob
                 kl=(torch.exp(log_ratio)-1-log_ratio).mean()
@@ -200,7 +224,12 @@ class AuxPPO(PPO):
                     "actor_gradient_norm":actor_norm,"critic_gradient_norm":critic_norm,
                     "auxiliary_prediction_mean":auxiliary_prediction.detach().mean().item(),
                     "auxiliary_prediction_std":auxiliary_prediction.detach().std(unbiased=False).item(),
-                    "auxiliary_target_mean":data.auxiliary.mean().item()})
+                    "auxiliary_target_mean":data.auxiliary.mean().item(),
+                    "auxiliary_active_fraction":data.auxiliary_mask.mean().item(),
+                    "auxiliary_positive_fraction":(data.auxiliary>0).float().mean().item(),
+                    "auxiliary_prediction_active_mean":float(
+                        (auxiliary_prediction.detach()*data.auxiliary_mask).sum().item()
+                        /max(data.auxiliary_mask.sum().item(),1.0))})
             self._n_updates+=1
             if time.monotonic()-heartbeat>=15:
                 print("PPO_OPTIMIZING",f"epoch={epoch+1}/{self.n_epochs}",f"optimizer_steps={len(records)}",flush=True)
