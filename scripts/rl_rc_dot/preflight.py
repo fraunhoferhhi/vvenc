@@ -101,6 +101,10 @@ def run(encoder, output, ffmpeg, *, frames=32, source=None, threads=2, decoder=N
                              "decoded_sha256": byte_hash, "stream_sha256": digest(native.output / "stream.266"),
                              "decision_pocs": [row["poc"] for row in native.states], "final_qps": per_poc,
                              "mean_qps":{str(row["poc"]):row["mean_qp"] for row in native.posts}}
+    if reports["anchor"]["stream_sha256"] != reports["zero"]["stream_sha256"]:
+        raise ValueError("Zero delta-QP must be bit-exact with the matched native-QPA anchor")
+    if reports["anchor"]["final_qps"] != reports["zero"]["final_qps"]:
+        raise ValueError("Zero delta-QP must preserve final native QPA CUs")
     if reports["zero"]["stream_sha256"] == reports["pattern"]["stream_sha256"]:
         raise ValueError("The spatial action had no bitstream effect")
     if reports["zero"]["final_qps"] == reports["pattern"]["final_qps"]:
@@ -112,7 +116,7 @@ def run(encoder, output, ffmpeg, *, frames=32, source=None, threads=2, decoder=N
     probe=str(reports["zero"]["decision_pocs"][-1])
     if plus[probe]<=minus[probe] or any(abs(plus[p]-minus[p])>1e-8 for p in plus if p!=probe):
         raise ValueError("Isolated POC action changed the wrong picture or had no effect")
-    report = {"schema":"vvenc-rcdot-vvc-adapter/2","gate": "REAL_VVC_STATE_ACTION_AU_DECODE_PASS", "encoder_sha256": digest(encoder),
+    report = {"schema":"vvenc-rcdot-vvc-adapter/3","gate": "REAL_VVC_STATE_ACTION_AU_DECODE_PASS", "encoder_sha256": digest(encoder),
               "fixture": source.name, "runs": reports}
     atomic_json(output / "PREFLIGHT.json", report)
     return report

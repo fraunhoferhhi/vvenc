@@ -852,10 +852,15 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   {
     Picture* const pic = bestCS->picture;
     const uint32_t ctu = getCtuAddr(partitioner.currQgPos,*pps.pcv);
-    const int qp = rcdot::requestedQp(slice,lumaArea);
-    tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-    bestCS->currQP[partitioner.chType] = bestCS->baseQP = qp;
-    updateLambda(slice,pic->ctuQpaLambda[ctu],pic->ctuAdaptedQP[ctu],qp,true);
+    const int nativeQpaQp = tempCS->baseQP;
+    const int qp = rcdot::requestedQp(slice,lumaArea,nativeQpaQp);
+    // Preserve both native QPA quantization and lambda for zero delta.
+    if( qp != nativeQpaQp )
+    {
+      tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+      bestCS->currQP[partitioner.chType] = bestCS->baseQP = qp;
+      updateLambda(slice,pic->ctuQpaLambda[ctu],pic->ctuAdaptedQP[ctu],qp,true);
+    }
   }
 
   // Research extension: one fixed PPO-QP action map per POC (first-stage integration).

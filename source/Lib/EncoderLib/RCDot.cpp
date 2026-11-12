@@ -206,7 +206,7 @@ void emitState( const Slice& slice )
         const int qp = slice.pic->ctuAdaptedQP.empty() ? slice.sliceQp : slice.pic->ctuAdaptedQP.at(ctu);
         inverse[y*COLS+x] = std::pow(2.0,-(qp-4.0)/6.0);
       }
-    s.events << "{\"schema\":\"vvenc-rcdot-vvc-adapter/2\",\"kind\":\"state\",\"poc\":" << slice.poc << ",\"step\":" << s.decisions
+    s.events << "{\"schema\":\"vvenc-rcdot-vvc-adapter/3\",\"kind\":\"state\",\"poc\":" << slice.poc << ",\"step\":" << s.decisions
              << ",\"history_poc\":" << s.historyPoc << ",\"lookahead_last_poc\":" << pre.lastPoc
              << ",\"global\":[";
     for( int i = 0; i < 16; ++i ) s.events << (i ? "," : "") << global[i];
@@ -225,7 +225,7 @@ void emitState( const Slice& slice )
   }
 }
 
-int requestedQp( const Slice& slice, const Area& area )
+int requestedQp( const Slice& slice, const Area& area, int nativeQpaQp )
 {
   const Map& map = session().actions.at(slice.poc);
   const int right = std::min(WIDTH,area.x+int(area.width));
@@ -239,7 +239,9 @@ int requestedQp( const Slice& slice, const Area& area )
       sum += overlap*map[y*COLS+x]; weight += overlap;
     }
   if( weight <= 0 ) throw std::runtime_error("RL-RC-DoT: invalid QG geometry");
-  return Clip3(-slice.sps->qpBDOffset[CH_L],MAX_QP,int(std::floor(slice.sliceQp+sum/weight+0.5)));
+  // Delta zero must preserve the encoder's existing native QPA QP.
+  const int delta = int(std::lround(sum / weight));
+  return Clip3(-slice.sps->qpBDOffset[CH_L],MAX_QP,nativeQpaQp + delta);
 }
 
 void recordCu( const CodingUnit& cu )

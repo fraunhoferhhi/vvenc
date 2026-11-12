@@ -24,7 +24,7 @@ void reset( const VVEncCfg& cfg );
 void storeAnalysis( int poc, int lastPoc, const Analysis& analysis, const Map& propagation );
 void emitState( const Slice& slice );
 bool controlsQp();
-int requestedQp( const Slice& slice, const Area& area );
+int requestedQp( const Slice& slice, const Area& area, int nativeQpaQp );
 void recordCu( const CodingUnit& cu );
 void finishPicture( const Picture& pic );
 void outputPicture( const Picture& pic, const AccessUnitList& au );

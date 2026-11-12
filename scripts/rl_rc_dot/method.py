@@ -9,7 +9,8 @@ import numpy as np
 W,H,FPS=480,320,30
 GRID=(20,30)
 FRAME_BYTES=W*H*3//2
-SCHEMA="vvenc-rcdot-vvc-adapter/2"
+SCHEMA="vvenc-rcdot-vvc-adapter/3"
+TRAIN_REWARD_SCALE=0.05  # Uniform positive scale; preserves published reward ordering.
 
 def observation(event,frames):
     if event.get("schema")!=SCHEMA or frames<1:raise ValueError("Unknown native schema or invalid frame count")
@@ -80,6 +81,23 @@ def detection_targets(raw,reconstructed):
     np.divide(labels,counts,out=labels,where=counts>0)
     tp=int(correct.sum());fp=len(pred)-tp;fn=len(raw)-tp
     return labels,{"precision":tp/len(pred) if len(pred) else 0.,"recall":tp/len(raw) if len(raw) else 0.,"tp":tp,"fp":fp,"fn":fn}
+
+def auxiliary_supervision_mask(raw,reconstructed):
+    """Supervise source/reconstruction object cells, not irrelevant background."""
+    mask=np.zeros(GRID,dtype=np.float32)
+    for boxes in (boxes_checked(raw),boxes_checked(reconstructed)):
+        for box in boxes:
+            x=min(29,max(0,int(((box[0]+box[2])/2)//16)))
+            y=min(19,max(0,int(((box[1]+box[3])/2)//16)))
+            mask[y,x]=1.0
+    return mask
+
+
+def training_reward(paper_reward):
+    """Scale the PPO reward while reporting/validating in original paper units."""
+    if not math.isfinite(paper_reward):raise ValueError("Nonfinite paper reward")
+    return TRAIN_REWARD_SCALE*paper_reward
+
 
 def score(raw,reconstructed,cumulative_bits,decisions,target_bps):
     if cumulative_bits<=0 or decisions<1 or not math.isfinite(target_bps) or target_bps<=0:raise ValueError("Invalid rate reward inputs")

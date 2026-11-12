@@ -78,7 +78,7 @@ class NativeEpisode:
         raise TimeoutError(f"No complete encoder event within {self.timeout}s at {path}")
 
     def _state(self, row):
-        if (row.get("schema") != "vvenc-rcdot-vvc-adapter/2" or row.get("kind") != "state" or row.get("step") != len(self.states)
+        if (row.get("schema") != "vvenc-rcdot-vvc-adapter/3" or row.get("kind") != "state" or row.get("step") != len(self.states)
                 or type(row.get("poc")) is not int or not 0 <= row["poc"] < self.frames
                 or row["poc"] in {r["poc"] for r in self.states}):
             raise ValueError("Repeated, missing or out-of-order decision record")
