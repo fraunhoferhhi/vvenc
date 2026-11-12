@@ -88,12 +88,13 @@ struct ScanElement
 class InitGeoRom
 {
   public:
-    InitGeoRom() { initGeoTemplate(); }
+    InitGeoRom() { initGeoTemplate(); initLfnstPairs(); }
 
     ~InitGeoRom() { }
 
   private:
     void initGeoTemplate() const;
+    void initLfnstPairs() const;
 
   private:
 };
@@ -182,6 +183,15 @@ extern const     int8_t   g_lfnstFwd8x8[ 4 ][ 2 ][ 16 ][ 48 ];
 extern const     int8_t   g_lfnstFwd4x4[ 4 ][ 2 ][ 16 ][ 16 ];
 extern const     int8_t   g_lfnstInv8x8[ 4 ][ 2 ][ 48 ][ 16 ];
 extern const     int8_t   g_lfnstInv4x4[ 4 ][ 2 ][ 16 ][ 16 ];
+
+// The LFNST matrices above in int16 with the coefficients of two adjacent inputs side by side, laid out
+// [mode][index][input pair][output][2], for the multiply-add kernels of the x86 SIMD code: one 16-bit multiply-add of
+// a broadcast input pair with a table row adds both products for consecutive outputs. Filled at static
+// initialization (InitGeoRom), read-only afterwards.
+extern           int16_t  g_lfnstFwd8x8Pairs[ 4 ][ 2 ][ 24 ][ 16 ][ 2 ];
+extern           int16_t  g_lfnstFwd4x4Pairs[ 4 ][ 2 ][  8 ][ 16 ][ 2 ];
+extern           int16_t  g_lfnstInv8x8Pairs[ 4 ][ 2 ][  8 ][ 48 ][ 2 ];
+extern           int16_t  g_lfnstInv4x4Pairs[ 4 ][ 2 ][  8 ][ 16 ][ 2 ];
 
 extern const     uint8_t  g_lfnstLut[ NUM_INTRA_MODE + NUM_EXT_LUMA_MODE - 1 ];
 

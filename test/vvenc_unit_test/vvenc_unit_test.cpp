@@ -2070,12 +2070,88 @@ static bool check_ict( TrQuant& ref, TrQuant& opt, unsigned num_cases )
   return true;
 }
 
+// LFNST kernels against the scalar code, for every matrix (4x4 and 8x8, 4 sets, 2 indices) and both zero-out sizes.
+// Inputs: random int16, the int16 extremes, the extremes signed like one matrix row (the largest sums the matrices
+// allow), and for the forward kernel random 19-bit values and random int16 with one value just outside int16 at any
+// position (both take the 32-bit path of the SIMD code). The inverse takes dequantized coefficients, which are clipped
+// to int16. The whole 48-entry output is compared, so writes past the kernel's output are caught as well.
+static bool check_lfnst( TrQuant& ref, TrQuant& opt, unsigned num_cases )
+{
+  printf( "Testing TrQuant::m_fwdLfnstNxN and m_invLfnstNxN\n" );
+  // rand() may give only 15 bits (RAND_MAX 32767 on Windows): two calls for each value
+  auto randBits = []( int bits ) { return ( int ) ( ( ( ( unsigned ) rand() << 15 ) ^ ( unsigned ) rand() ) & ( ( 1u << bits ) - 1 ) ) - ( 1 << ( bits - 1 ) ); };
+  auto rand16   = [&]() { return randBits( 16 ); };
+  auto rand19   = [&]() { return randBits( 19 ); };
+  MinMaxGenerator<TCoeff> extremes{ 16 };
+
+  for( int fwd = 0; fwd < 2; fwd++ )
+  {
+    for( uint32_t size = 4; size <= 8; size += 4 )
+    {
+      const int numIn = fwd ? ( size > 4 ? 48 : 16 ) : 16;
+      for( uint32_t mode = 0; mode < 4; mode++ )
+      {
+        for( uint32_t index = 0; index < 2; index++ )
+        {
+          for( int zeroOutSize = 8; zeroOutSize <= 16; zeroOutSize += 8 )
+          {
+            for( unsigned c = 0; c < num_cases; c++ )
+            {
+              const int kind = c % ( fwd ? 5 : 3 );
+              std::vector<TCoeff> src( 48, 0 );
+              for( int i = 0; i < numIn; i++ )
+              {
+                src[i] = kind == 0 || kind == 4 ? rand16() : kind == 1 ? extremes() : kind == 3 ? rand19() : 0;
+              }
+              if( kind == 4 )
+              {
+                src[rand() % numIn] = ( rand() & 1 ) ? 32768 : -32769;
+              }
+              if( kind == 2 )
+              {
+                // the signs of one row's coefficients: the forward row j holds the weights of output j; for the
+                // inverse, output j is row j of the inverse matrix
+                const int     outRows = fwd ? zeroOutSize : ( size > 4 ? 48 : 16 );
+                const int     j       = rand() % outRows;
+                const int8_t* row     = fwd ? ( size > 4 ? g_lfnstFwd8x8[mode][index][j] : g_lfnstFwd4x4[mode][index][j] )
+                                            : ( size > 4 ? g_lfnstInv8x8[mode][index][j] : g_lfnstInv4x4[mode][index][j] );
+                const bool    negate  = rand() & 1;
+                for( int i = 0; i < numIn; i++ )
+                {
+                  src[i] = ( row[i] >= 0 ) != negate ? 32767 : -32768;
+                }
+              }
+
+              std::vector<TCoeff> srcRef( src ), srcOpt( src );
+              std::vector<TCoeff> dstRef( 48, 0x5a5a5a5a ), dstOpt( 48, 0x5a5a5a5a );
+              ( fwd ? ref.m_fwdLfnstNxN : ref.m_invLfnstNxN )( srcRef.data(), dstRef.data(), mode, index, size, zeroOutSize );
+              ( fwd ? opt.m_fwdLfnstNxN : opt.m_invLfnstNxN )( srcOpt.data(), dstOpt.data(), mode, index, size, zeroOutSize );
+
+              std::ostringstream sstm;
+              sstm << ( fwd ? "fwd" : "inv" ) << "LfnstNxN size=" << size << " mode=" << mode << " index=" << index
+                   << " zeroOutSize=" << zeroOutSize << " kind=" << kind;
+              if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), 48 )
+               || !compare_values_1d( sstm.str() + " src", srcRef.data(), srcOpt.data(), 48 ) )
+              {
+                return false;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
 static bool test_TrQuant()
 {
   TrQuant ref( /*enableOpt=*/false );
   TrQuant opt( /*enableOpt=*/true );
 
-  return check_ict( ref, opt, NUM_CASES );
+  bool passed = check_ict( ref, opt, NUM_CASES );
+  passed = check_lfnst( ref, opt, 20 ) && passed;
+  return passed;
 }
 
 #endif // ENABLE_SIMD_TRAFO
