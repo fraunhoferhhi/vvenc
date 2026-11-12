@@ -389,6 +389,12 @@ private:
     int    clip[MAX_NUM_ALF_LUMA_COEFF];   // clipping indices chosen for that filter
   };
   AlfMergedPair          m_alfMergedPairs[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES];   // [i][j] for i < j
+  // alfEncoderCtb: each ASU's luma distortion with each filter set, [asuIdx * CTB_SET_DIST_STRIDE + column]: the fixed
+  // sets in columns 0 .. 15, APS set k in column 16 + k (a pass uses at most ALF_CTB_MAX_NUM_APS - 1 = 7 APS sets), and
+  // the new filter set in the last column
+  static constexpr int   CTB_SET_DIST_STRIDE     = NUM_FIXED_FILTER_SETS + ALF_CTB_MAX_NUM_APS;
+  static constexpr int   CTB_NEW_FILTER_DIST_COL = CTB_SET_DIST_STRIDE - 1;
+  std::vector<double>    m_ctbSetDist;
   CABACWriter*           m_CABACEstimator;
   CtxCache*              m_CtxCache;
   double                 m_lambda[MAX_NUM_COMP];
@@ -523,6 +529,9 @@ public:
   double deriveFilterCoeffs      ( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam);
   int    deriveFilterCoefficientsPredictionMode( AlfFilterShape& alfShape, int **filterSet, int** filterCoeffDiff, const int numFilters );
   double deriveCoeffQuant        ( int *filterClipp, int *filterCoeffQuant, const AlfCovariance& cov, const AlfFilterShape& shape, const int bitDepth, const bool optimizeClip );
+  double getCtbLumaSetDistortion ( const int asuIdx, const int filterSetIdx, const short* setCoeff, const short* setClipp, const bool doClip, const double invFactor ) const;
+  void   deriveCtbSetDistortions ( const int numAsus, const int numApsSets, const bool doClip, const double invFactor );
+  void   deriveCtbNewFilterDistortions( const int numAsus, const bool doClip, const double invFactor );
   double deriveCtbAlfEnableFlags ( CodingStructure& cs, ChannelType channel, const double chromaWeight,
                                    const int numClasses, const int numCoeff, const int numAsus, double& distUnfilter );
   void   roundFiltCoeff          ( int *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor );
