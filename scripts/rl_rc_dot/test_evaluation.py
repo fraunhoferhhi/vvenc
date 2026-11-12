@@ -4,12 +4,34 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 import unittest
 import tempfile
 import json
-from scripts.rl_rc_dot.evaluate import bd_metrics,report
+from scripts.rl_rc_dot.evaluate import bd_metrics,report,evaluation_protocol,evaluation_deadline
 
 def points(scale=1):
     return [{"actual_kbps":r*scale,"mean_precision":q} for r,q in [(50,.2),(80,.3),(120,.4),(160,.5),(200,.6)]]
 
 class Evaluation(unittest.TestCase):
+    def test_mini_five_rate_and_quick_protocols(self):
+        for rates in ([50,120,200],[50,80,120,160,200]):
+            evaluation_protocol("mini",256,rates)
+        for frames,rates in ((64,[50,120,200]),(256,[50,120]),(256,[200,120,50])):
+            with self.assertRaises(ValueError):evaluation_protocol("mini",frames,rates)
+
+    def test_notebook_setup_consumes_evaluation_budget(self):
+        self.assertEqual(evaluation_deadline(1,1000,now=50,wall=1600),2690)
+        self.assertLess(evaluation_deadline(1,1000,now=50,wall=5000),50)
+        self.assertEqual(evaluation_deadline(0,1000,now=50,wall=5000),float("inf"))
+
+    def test_five_rate_mini_report_computes_bd_rate(self):
+        pairs=[]
+        for a,b in zip(points(),points(.8)):
+            rate=a['actual_kbps']
+            pairs.append(tuple(dict(p,video_id='mini',target_kbps=rate,mean_recall=.5,f1=.45) for p in (a,b)))
+        with tempfile.TemporaryDirectory() as tmp:
+            report(Path(tmp),pairs)
+            summary=json.loads((Path(tmp)/'summary.json').read_text())
+            self.assertEqual(summary['bd_rate_valid_videos'],1)
+            self.assertAlmostEqual(summary['mean_bd_rate_percent'],-20,places=8)
+
     def test_three_rate_mini_summary_reports_pairs_without_bd_rate(self):
         rates=(50,120,200)
         pairs=[]
