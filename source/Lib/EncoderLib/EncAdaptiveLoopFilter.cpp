@@ -4877,6 +4877,78 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
   }
 }
 
+// Luma distortion of ASU asuIdx when filtered with filter set filterSetIdx: its unfiltered distortion plus each class's
+// change, classes in order. A fixed set (filterSetIdx < NUM_FIXED_FILTER_SETS) takes its filters from the fixed table,
+// any other set from setCoeff / setClipp (MAX_NUM_ALF_CLASSES x MAX_NUM_ALF_LUMA_COEFF).
+double EncAdaptiveLoopFilter::getCtbLumaSetDistortion( const int asuIdx, const int filterSetIdx, const short* setCoeff, const short* setClipp, const bool doClip, const double invFactor ) const
+{
+  double dist = m_ctbDistortionUnfilter[COMP_Y][asuIdx];
+  int    filterCoeff[MAX_NUM_ALF_LUMA_COEFF];
+  int    filterClipp[MAX_NUM_ALF_LUMA_COEFF];
+
+  for( int classIdx = 0; classIdx < MAX_NUM_ALF_CLASSES; classIdx++ )
+  {
+    const AlfCovariance& cov = m_alfCovariance[COMP_Y][asuIdx][classIdx];
+    if( cov.all0 )
+    {
+      continue;
+    }
+    const int* coeff = filterCoeff;
+    const int* clipp = filterClipp;
+    if( filterSetIdx < NUM_FIXED_FILTER_SETS )
+    {
+      coeff = m_fixedFilterSetCoeff[m_classToFilterMapping[filterSetIdx][classIdx]];
+      clipp = m_clipDefaultEnc;
+    }
+    else
+    {
+      for( int i = 0; i < MAX_NUM_ALF_LUMA_COEFF; i++ )
+      {
+        filterCoeff[i] = setCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
+        filterClipp[i] = setClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
+      }
+    }
+    dist += doClip ? cov.calcErrorForCoeffs<true >( clipp, coeff, MAX_NUM_ALF_LUMA_COEFF, invFactor )
+                   : cov.calcErrorForCoeffs<false>( clipp, coeff, MAX_NUM_ALF_LUMA_COEFF, invFactor );
+  }
+  return dist;
+}
+
+// alfEncoderCtb tries every filter set on every ASU in each of its decision passes (with or without a new filter, each
+// number of APS sets, a re-derived new filter), but the fixed and APS sets stay the same in all passes. Their
+// distortions go into m_ctbSetDist once, and the passes look them up.
+void EncAdaptiveLoopFilter::deriveCtbSetDistortions( const int numAsus, const int numApsSets, const bool doClip, const double invFactor )
+{
+  if( m_ctbSetDist.size() < size_t( numAsus * CTB_SET_DIST_STRIDE ) )
+  {
+    m_ctbSetDist.resize( numAsus * CTB_SET_DIST_STRIDE );   // once per picture encoder: the ASU count is fixed
+  }
+  for( int asuIdx = 0; asuIdx < numAsus; asuIdx++ )
+  {
+    double* setDist = &m_ctbSetDist[asuIdx * CTB_SET_DIST_STRIDE];
+    for( int filterSetIdx = 0; filterSetIdx < NUM_FIXED_FILTER_SETS; filterSetIdx++ )
+    {
+      setDist[filterSetIdx] = getCtbLumaSetDistortion( asuIdx, filterSetIdx, nullptr, nullptr, doClip, invFactor );
+    }
+    for( int apsIdx = 0; apsIdx < numApsSets; apsIdx++ )
+    {
+      setDist[NUM_FIXED_FILTER_SETS + apsIdx] = getCtbLumaSetDistortion( asuIdx, NUM_FIXED_FILTER_SETS + apsIdx, m_coeffApsLuma[apsIdx],
+                                                                         m_clippApsLuma[apsIdx], doClip, invFactor );
+    }
+  }
+}
+
+// The new filter set (m_coeffFinal / m_clippFinal) changes only when alfEncoderCtb reconstructs it, so its distortions
+// are computed again only then.
+void EncAdaptiveLoopFilter::deriveCtbNewFilterDistortions( const int numAsus, const bool doClip, const double invFactor )
+{
+  for( int asuIdx = 0; asuIdx < numAsus; asuIdx++ )
+  {
+    m_ctbSetDist[asuIdx * CTB_SET_DIST_STRIDE + CTB_NEW_FILTER_DIST_COL] =
+      getCtbLumaSetDistortion( asuIdx, NUM_FIXED_FILTER_SETS, m_coeffFinal, m_clippFinal, doClip, invFactor );
+  }
+}
+
 void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfParamNewFilters, const double lambdaChromaWeight, const int numAsus, const int numCtus )
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_ENC_CTB );
@@ -4909,6 +4981,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
   std::vector<int> bestApsIds;
   double costMin = MAX_DOUBLE;
   reconstructCoeffAPSs(cs, true, false, true);
+  deriveCtbSetDistortions( numAsus, std::min<int>( (int)apsIds.size(), ALF_CTB_MAX_NUM_APS - 1 ), doClip, invFactor );
+  bool newFilterDistStale = true;   // m_coeffFinal changed since its distortions were computed
 
   DTRACE( g_trace_ctx, D_MISC, "POC=%d\n", cs.slice->poc );
 
@@ -4927,6 +5001,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
       {
         bitsNewFilter = m_bitsNewFilter[CH_L];
         reconstructCoeff(alfParamNewFilters, CH_L, true, true);
+        newFilterDistStale = true;
       }
     }
     int numIter = useNewFilter ? 2 : 1;
@@ -5025,6 +5100,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             DTRACE( g_trace_ctx, D_MISC, ", use it\n" );
 
             reconstructCoeff(m_alfParamTemp, CH_L, true, true);
+            newFilterDistStale = true;
             bitsNewFilter = bitsNewFilterTempLuma;
           }
           else //no blocks using new filter, skip
@@ -5032,6 +5108,12 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             continue;
           }
         }// if iter > 0
+
+        if( useNewFilter && newFilterDistStale )
+        {
+          deriveCtbNewFilterDistortions( numAsus, doClip, invFactor );
+          newFilterDistStale = false;
+        }
 
         m_CABACEstimator->getCtx() = ctxStart;
         for( int asuIdx = 0; asuIdx < numAsus; asuIdx++ )
@@ -5057,53 +5139,17 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             double rateOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, m_CABACEstimator, ctuLambda );
             alfCtbFilterSetIndex[ctbIdx] = filterSetIdx;
             rateOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctbIdx, m_CABACEstimator, ctuLambda );
-            //distortion
-            double dist = distUnfilterCtb;
-
-            for (int classIdx = 0; classIdx < MAX_NUM_ALF_CLASSES; classIdx++)
+            //distortion, from the table: with a new filter, set 16 is the new filter and APS set k moves to 17 + k
+            int distCol = filterSetIdx;
+            if( useNewFilter && filterSetIdx == NUM_FIXED_FILTER_SETS )
             {
-              if (filterSetIdx < NUM_FIXED_FILTER_SETS)
-              {
-                // fixed filter set
-                int filterIdx = m_classToFilterMapping[filterSetIdx][classIdx];
-
-                if( !m_alfCovariance[COMP_Y][asuIdx][classIdx].all0 )
-                  dist += doClip ? m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                                 : m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
-              }
-              else
-              {
-                short *pCoeff;
-                short *pClipp;
-                if (useNewFilter && filterSetIdx == NUM_FIXED_FILTER_SETS)
-                {
-                  // New filter, no APS
-                  pCoeff = m_coeffFinal;
-                  pClipp = m_clippFinal;
-                }
-                else if (useNewFilter)
-                {
-                  // New filter after APS
-                  pCoeff = m_coeffApsLuma[filterSetIdx - 1 - NUM_FIXED_FILTER_SETS];
-                  pClipp = m_clippApsLuma[filterSetIdx - 1 - NUM_FIXED_FILTER_SETS];
-                }
-                else
-                {
-                  // filter from APS
-                  pCoeff = m_coeffApsLuma[filterSetIdx - NUM_FIXED_FILTER_SETS];
-                  pClipp = m_clippApsLuma[filterSetIdx - NUM_FIXED_FILTER_SETS];
-                }
-                for (int i = 0; i < MAX_NUM_ALF_LUMA_COEFF; i++)
-                {
-                  m_filterTmp[i] = pCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
-                  m_clipTmp[i]   = pClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
-                }
-
-                if( !m_alfCovariance[COMP_Y][asuIdx][classIdx].all0 )
-                  dist += doClip ? m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                                 : m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
-              }
-            } //for(classIdx)
+              distCol = CTB_NEW_FILTER_DIST_COL;
+            }
+            else if( useNewFilter && filterSetIdx > NUM_FIXED_FILTER_SETS )
+            {
+              distCol = filterSetIdx - 1;
+            }
+            const double dist = m_ctbSetDist[asuIdx * CTB_SET_DIST_STRIDE + distCol];
             //cost
             const double costOnTmp = dist + rateOn;
 #if ENABLE_TRACING
