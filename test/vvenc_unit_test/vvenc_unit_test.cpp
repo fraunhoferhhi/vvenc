@@ -5495,6 +5495,7 @@ static void generate_non_positive_definite_matrix( AlfCovariance::TE lhs, AlfCov
   // Depending on the chosen value range, regularization may or may not recover it.
   for( int i = 0; i < size; ++i )
   {
+    std::fill_n( lhs[i], size, 0.0f );
     lhs[i][i] = genDiag();
     CHECK( lhs[i][i] >= 0.0f, "Diagonal entries must be negative to ensure non-positive definiteness." );
     rhs[i] = genRhs();
