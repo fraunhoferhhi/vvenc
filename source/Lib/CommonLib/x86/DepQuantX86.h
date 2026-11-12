@@ -872,6 +872,104 @@ namespace vvenc {
         }
       }
     }
+
+    // The state chain of DQIntern::dequantCoeffs, state = ( 32040 >> ( ( state << 2 ) + ( ( level & 1 ) << 1 ) ) ) & 3,
+    // four levels per step. Index: state << 4 | the parities of 4 scan positions (bit k = position k, run from k = 3 down
+    // to 0). Entry: the state after them << 4 | ( the state before position k ) >> 1 in bit k.
+    alignas( 64 ) static const uint8_t g_stateChain4[64] =
+    {
+      0x00, 0x20, 0x11, 0x31, 0x22, 0x02, 0x33, 0x13, 0x15, 0x35, 0x04, 0x24, 0x37, 0x17, 0x26, 0x06,
+      0x15, 0x35, 0x04, 0x24, 0x37, 0x17, 0x26, 0x06, 0x00, 0x20, 0x11, 0x31, 0x22, 0x02, 0x33, 0x13,
+      0x2a, 0x0a, 0x3b, 0x1b, 0x08, 0x28, 0x19, 0x39, 0x3f, 0x1f, 0x2e, 0x0e, 0x1d, 0x3d, 0x0c, 0x2c,
+      0x3f, 0x1f, 0x2e, 0x0e, 0x1d, 0x3d, 0x0c, 0x2c, 0x2a, 0x0a, 0x3b, 0x1b, 0x08, 0x28, 0x19, 0x39,
+    };
+
+    // DQIntern::dequantCoeffs one 4x4 sub-block (one scan group of 16) at a time: the levels are read and the
+    // coefficients written in the sub-block's raster order, only the state chain runs in scan order (scalar, four
+    // parities per table step). Falls back to the scalar code for scaling lists, sub-blocks smaller than 4x4, a last
+    // position in the zero-out region of a 64-point transform (never coded: those scan positions are not 4x4 groups),
+    // and steps so large that a product of the scalar code's 64-bit arithmetic could leave 32 bits.
+    template<X86_VEXT vext>
+    void dequantCoeffs( const TCoeffSig* qCoeff, TCoeff* tCoeff, const ScanElement* scan, int lastScanIdx, int width, int height,
+                        int shift, Intermediate_Int invQScale, const int* piDequantCoef, TCoeff minTCoeff, TCoeff maxTCoeff )
+    {
+      // |qIdx| = | 2 level - sign( level ) ( state >> 1 ) | <= 65536 for 16-bit levels
+      const int     add      = shift < 0 ? 0 : ( 1 << shift ) >> 1;
+      const int64_t maxScale = int64_t( invQScale ) << std::max( -shift, 0 );
+      const int     numCoded = std::min( width, JVET_C0024_ZERO_OUT_TH ) * std::min( height, JVET_C0024_ZERO_OUT_TH );
+      if( piDequantCoef || width < 4 || height < 4 || lastScanIdx >= numCoded || maxScale * 65536 + add > std::numeric_limits<int32_t>::max() )
+      {
+        DQIntern::dequantCoeffs( qCoeff, tCoeff, scan, lastScanIdx, width, height, shift, invQScale, piDequantCoef, minTCoeff, maxTCoeff );
+        return;
+      }
+
+      // as in the scalar code: a negative shift scales the step once, at the last position, when its level is nonzero
+      const int     scale    = shift < 0 && qCoeff[scan[lastScanIdx].idx] ? invQScale << -shift : invQScale;
+      const __m128i vScale   = _mm_set1_epi32( scale );
+      const __m128i vAdd     = _mm_set1_epi32( add );
+      const __m128i vShift   = _mm_cvtsi32_si128( std::max( shift, 0 ) );
+      const __m128i vMin     = _mm_set1_epi32( minTCoeff );
+      const __m128i vMax     = _mm_set1_epi32( maxTCoeff );
+      const __m128i vOne     = _mm_set1_epi16( 1 );
+
+      // The diagonal scan inside a 4x4 sub-block; raster position r = 4 y + x.
+      // scanToRaster[i]: the raster position of scan index i; rasterToScan[r]: the scan index of raster position r.
+      const __m128i scanToRaster = _mm_setr_epi8( 0, 4, 1, 8, 5, 2, 12, 9, 6, 3, 13, 10, 7, 14, 11, 15 );
+      const __m128i rasterToScan = _mm_setr_epi8( 0, 2, 5, 9, 1, 4, 8, 12, 3, 7, 11, 14, 6, 10, 13, 15 );
+      // where raster position r finds its state bit in the 16-bit scan-order mask: the byte ( rasterToScan >> 3 ) and
+      // the bit 1 << ( rasterToScan & 7 ) in it
+      const __m128i stateByte    = _mm_setr_epi8( 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1 );
+      const __m128i stateBit     = _mm_setr_epi8( 1, 4, 32, 2, 2, 16, 1, 16, 8, -128, 8, 64, 64, 4, 32, -128 );
+
+      int chain = 0;   // the state between groups, in bits 4-5 (as in g_stateChain4's entries)
+      for( int group = lastScanIdx >> 4; group >= 0; group-- )
+      {
+        const int        firstIdx = group << 4;
+        const unsigned   topLeft  = scan[firstIdx].idx;   // a group's diagonal scan starts at its sub-block's top-left
+        CHECKD( ( scan[firstIdx].x & 3 ) || ( scan[firstIdx].y & 3 ), "a scan group must be an aligned 4x4 sub-block" );
+        const TCoeffSig* src      = qCoeff + topLeft;
+        TCoeff*          dst      = tCoeff + topLeft;
+
+        // the levels, rows 0-1 and rows 2-3; those after lastScanIdx (in the first group) count as 0, as in the scalar loop
+        __m128i lvl01 = _mm_unpacklo_epi64( _mm_loadl_epi64( ( const __m128i* ) src ), _mm_loadl_epi64( ( const __m128i* ) ( src + width ) ) );
+        __m128i lvl23 = _mm_unpacklo_epi64( _mm_loadl_epi64( ( const __m128i* ) ( src + 2 * width ) ), _mm_loadl_epi64( ( const __m128i* ) ( src + 3 * width ) ) );
+        const __m128i after = _mm_cmpgt_epi8( rasterToScan, _mm_set1_epi8( ( char ) std::min( lastScanIdx - firstIdx, 15 ) ) );
+        lvl01 = _mm_andnot_si128( _mm_unpacklo_epi8( after, after ), lvl01 );
+        lvl23 = _mm_andnot_si128( _mm_unpackhi_epi8( after, after ), lvl23 );
+
+        // the parities in scan order as a 16-bit mask (bit i: scan index i), run through the chain 4 at a time from
+        // scan index 15 down; stateBits bit i: the state before scan index i, >> 1
+        __m128i parity = _mm_packs_epi16( _mm_and_si128( lvl01, vOne ), _mm_and_si128( lvl23, vOne ) );
+        parity = _mm_shuffle_epi8( parity, scanToRaster );
+        const int parities = _mm_movemask_epi8( _mm_slli_epi16( parity, 7 ) );
+        int stateBits = 0;
+        for( int k = 12; k >= 0; k -= 4 )
+        {
+          chain      = g_stateChain4[( chain & 0x30 ) | ( ( parities >> k ) & 15 )];
+          stateBits |= ( chain & 15 ) << k;
+        }
+
+        // back to raster order, as bytes: -1 where the state before the level is 2 or 3, else 0
+        __m128i state = _mm_shuffle_epi8( _mm_cvtsi32_si128( stateBits ), stateByte );
+        state = _mm_cmpeq_epi8( _mm_and_si128( state, stateBit ), stateBit );
+        // -sign( level ) * ( state >> 1 ), per 16-bit level
+        const __m128i corr01 = _mm_sign_epi16( _mm_unpacklo_epi8( state, state ), lvl01 );
+        const __m128i corr23 = _mm_sign_epi16( _mm_unpackhi_epi8( state, state ), lvl23 );
+
+        // qIdx = 2 level - sign( level ) ( state >> 1 ) in 32 bits, then ( qIdx scale + add ) >> shift, clipped
+        auto dequantRow = [&]( __m128i lvl, __m128i corr, TCoeff* row )
+        {
+          const __m128i qIdx = _mm_add_epi32( _mm_slli_epi32( _mm_cvtepi16_epi32( lvl ), 1 ), _mm_cvtepi16_epi32( corr ) );
+          __m128i       coef = _mm_sra_epi32( _mm_add_epi32( _mm_mullo_epi32( qIdx, vScale ), vAdd ), vShift );
+          coef = _mm_min_epi32( _mm_max_epi32( coef, vMin ), vMax );
+          _mm_storeu_si128( ( __m128i* ) row, coef );
+        };
+        dequantRow( lvl01,                              corr01,                              dst );
+        dequantRow( _mm_unpackhi_epi64( lvl01, lvl01 ), _mm_unpackhi_epi64( corr01, corr01 ), dst + width );
+        dequantRow( lvl23,                              corr23,                              dst + 2 * width );
+        dequantRow( _mm_unpackhi_epi64( lvl23, lvl23 ), _mm_unpackhi_epi64( corr23, corr23 ), dst + 3 * width );
+      }
+    }
   };
 
 template<X86_VEXT vext>
@@ -880,6 +978,7 @@ void DepQuant::_initDepQuantX86()
   m_checkAllRdCosts     = DQInternSimd::checkAllRdCosts<vext>;
   m_checkAllRdCostsOdd1 = DQInternSimd::checkAllRdCostsOdd1<vext>;
   m_updateStatesEOS     = DQInternSimd::updateStatesEOS<vext>;
+  m_dequantCoeffs       = DQInternSimd::dequantCoeffs<vext>;
   m_updateStates        = DQInternSimd::updateStates<vext>;
   m_findFirstPos        = DQInternSimd::findFirstPos<vext>;
 }

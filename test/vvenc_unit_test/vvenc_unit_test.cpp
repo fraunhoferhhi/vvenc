@@ -865,6 +865,66 @@ static bool check_xFindFirstTestPos( DepQuant* ref, DepQuant* opt, unsigned num_
   return true;
 }
 
+static bool check_dequantCoeffs( DepQuant* ref, DepQuant* opt, unsigned num_cases )
+{
+  printf( "Testing DepQuant::dequantCoeffs\n" );
+
+  DimensionGenerator rng;
+  std::vector<TCoeffSig> levels( MAX_TB_SIZEY * MAX_TB_SIZEY );
+  std::vector<TCoeff> recRef( levels.size() ), recOpt( levels.size() );
+  std::vector<int> scalingList( levels.size() );
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    for( int kind = 0; kind < 5; kind++ )
+    {
+      const int log2W = rng.get( 1, 6 ), log2H = rng.get( 1, 6 );
+      const int width = 1 << log2W, height = 1 << log2H, numCoeff = width * height;
+      const ScanElement* scan = getScanOrder( SCAN_GROUPED_4x4, log2W, log2H );
+      // mostly inside the coded region (a 64-point transform zeroes the rest), sometimes in the zero-out region
+      const int numCoded = std::min( width, JVET_C0024_ZERO_OUT_TH ) * std::min( height, JVET_C0024_ZERO_OUT_TH );
+      const int lastScanIdx = rng.get( 0, ( rand() & 7 ) ? numCoded - 1 : numCoeff - 1 );
+
+      // levels: 0: mostly 0 and +-1 (the common case), 1: up to +-255, 2: the 16-bit extremes, 3: full 16-bit range,
+      // 4: kind 0 with a scaling list (the x86 kernel's scalar fallback)
+      for( int k = 0; k < numCoeff; k++ )
+      {
+        const int r = rand();
+        levels[k] = kind == 1 ? TCoeffSig( ( r & 511 ) - 256 )
+                  : kind == 2 ? TCoeffSig( r & 1 ? ( r & 2 ? 32767 : -32768 ) : ( r & 2 ? 32766 : -32767 ) )
+                  : kind == 3 ? TCoeffSig( ( ( r & 0x7fff ) << 1 | ( rand() & 1 ) ) - 32768 )
+                  : TCoeffSig( ( r & 7 ) < 4 ? 0 : ( r & 7 ) - 5 );
+        scalingList[k] = rng.get( 1, 255 ) * rng.get( 40, 72 );
+      }
+      if( rand() & 1 )
+      {
+        levels[scan[lastScanIdx].idx] = 0;   // the step is not scaled when the last level is 0 (not in real streams)
+      }
+
+      // the real shift range, past the 32-bit products limit at its negative end
+      const int shift = rng.get( 0, 22 ) - 10;
+      const Intermediate_Int invQScale = g_invQuantScales[rng.get( 0, 1 )][rng.get( 0, SCALING_LIST_REM_NUM - 1 )];
+      const int maxLog2TrDynamicRange = rng.getOneOf<int>( { 15, 16, 20 } );
+      const TCoeff minTCoeff = -( 1 << maxLog2TrDynamicRange ), maxTCoeff = ( 1 << maxLog2TrDynamicRange ) - 1;
+      const int* piDequantCoef = kind == 4 ? scalingList.data() : nullptr;
+
+      std::fill( recRef.begin(), recRef.end(), 0 );
+      std::fill( recOpt.begin(), recOpt.end(), 0 );
+      ref->m_dequantCoeffs( levels.data(), recRef.data(), scan, lastScanIdx, width, height, shift, invQScale, piDequantCoef, minTCoeff, maxTCoeff );
+      opt->m_dequantCoeffs( levels.data(), recOpt.data(), scan, lastScanIdx, width, height, shift, invQScale, piDequantCoef, minTCoeff, maxTCoeff );
+
+      std::ostringstream sstm;
+      sstm << "DepQuant dequantCoeffs " << width << "x" << height << " kind=" << kind << " last=" << lastScanIdx
+           << " shift=" << shift << " invQScale=" << invQScale << " range=" << maxLog2TrDynamicRange;
+      if( !compare_values_1d( sstm.str(), recRef.data(), recOpt.data(), numCoeff ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 static bool test_DepQuant()
 {
   auto ref = std::make_unique<DepQuant>( /*other=*/nullptr,
@@ -886,6 +946,7 @@ static bool test_DepQuant()
   passed = check_updateStates( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_updateStatesEOS( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_xFindFirstTestPos( ref.get(), opt.get(), num_cases ) && passed;
+  passed = check_dequantCoeffs( ref.get(), opt.get(), num_cases ) && passed;
 
   return passed;
 }

@@ -774,7 +774,30 @@ namespace DQIntern
     kept.params    = *this;
   }
 
-  void Quantizer::dequantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef) const
+  void dequantCoeffs( const TCoeffSig* qCoeff, TCoeff* tCoeff, const ScanElement* scan, int lastScanIdx, int /*width*/, int /*height*/,
+                      int shift, Intermediate_Int invQScale, const int* piDequantCoef, TCoeff minTCoeff, TCoeff maxTCoeff )
+  {
+    const Intermediate_Int add = (shift < 0) ? 0 : ((1 << shift) >> 1);
+    for( int state = 0, scanIdx = lastScanIdx; scanIdx >= 0; scanIdx-- )
+    {
+      const unsigned   rasterPos = scan[scanIdx].idx;
+      const TCoeffSig& level     = qCoeff[ rasterPos ];
+      // zero levels are not skipped by a (often mispredicted) branch: their qIdx is 0, so they give the 0 of the memset
+      if (piDequantCoef)
+        invQScale = piDequantCoef[rasterPos];//scalingfactor*levelScale
+      if (shift < 0 && level && (piDequantCoef || scanIdx == lastScanIdx))
+      {
+        invQScale <<= -shift;
+      }
+      const int        sign      = (level > 0) - (level < 0);   // -1, 0 or 1
+      Intermediate_Int qIdx      = 2 * level - sign * (state >> 1);
+      int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
+      tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
+      state = ( 32040 >> ((state<<2)+((level&1)<<1)) ) & 3;   // the 16-bit value "32040" represent the state transition table
+    }
+  }
+
+  void Quantizer::dequantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef, DequantCoeffsFunc dequant ) const
   {
 
     //----- set basic parameters -----
@@ -807,27 +830,10 @@ namespace DQIntern
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
     const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
-    Intermediate_Int  shift                 = IQUANT_SHIFT + 1 - qpPer - transformShift + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
-    Intermediate_Int  invQScale             = g_invQuantScales[needsSqrt2ScaleAdjustment?1:0][ qpRem ];
-    Intermediate_Int  add                   = (shift < 0) ? 0 : ((1 << shift) >> 1);
+    const int         shift                 = IQUANT_SHIFT + 1 - qpPer - transformShift + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
+    const int         invQScale             = g_invQuantScales[needsSqrt2ScaleAdjustment?1:0][ qpRem ];
     //----- dequant coefficients -----
-    for( int state = 0, scanIdx = lastScanIdx; scanIdx >= 0; scanIdx-- )
-    {
-      const unsigned   rasterPos = scan[scanIdx].idx;
-      const TCoeffSig& level     = qCoeff[ rasterPos ];
-      // zero levels are not skipped by a (often mispredicted) branch: their qIdx is 0, so they give the 0 of the memset
-      if (enableScalingLists)
-        invQScale = piDequantCoef[rasterPos];//scalingfactor*levelScale
-      if (shift < 0 && level && (enableScalingLists || scanIdx == lastScanIdx))
-      {
-        invQScale <<= -shift;
-      }
-      const int        sign      = (level > 0) - (level < 0);   // -1, 0 or 1
-      Intermediate_Int qIdx      = 2 * level - sign * (state >> 1);
-      int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
-      tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
-      state = ( 32040 >> ((state<<2)+((level&1)<<1)) ) & 3;   // the 16-bit value "32040" represent the state transition table
-    }
+    dequant( qCoeff, tCoeff, scan, lastScanIdx, area.width, area.height, shift, invQScale, enableScalingLists ? piDequantCoef : nullptr, minTCoeff, maxTCoeff );
   }
 
   bool Quantizer::preQuantCoeff( const TCoeff absCoeff, PQData* pqData, int quanCoeff ) const
@@ -1638,7 +1644,7 @@ void DepQuant::xDecideAndUpdate( const TCoeff absCoeff, const DQIntern::ScanInfo
 
 void DepQuant::xDequantDQ( const TransformUnit& tu,  CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP, bool enableScalingLists, int* piDequantCoef )
 {
-  m_quant.dequantBlock( tu, compID, cQP, recCoeff, enableScalingLists, piDequantCoef );
+  m_quant.dequantBlock( tu, compID, cQP, recCoeff, enableScalingLists, piDequantCoef, m_dequantCoeffs );
 }
 
 DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool enableOpt ) : QuantRDOQ2( other, useScalingLists, enableOpt ), RateEstimator(), m_commonCtx()
@@ -1664,6 +1670,7 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool ena
   m_checkAllRdCosts     = DQIntern::checkAllRdCosts;
   m_checkAllRdCostsOdd1 = DQIntern::checkAllRdCostsOdd1;
   m_updateStatesEOS     = DQIntern::updateStatesEOS;
+  m_dequantCoeffs       = DQIntern::dequantCoeffs;
   m_updateStates        = DQIntern::updateStates;
   m_findFirstPos        = DQIntern::findFirstPos;
 

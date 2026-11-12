@@ -287,13 +287,20 @@ namespace DQIntern
     Entry entry[ MAX_NUM_CH ][ 2 * 6 + 1 ];
   };
 
+  // Dequantizes the levels qCoeff at scan positions lastScanIdx down to 0 (raster positions scan[i].idx, the block's
+  // width as stride) into tCoeff, which the caller has zeroed, along the dependent-quantization state chain.
+  // piDequantCoef: the scaling list's factor per raster position, or nullptr without scaling lists.
+  void dequantCoeffs( const TCoeffSig* qCoeff, TCoeff* tCoeff, const ScanElement* scan, int lastScanIdx, int width, int height,
+                      int shift, Intermediate_Int invQScale, const int* piDequantCoef, TCoeff minTCoeff, TCoeff maxTCoeff );
+  typedef decltype( &dequantCoeffs ) DequantCoeffsFunc;
+
   class Quantizer : public QuantBlockParams
   {
   public:
     Quantizer() {}
     void   init            ( int dqThrVal ) { m_DqThrVal = dqThrVal; }
     void   initQuantBlock  ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, QuantBlockMemo& memo );
-    void   dequantBlock    ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef ) const;
+    void   dequantBlock    ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef, DequantCoeffsFunc dequant ) const;
     void   initQuantBlock  ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, int gValue = -1 );
     bool   preQuantCoeff   ( const TCoeff absCoeff, PQData *pqData, int quanCoeff ) const;
     TCoeff getLastThreshold() const { return m_thresLast; }
@@ -479,6 +486,7 @@ public:
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCostsOdd1 )( const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
   void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
+  DQIntern::DequantCoeffsFunc m_dequantCoeffs;   // the dequantization kernel of the SIMD level in use (m_quant.dequantBlock)
   void( *m_updateStatesEOS )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx );
   void( *m_findFirstPos )( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight );
 };
