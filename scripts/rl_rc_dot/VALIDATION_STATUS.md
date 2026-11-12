@@ -1,4 +1,24 @@
-# Implementation validation — 2026-11-11
+# Implementation validation — updated 2026-11-12
+
+## Adapter/3 Mini repair acceptance
+
+- Rebuilt current native C++ on Windows/GCC15.2/Release/JSON ON/SIMD OFF.
+- 62 tests executed:61 passed;1 shared-libswscale RGB test skipped on Windows.
+- The two real native codec/PPO/checkpoint/validation regression tests passed.
+  Their detector is a synthetic fixture, not BDD100K/YOLO quality evidence.
+- Five32-frame native runs passed (anchor, zero, pattern, POC minus/plus).
+  Zero and anchor streams are byte-identical. Spatial QP direction, isolated
+  POC control, full CU coverage and decoder/native reconstruction parity pass.
+- New regression coverage: all Mini notebook phases respect Val4; Test30
+  supports three/five rates; five-rate report computes BD; setup counts in
+  evaluation deadline; notebook code cells parse.
+- Current encoder SHA256:
+  65efc45cf9c85a9543d34e9b83d4fb42476a3fefbedd9958748a8f0740711924
+  This identifies the local tested binary, not a required Kaggle build hash.
+- Linux CI/Kaggle must pass the RGB protocol gate. Real adapter/3 BDD100K
+  T4x2 learning, convergence and coding efficiency remain unverified here.
+
+## Historical adapter/2 checks (2026-11-11)
 
 This describes engineering checks, not a trained-policy result.
 
