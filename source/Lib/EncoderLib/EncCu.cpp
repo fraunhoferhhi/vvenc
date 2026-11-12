@@ -3705,6 +3705,10 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
 
   const UnitArea  areaTop  = UnitArea( format, Area( lumaPos.x,             lumaPos.y - verOffset, lumaSize.width, verOffset       ) );
   const UnitArea  areaLeft = UnitArea( format, Area( lumaPos.x - horOffset, lumaPos.y,             horOffset,      lumaSize.height ) );
+  // at a CTU top the area above lies in the CTU line above, which may be deblocked meanwhile: it is read as it was encoded
+  const Picture& pic            = *cs.picture;
+  const bool     topInLineAbove = ( lumaPos.y & cs.pcv->maxCUSizeMask ) == 0;
+  const auto     recoAbove      = [&]( const CompArea& blk ) -> CPelBuf { return topInLineAbove ? pic.getRecoAboveCtuTop( blk ) : pic.getRecoBuf( blk ); };
 
   for ( int compIdx = compStr; compIdx <= compEnd; compIdx++ )
   {
@@ -3736,7 +3740,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
       locArea.x -= cu->blocks[compIdx].x;
       locArea.y -= cu->blocks[compIdx].y;
       PelBuf dbReco = picDbBuf.getBuf( locArea );
-        dbReco.copyFrom( cs.picture->getRecoBuf( compArea ) );
+        dbReco.copyFrom( recoAbove( compArea ) );
       }
     }
 
@@ -3801,7 +3805,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
       {
         org = cs.picture->getFiltOrigBuf( compArea );
       }
-      CPelBuf reco   = cs.picture->getRecoBuf( compArea );
+      CPelBuf reco   = recoAbove( compArea );
       CPelBuf recoDb = picDbBuf.getBuf( locArea );
       distBeforeDb  += xGetDistortionDb( cs, org, reco,   compArea, true );
       distAfterDb   += xGetDistortionDb( cs, org, recoDb, compArea, false  );

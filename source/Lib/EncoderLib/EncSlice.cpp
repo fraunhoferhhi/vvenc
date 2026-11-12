@@ -275,6 +275,10 @@ void EncSlice::init( const VVEncCfg& encCfg,
     }
   }
 
+  // the bottom rows of every CTU line one after another; the margin holds the top-left samples left of the picture
+  const PreCalcValues& pcv = *pps.pcv;
+  m_ctuLineBottoms.create( pcv.chrFormat, Area( 0, 0, pcv.widthInCtus << pcv.maxCUSizeLog2, pcv.heightInCtus * Picture::CTU_LINE_BOTTOM_ROWS ), 0, Picture::CTU_LINE_BOTTOM_ROWS );
+
   const int sizeInCtus = pps.pcv->sizeInCtus;
   m_processStates = std::vector<ProcessCtuState>( sizeInCtus );
   m_saoReconParams.resize( sizeInCtus );
@@ -335,6 +339,7 @@ void EncSlice::initPic( Picture* pic )
   m_picEncState.pic        = pic;
   m_picEncState.id         = ++lastPicEncStateId;
   m_picEncState.syncPicCtx = m_syncPicCtx.data();
+  pic->m_ctuLineBottoms    = &m_ctuLineBottoms;
 
   for( auto* lnRsc : m_TileLineEncRsrc )
   {
@@ -779,6 +784,9 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
 {
   CodingStructure& cs = *pic->cs;
 
+  // every CTU is encoded: nothing reads the line bottoms any more, and this slice encoder will keep the next picture's
+  pic->m_ctuLineBottoms = nullptr;
+
   // finalize
   if( slice.sps->saoEnabled && pic->useSAO )
   {
@@ -929,6 +937,20 @@ inline bool checkCtuTaskNbBotRgt( const PPS& pps, const int& ctuPosX, const int&
   return ctuPosX + rightOffset < pps.pcv->widthInCtus && ctuPosY + 1 < pps.pcv->heightInCtus && ( override || pps.canFilterCtuBdry( ctuPosX, ctuPosY, rightOffset, 1 ) ) && processStates[ ctuRsAddr + rightOffset + pps.pcv->widthInCtus ] <= tskType;
 }
 
+// With IFP, below the derivation lines the CCALF statistics are read only by selectCcAlfFilterForCtuLine. They are unused
+// once the derivation has turned CCALF off for Cb and Cr, and are skipped then.
+bool EncSlice::xCcAlfStatsUnused( const ProcessCtuState* processStates, const int ctuRsAddr ) const
+{
+  if( !m_pcEncCfg->m_ifpLines )
+    return false;
+  // above the derivation lines the statistics feed the derivation; below them they are needed until its decision is known
+  if( ctuRsAddr <= (int)m_ccalfDeriveCtu || processStates[ m_ccalfDeriveCtu ] < CCALF_RECONSTRUCT )
+    return false;
+  // the flags are final here: the derivation task sets them before its atomic state store to CCALF_RECONSTRUCT
+  const CcAlfFilterParam& ccAlfParam = m_pALF->getCcAlfFilterParam();
+  return !ccAlfParam.ccAlfFilterEnabled[COMP_Cb - 1] && !ccAlfParam.ccAlfFilterEnabled[COMP_Cr - 1];
+}
+
 template<bool checkReadyState>
 bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
 {
@@ -1015,6 +1037,12 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           lineEncRsrc->m_CachedBvs         .resetIbcBvCand();
         }
 
+        // the line below reads these rows unfiltered (Picture::getRecoAboveCtuTop), and deblocking may start before it does
+        if( ctuPosY + 1 < pcv.heightInCtus )
+        {
+          pic->keepCtuBottomRows( ctuArea );
+        }
+
         DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", 1 ) );
         ITT_TASKEND( itt_domain_encode, itt_handle_ctuEncode );
 
@@ -1049,11 +1077,15 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           if( pps.canFilterCtuBdry( ctuPosX, ctuPosY, i, 0 ) && processStates[ctuRsAddr + i] <= CTU_ENCODE )
             return false;
 
-        // check bottom right with 1 CTU delay (this is only required for intra pred)
-        // at the right picture border this will check the bottom CTU
-        const int checkBottomRight = std::min<int>( 1, lastCtuPosXInTile - ctuPosX );
-        if( checkCtuTaskNbBotRgt( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CTU_ENCODE, checkBottomRight ) ) 
-          return false;
+        // No wait for the line below: it reads the unfiltered rows above it from the kept CTU bottoms (keepCtuBottomRows).
+        // IBC reads far deeper into the unfiltered picture, so with IBC the bottom right CTU (1 CTU delay) must be encoded
+        // first; at the right picture border this checks the bottom CTU.
+        if( pic->useIBC )
+        {
+          const int checkBottomRight = std::min<int>( 1, lastCtuPosXInTile - ctuPosX );
+          if( checkCtuTaskNbBotRgt( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CTU_ENCODE, checkBottomRight ) )
+            return false;
+        }
 
         if( checkReadyState )
           return true;
@@ -1318,16 +1350,17 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
 
     case CCALF_GET_STATISTICS:
       {
-        if( checkCtuTaskNbTop   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) return false;
-        if( checkCtuTaskNbBot   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) return false;
-
+        // No wait for the lines above and below: the statistics read their luma from the pre-ALF copy, complete since
+        // ALF_GET_STATISTICS waited for SAO below, and their chroma only inside this line
         if( checkReadyState )
           return true;
+
+        const bool statsUnused = encSlice->xCcAlfStatsUnused( processStates, ctuRsAddr );
 
         ITT_TASKSTART( itt_domain_encode, itt_handle_ccalf_stat );
 
         // ALF pre-processing
-        if( slice.sps->ccalfEnabled )
+        if( slice.sps->ccalfEnabled && !statsUnused )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L);
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
@@ -1408,8 +1441,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
         {
           // ensure line-by-line reconstruction due to line synchronization
           if( checkCtuTaskNbTop( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CCALF_RECONSTRUCT ) ) return false;
-          // check bottom due to rec. buffer usage in ccalf statistics
-          if( checkCtuTaskNbBot( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CCALF_GET_STATISTICS ) ) return false;
         }
 
         if( checkReadyState )

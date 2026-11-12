@@ -177,6 +177,13 @@ struct Picture : public UnitArea
          int        getRecoBufStride(const ComponentID compID)      const { return m_picBufs[PIC_RECONSTRUCTION].bufs[compID].stride; }
   const  Pel*       getRecoBufPtr   (const ComponentID compID)      const { return m_picBufs[PIC_RECONSTRUCTION].bufs[compID].buf; }
 
+  // The rows above a CTU top as the CTU line above was encoded, before its loop filters. The readers of unfiltered samples
+  // there (intra reference samples, CCLM, the deblocking estimate EDO) use it, so a line is deblocked without waiting for the
+  // encoding of the line below. blk lies in the bottom CTU_LINE_BOTTOM_ROWS (luma) rows of one CTU line.
+  const CPelBuf     getRecoAboveCtuTop(const CompArea& blk)         const;
+  // Keeps the bottom rows of an encoded CTU for getRecoAboveCtuTop (called before its deblocking may start).
+  void              keepCtuBottomRows (const UnitArea& ctuArea);
+
         PelStorage& getFilteredOrigBuffer()                               { return *m_sharedBufs[       PIC_FILT_ORIGINAL]; }
          PelUnitBuf getFiltOrigBuf()                                      { return getSharedBuf(        PIC_FILT_ORIGINAL); }
   const CPelUnitBuf getFiltOrigBuf()                                const { return getSharedBuf(        PIC_FILT_ORIGINAL); }
@@ -289,6 +296,11 @@ public:
   std::vector<short>            m_alfCtbFilterIndex;
   std::vector<uint8_t>          m_alfCtuAlternative[ MAX_NUM_COMP ];
   std::vector<std::atomic<int>>*  m_tileColsDone = nullptr;
+  // While the picture is encoded: the bottom CTU_LINE_BOTTOM_ROWS luma rows (and the chroma rows beside them) of every CTU
+  // line, unfiltered, owned by the slice encoder. Null otherwise; getRecoAboveCtuTop then reads the reconstruction.
+  PelStorage*                   m_ctuLineBottoms = nullptr;
+  // the deepest of those readers, EDO, looks 8 luma rows above a CU
+  static constexpr int          CTU_LINE_BOTTOM_ROWS = 8;
 
   void*                         userData;
 
