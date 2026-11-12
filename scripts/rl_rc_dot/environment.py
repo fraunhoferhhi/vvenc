@@ -20,18 +20,22 @@ class VVenCEnv(gym.Env):
     action_space = ACTIONS
 
     def __init__(self, catalog, detector, encoder, output, *, split="train", frame_limit=0, threads=2,
-                 fixed_video=None, fixed_rate=None, mode="live", retain_media=False):
+                 fixed_video=None, fixed_rate=None, mode="live", retain_media=False, random_windows=False):
         self.catalog, self.detector = catalog, detector
         self.encoder, self.output = Path(encoder), Path(output)
         self.output.mkdir(parents=True, exist_ok=True)
         if split not in ("train", "val", "test"):
             raise ValueError("Unknown dataset split")
-        self.ids = catalog.lock["splits"][split]
+        self.ids = catalog.selected[split] if hasattr(catalog,"selected") else catalog.lock["splits"][split]
+        if not self.ids:raise ValueError("Selected split has no videos")
         if fixed_video is not None and fixed_video not in self.ids:
             raise ValueError("Requested video is outside the selected split")
         self.split, self.frame_limit, self.threads = split, frame_limit, threads
         self.fixed_video, self.fixed_rate, self.mode = fixed_video, fixed_rate, mode
         self.retain_media = retain_media
+        self.random_windows = bool(random_windows)
+        if self.random_windows and (split!="train" or frame_limit!=256 or fixed_video is not None):
+            raise ValueError("Random 256-frame windows apply only to mini training")
         self.native = None
         self.source = None
         self.trajectory = None
@@ -79,7 +83,11 @@ class VVenCEnv(gym.Env):
         folder = self.output / f"{self.video_id}_{self.rate}_{uuid.uuid4().hex[:8]}"
         folder.mkdir()
         path = folder / "source.yuv"
-        self.frames = self.catalog.prepare(self.video_id, path, self.frame_limit)
+        self.start_frame=int(self.np_random.choice([0,128,256,384,512])) if self.random_windows else 0
+        self.frames=(self.catalog.prepare(self.video_id,path,self.frame_limit,start_frame=self.start_frame)
+                     if self.start_frame else self.catalog.prepare(self.video_id,path,self.frame_limit))
+        if self.frame_limit and self.frames!=self.frame_limit:
+            raise ValueError(f"Source window truncated: {self.video_id}, {self.frames} != {self.frame_limit}")
         self.source = np.memmap(path, mode="r", dtype=np.uint8, shape=(self.frames, FRAME_BYTES))
         self.trajectory = gzip.open(folder / "trajectory.jsonl.gz", "wt", encoding="utf-8")
         self.native = NativeEpisode(self.encoder, path, folder / "codec", self.frames, self.rate,
@@ -88,7 +96,8 @@ class VVenCEnv(gym.Env):
         self.rewards = []
         self.precisions, self.recalls = [], []
         self.counts = np.zeros(3, dtype=np.int64)
-        return observation(self.native.current, self.frames), {"video_id": self.video_id, "rate_kbps": self.rate}
+        return observation(self.native.current, self.frames), {"video_id": self.video_id, "rate_kbps": self.rate,
+                                                               "start_frame": self.start_frame}
 
     def step(self, action):
         if self.native is None or self.native.current is None:
@@ -105,7 +114,7 @@ class VVenCEnv(gym.Env):
         reward, block, metrics = score(raw, prediction, self.native.bits, self.decisions, self.rate * 1000)
         mask = auxiliary_supervision_mask(raw, prediction)
         info = {"block_reward": block, "block_mask": mask, "paper_reward": reward,
-                "video_id": self.video_id, "poc": poc, "rate_kbps": self.rate,
+                "video_id": self.video_id, "poc": poc, "rate_kbps": self.rate, "start_frame": self.start_frame,
                 "consumed_action":np.asarray(post.get("consumed_action",np.zeros(600)),dtype=float).ravel().tolist(),**metrics}
         self.rewards.append(reward)
         self.precisions.append(metrics["precision"])
@@ -130,6 +139,7 @@ class VVenCEnv(gym.Env):
         if terminated:
             tp, fp, fn = map(int, self.counts)
             info["episode"] = {"r": float(sum(self.rewards)), "l": self.decisions,
+                               "start_frame": self.start_frame,
                                "mean_precision": float(np.mean(self.precisions)),
                                "mean_recall": float(np.mean(self.recalls)),
                                "mean_reward": float(np.mean(self.rewards)),

@@ -49,11 +49,45 @@ def source_fingerprint():
     return value.hexdigest()
 
 
+MINI_COUNTS = {"train":16, "val":4, "test":30}
+MINI_SEED = 20261111
+
+
+def select_locked_ids(lock, split, mode="full", seed=MINI_SEED):
+    """Immutable, deterministic, car-count-stratified split subset."""
+    if mode not in ("full","mini") or split not in ("train","val","test"):
+        raise ValueError("Unknown dataset mode/split")
+    ids=list(lock["splits"][split])
+    if mode=="full":
+        return ids
+    limit=MINI_COUNTS[split]
+    if len(set(ids))!=len(ids) or len(ids)<limit:
+        raise ValueError("Invalid locked split for mini selection")
+    boxes={row["video_id"]:int(row["car_boxes"]) for row in lock["video_records"]}
+    ranked=sorted(ids,key=lambda vid:(boxes[vid],vid))
+    chosen=[]
+    for index in range(4):
+        bucket=ranked[len(ids)*index//4:len(ids)*(index+1)//4]
+        required=limit//4+int(index<limit%4)
+        ordering=sorted(bucket,key=lambda vid:hashlib.sha256(
+            f"mini-v1:{seed}:{split}:{vid}".encode("ascii")).digest())
+        if len(ordering)<required:
+            raise ValueError("Mini stratification bucket is too small")
+        chosen.extend(ordering[:required])
+    selected=set(chosen)
+    return [vid for vid in ids if vid in selected]
+
+
 class VideoCatalog:
-    def __init__(self, input_root, ffmpeg="ffmpeg", ffprobe="ffprobe"):
+    def __init__(self, input_root, ffmpeg="ffmpeg", ffprobe="ffprobe", *, mode="full", seed=MINI_SEED):
         if digest(ASSETS/"dataset_lock.json")!=DATASET_SHA:raise ValueError("Bundled split lock changed")
         self.lock = json.loads((ASSETS / "dataset_lock.json").read_text(encoding="utf-8"))
         self.records = {row["video_id"]: row for row in self.lock["video_records"]}
+        self.mode,self.seed=mode,int(seed)
+        self.selected={split:select_locked_ids(self.lock,split,mode,self.seed)
+                       for split in ("train","val","test")}
+        if len(set().union(*(set(v) for v in self.selected.values())))!=sum(map(len,self.selected.values())):
+            raise ValueError("Dataset split overlap")
         self.files = {}
         self.verified = set()
         for path in Path(input_root).rglob("*.mov"):
@@ -62,7 +96,7 @@ class VideoCatalog:
         self.ffmpeg, self.ffprobe = ffmpeg, ffprobe
 
     def check_available(self,splits=("train","val")):
-        missing=[vid for split in splits for vid in self.lock["splits"][split]
+        missing=[vid for split in splits for vid in self.selected[split]
                  if not any(p.stat().st_size==self.records[vid]["size_bytes"] for p in self.files.get(vid,[]))]
         if missing:raise FileNotFoundError("Missing locked videos: "+", ".join(missing))
 
@@ -76,7 +110,9 @@ class VideoCatalog:
                 return path
         raise FileNotFoundError(f"Locked MOV absent or hash mismatch for {video_id}")
 
-    def prepare(self, video_id, output, frame_limit=0):
+    def prepare(self, video_id, output, frame_limit=0, *, start_frame=0):
+        if int(start_frame)!=start_frame or start_frame<0 or (start_frame and not frame_limit):
+            raise ValueError("Source window requires a nonnegative integer offset and a frame limit")
         source = self.source(video_id)
         metadata = subprocess.check_output([self.ffprobe, "-v", "error", "-select_streams", "v:0",
                     "-show_entries", "stream=color_range,color_space,color_transfer,color_primaries", "-of", "json", str(source)])
@@ -96,7 +132,8 @@ class VideoCatalog:
                  {"tv":"tv","pc":"pc"}]
         if any(v not in choices for v,choices in zip(values,allowed)):raise ValueError("Unsupported source color metadata")
         matrix,primaries,transfer,range_=[choices[v] for v,choices in zip(values,allowed)]
-        filter_ = (f"fps=30,colorspace=ispace={matrix}:iprimaries={primaries}:itrc={transfer}:irange={range_}:"
+        crop=f"trim=start_frame={start_frame},setpts=PTS-STARTPTS," if start_frame else ""
+        filter_ = (f"fps=30,{crop}colorspace=ispace={matrix}:iprimaries={primaries}:itrc={transfer}:irange={range_}:"
                    "space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p,"
                    "scale=480:320:flags=bicubic,format=yuv420p")
         args = [self.ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-threads", "1",
@@ -111,7 +148,8 @@ class VideoCatalog:
         atomic_json(Path(output).with_suffix(".preprocess.json"),{"video_id":video_id,
                     "source_sha256":self.records[video_id]["sha256"],"color_metadata":stream,
                     "resolved_input_color":dict(matrix=matrix,primaries=primaries,transfer=transfer,range=range_),
-                    "filter":filter_,"frames":size//FRAME_BYTES,"yuv_sha256":digest(output)})
+                    "filter":filter_,"start_frame":start_frame,"frame_limit":frame_limit,
+                    "frames":size//FRAME_BYTES,"yuv_sha256":digest(output)})
         return size // FRAME_BYTES
 
 
