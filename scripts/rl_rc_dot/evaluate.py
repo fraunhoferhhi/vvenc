@@ -20,6 +20,22 @@ from .artifacts import RUN_SCHEMA,policy_digest,import_run,export_evaluation
 class EvaluationStop(Exception):pass
 
 
+def evaluation_protocol(mode, frames, rates):
+    full = [50,80,120,160,200]
+    if mode == "mini" and (frames != 256 or list(rates) not in ([50,120,200],full)):
+        raise ValueError("Mini Test30 requires 256 frames and either 50,120,200 or all five rates")
+    if mode == "full" and list(rates) != full:
+        raise ValueError("Full Test100 requires all five ordered bitrate points")
+
+
+def evaluation_deadline(hours, session_start_utc=None, *, now=None, wall=None):
+    now=time.monotonic() if now is None else now
+    wall=time.time() if wall is None else wall
+    if not hours:return float("inf")
+    elapsed=max(0,wall-session_start_utc) if session_start_utc is not None else 0
+    return now+hours*3600-elapsed-min(600,hours*360)
+
+
 def verify_decoded(stream, trajectory, frames, ffmpeg, decoder=None):
     destination = stream.with_suffix(".decoded.yuv")
     if decoder:
@@ -135,7 +151,7 @@ def report(output, pairs, rates=(50,80,120,160,200)):
             metrics=bd_metrics(anchor,agent)
         else:
             metrics={"bd_rate_percent":None,"bd_precision_points":None,
-                     "reason":"Mini 3-point curve: BD-rate reserved for full 5-rate evaluation"}
+                     "reason":"Preliminary 3-point curve: BD-rate reserved for five-rate evaluation"}
         rows.append({"video_id":video_id,**metrics})
         fig, axis = plt.subplots()
         for points, label in ((anchor, "VVenC (matched CTU32)"), (agent, "VVenC + RL-RC-DoT")):
@@ -186,6 +202,8 @@ def main():
     parser.add_argument("--seed", type=int, default=20261111)
     parser.add_argument("--max-pairs", type=int, default=0)
     parser.add_argument("--max-hours", type=float, default=0)
+    parser.add_argument("--session-start-utc",type=float,
+                        help="Notebook start time.time(); setup counts against --max-hours")
     parser.add_argument("--ffmpeg", default="ffmpeg")
     parser.add_argument("--ffprobe", default="ffprobe")
     args = parser.parse_args()
@@ -198,10 +216,8 @@ def main():
     if (not args.rate_list or len(set(args.rate_list))!=len(args.rate_list)
             or any(x not in (50,80,120,160,200) for x in args.rate_list)):
         parser.error("Evaluation rate list must be a unique subset of 50,80,120,160,200")
-    if args.dataset_mode=="mini" and (args.frames!=256 or args.rate_list!=[50,120,200]):
-        parser.error("Mini Test30 requires 256 frames and 50,120,200 kbps")
-    if args.dataset_mode=="full" and len(args.rate_list)!=5:
-        parser.error("Full Test100 requires all five bitrate points")
+    try:evaluation_protocol(args.dataset_mode,args.frames,args.rate_list)
+    except ValueError as error:parser.error(str(error))
     manifest_path=args.checkpoint.parent/"manifest.json"
     method_path=args.checkpoint.parents[2]/"method.json"
     sealed=json.loads(manifest_path.read_text());method=json.loads(method_path.read_text())
@@ -234,8 +250,7 @@ def main():
     print("EVALUATION_DATASET_SELECTION_PASS",json.dumps({"mode":args.dataset_mode,
            "test_videos":catalog.selected["test"],"rates":args.rate_list,"frames":args.frames}),flush=True)
     detector = FrozenDetector(args.yolo_repo, args.weights, args.device)
-    deadline = time.monotonic() + args.max_hours * 3600 if args.max_hours else float("inf")
-    if args.max_hours:deadline-=min(600,args.max_hours*360)
+    deadline = evaluation_deadline(args.max_hours,args.session_start_utc)
     args.deadline=deadline
     pairs, added = [], 0
     try:
