@@ -65,9 +65,60 @@ namespace vvenc {
 //#define cond_mm_prefetch(a,b)
 
 static constexpr unsigned short levmask[16] = {0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0,0,0,0,0,0};
+
+#ifdef USE_AVX2
+// DeQuantCoreSIMD for rows of a multiple of 16 coefficients, 16 per step: the same arithmetic in 256-bit registers.
+// The 32-bit products come from interleaving the 16-bit low and high product halves, which works per 128-bit lane, so
+// each load is first reordered by 64-bit quarters (0, 2, 1, 3): the low interleave then gives coefficients 0-7 in
+// order and the high one 8-15.
+template<bool isLeftShift>
+static void DeQuantRows16_AVX2( const int width, const int height, const int scale, const TCoeffSig* const piQCoef, const size_t piQCfStride,
+                                TCoeff* const piCoef, const int shift, const int inputMaximum, const TCoeff transformMaximum )
+{
+  const __m256i vmax   = _mm256_set1_epi16( ( short ) inputMaximum );
+  const __m256i vmin   = _mm256_set1_epi16( ( short ) ( -inputMaximum - 1 ) );
+  const __m256i vTmax  = _mm256_set1_epi32( transformMaximum );
+  const __m256i vTmin  = _mm256_set1_epi32( -transformMaximum - 1 );
+  const __m256i vscale = _mm256_set1_epi16( ( short ) scale );
+  const __m256i vadd   = _mm256_set1_epi32( isLeftShift ? 0 : 1 << ( shift - 1 ) );
+  const __m128i vshift = _mm_cvtsi32_si128( shift );
+
+  const auto scaleAndClip = [&]( __m256i v )
+  {
+    v = isLeftShift ? _mm256_sll_epi32( v, vshift ) : _mm256_sra_epi32( _mm256_add_epi32( v, vadd ), vshift );
+    return _mm256_min_epi32( _mm256_max_epi32( v, vTmin ), vTmax );
+  };
+
+  for( int y = 0; y < height; y++ )
+  {
+    for( int x = 0; x < width; x += 16 )
+    {
+      __m256i level = _mm256_loadu_si256( ( const __m256i* ) &piQCoef[x + y * piQCfStride] );
+      level = _mm256_permute4x64_epi64( level, 0 + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+      level = _mm256_min_epi16( _mm256_max_epi16( level, vmin ), vmax );
+      const __m256i productLow  = _mm256_mullo_epi16( level, vscale );
+      const __m256i productHigh = _mm256_mulhi_epi16( level, vscale );
+      _mm256_storeu_si256( ( __m256i* ) &piCoef[x + y * width],     scaleAndClip( _mm256_unpacklo_epi16( productLow, productHigh ) ) );
+      _mm256_storeu_si256( ( __m256i* ) &piCoef[x + y * width + 8], scaleAndClip( _mm256_unpackhi_epi16( productLow, productHigh ) ) );
+    }
+  }
+}
+#endif
+
 template<X86_VEXT vext>
 static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const TCoeffSig *const piQCoef,const size_t piQCfStride,TCoeff *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum)
 {
+#ifdef USE_AVX2
+  if( vext >= AVX2 && maxX >= 15 )
+  {
+    CHECKD( ( maxX + 1 ) % 16 != 0, "transform widths are powers of two: 16 or more is a multiple of 16" );
+    if( rightShift > 0 )
+      DeQuantRows16_AVX2<false>( maxX + 1, maxY + 1, scale, piQCoef, piQCfStride, piCoef, rightShift, inputMaximum, transformMaximum );
+    else
+      DeQuantRows16_AVX2<true>( maxX + 1, maxY + 1, scale, piQCoef, piQCfStride, piCoef, -rightShift, inputMaximum, transformMaximum );
+    return;
+  }
+#endif
   // TODO: TCoeffSig!!!
   const int inputMinimum = -(inputMaximum+1);
   const TCoeff transformMinimum = -(transformMaximum+1);
