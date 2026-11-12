@@ -1,4 +1,4 @@
-"""Paired VVenC / RL-RC-DoT Test100 evaluation with verified pair resume."""
+"""Paired locked BDD100K full/Test100 or mini/Test30 evaluation with verified resume."""
 
 import argparse
 import gzip
@@ -115,7 +115,7 @@ def bd_metrics(anchor, agent):
             "bd_precision_points": float(quality) if quality is not None else None}
 
 
-def report(output, pairs):
+def report(output, pairs, rates=(50,80,120,160,200)):
     import csv
     import matplotlib
     matplotlib.use("Agg")
@@ -125,11 +125,18 @@ def report(output, pairs):
     for pair in pairs:
         by_video.setdefault(pair[0]["video_id"], []).append(pair)
     rows = []
+    all_complete_pairs=[]
     for video_id, values in by_video.items():
-        if len(values) != 5:
+        if len(values)!=len(rates) or {p[0]["target_kbps"] for p in values}!=set(rates):
             continue
-        anchor, agent = zip(*values)
-        rows.append({"video_id": video_id, **bd_metrics(anchor, agent)})
+        anchor,agent=zip(*values)
+        all_complete_pairs.extend(values)
+        if len(rates)==5:
+            metrics=bd_metrics(anchor,agent)
+        else:
+            metrics={"bd_rate_percent":None,"bd_precision_points":None,
+                     "reason":"Mini 3-point curve: BD-rate reserved for full 5-rate evaluation"}
+        rows.append({"video_id":video_id,**metrics})
         fig, axis = plt.subplots()
         for points, label in ((anchor, "VVenC (matched CTU32)"), (agent, "VVenC + RL-RC-DoT")):
             points = sorted(points, key=lambda point: point["actual_kbps"])
@@ -143,11 +150,25 @@ def report(output, pairs):
         writer = csv.DictWriter(out, fieldnames=["video_id", "bd_rate_percent", "bd_precision_points", "reason"])
         writer.writeheader()
         writer.writerows(rows)
-    valid = [row["bd_rate_percent"] for row in rows if row["bd_rate_percent"] is not None]
-    atomic_json(output / "summary.json", {"completed_pairs": len(pairs), "complete_videos": len(rows),
-                "bd_rate_valid_videos": len(valid), "mean_bd_rate_percent": float(np.mean(valid)) if valid else None,
-                "anchor_profile":"matched CTU32/DQP2/FPP0 research profile; not stock CTU128",
-                "curve_rule": "Pareto frontier sorted by actual bitrate; PCHIP on overlap only"})
+    valid=[row["bd_rate_percent"] for row in rows if row["bd_rate_percent"] is not None]
+    def macro(name, key):
+        return float(np.mean([agent[key]-anchor[key] for anchor,agent in all_complete_pairs])) if all_complete_pairs else None
+    rate_ratios=[agent["actual_kbps"]/anchor["actual_kbps"]-1
+                 for anchor,agent in all_complete_pairs if anchor["actual_kbps"]>0]
+    win_rates=[agent["mean_precision"]>anchor["mean_precision"] for anchor,agent in all_complete_pairs]
+    atomic_json(output/"summary.json",{
+        "completed_pairs":len(pairs),"complete_videos":len(rows),
+        "rates_kbps":list(rates),"completed_comparable_pairs":len(all_complete_pairs),
+        "mean_delta_precision":macro("agent","mean_precision"),
+        "mean_delta_recall":macro("agent","mean_recall"),
+        "mean_delta_f1":macro("agent","f1"),
+        "mean_rate_ratio_vs_anchor":float(np.mean(rate_ratios)) if rate_ratios else None,
+        "precision_win_fraction":float(np.mean(win_rates)) if win_rates else None,
+        "bd_rate_valid_videos":len(valid),
+        "mean_bd_rate_percent":float(np.mean(valid)) if valid else None,
+        "bd_rate_policy":"5 bitrate points only; mini 3-rate runs report paired metrics, no BD-rate claim",
+        "anchor_profile":"matched CTU32/DQP2/FPP0 research profile; not stock CTU128",
+        "curve_rule":"Pareto frontier sorted by actual bitrate; PCHIP on overlap only"})
 
 
 def main():
@@ -158,6 +179,9 @@ def main():
     parser.add_argument("--resume-from",type=Path)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--frames", type=int, default=0)
+    parser.add_argument("--dataset-mode",choices=("mini","full"),default="full")
+    parser.add_argument("--rates",default="50,80,120,160,200",
+                        help="Mini: 50,120,200; Full: 50,80,120,160,200")
     parser.add_argument("--encoder-threads", type=int, default=2)
     parser.add_argument("--seed", type=int, default=20261111)
     parser.add_argument("--max-pairs", type=int, default=0)
@@ -167,6 +191,17 @@ def main():
     args = parser.parse_args()
     if args.frames<0 or args.max_pairs<0 or args.max_hours<0 or args.encoder_threads<1:
         parser.error("Invalid evaluation budget")
+    try:
+        args.rate_list=[int(s.strip()) for s in args.rates.split(",")]
+    except ValueError:
+        parser.error("Invalid bitrate list")
+    if (not args.rate_list or len(set(args.rate_list))!=len(args.rate_list)
+            or any(x not in (50,80,120,160,200) for x in args.rate_list)):
+        parser.error("Evaluation rate list must be a unique subset of 50,80,120,160,200")
+    if args.dataset_mode=="mini" and (args.frames!=256 or args.rate_list!=[50,120,200]):
+        parser.error("Mini Test30 requires 256 frames and 50,120,200 kbps")
+    if args.dataset_mode=="full" and len(args.rate_list)!=5:
+        parser.error("Full Test100 requires all five bitrate points")
     manifest_path=args.checkpoint.parent/"manifest.json"
     method_path=args.checkpoint.parents[2]/"method.json"
     sealed=json.loads(manifest_path.read_text());method=json.loads(method_path.read_text())
@@ -174,13 +209,15 @@ def main():
             or sealed["method_sha256"]!=hashlib.sha256(json.dumps(method,sort_keys=True).encode()).hexdigest()
             or method["encoder_sha256"]!=digest(args.encoder) or method["source_fingerprint"]!=source_fingerprint()
             or method["dataset_sha256"]!=digest(ASSETS/"dataset_lock.json") or method["encoder_threads"]!=args.encoder_threads
-            or method["detector_weights_sha256"]!=digest(args.weights)):
+            or method["detector_weights_sha256"]!=digest(args.weights)
+            or method.get("dataset_mode","full")!=args.dataset_mode):
         raise ValueError("Evaluation checkpoint/source/encoder/detector does not match the training contract")
     if args.resume_from:import_run(args.resume_from,args.output)
     args.output.mkdir(parents=True, exist_ok=True)
     identity = {"schema": "vvenc-rcdot-evaluation/2", "checkpoint_sha256": digest(args.checkpoint),
                 "encoder_sha256": digest(args.encoder), "source_fingerprint": source_fingerprint(),
                 "dataset_sha256": digest(ASSETS / "dataset_lock.json"), "frames": args.frames,
+                "dataset_mode":args.dataset_mode,"rates":args.rate_list,
                 "decoder_sha256": digest(args.decoder) if args.decoder else None,
                 "detector_device": args.device, "encoder_threads": args.encoder_threads,
                 "seed":args.seed,"profile":"ctu32_dqp2_fpp0","method":method}
@@ -191,15 +228,19 @@ def main():
     model = AuxPPO.load(args.checkpoint, device="cpu")
     model.assert_checkpoint_finite()
     if policy_digest(model)!=sealed["policy_sha256"]:raise ValueError("Loaded evaluation policy differs")
-    catalog = VideoCatalog(args.input_root, args.ffmpeg, args.ffprobe)
+    catalog = VideoCatalog(args.input_root, args.ffmpeg, args.ffprobe,
+                           mode=args.dataset_mode,seed=args.seed)
+    catalog.check_available(("test",))
+    print("EVALUATION_DATASET_SELECTION_PASS",json.dumps({"mode":args.dataset_mode,
+           "test_videos":catalog.selected["test"],"rates":args.rate_list,"frames":args.frames}),flush=True)
     detector = FrozenDetector(args.yolo_repo, args.weights, args.device)
     deadline = time.monotonic() + args.max_hours * 3600 if args.max_hours else float("inf")
     if args.max_hours:deadline-=min(600,args.max_hours*360)
     args.deadline=deadline
     pairs, added = [], 0
     try:
-        for video_id in catalog.lock["splits"]["test"]:
-            for rate in (50, 80, 120, 160, 200):
+        for video_id in catalog.selected["test"]:
+            for rate in args.rate_list:
                 pair_root = args.output / "pairs" / f"{video_id}_{rate}"
                 existed = (pair_root / "rl_rc_dot.json").exists() and (pair_root / "vvenc.json").exists()
                 if not existed and (time.monotonic() >= deadline or (args.max_pairs and added >= args.max_pairs)):
@@ -214,7 +255,7 @@ def main():
         print("EVALUATION_SOFT_STOP",str(error),flush=True)
     finally:
         detector.close()
-        report(args.output,pairs)
+        report(args.output,pairs,args.rate_list)
         print("EVALUATION_EXPORT",json.dumps(export_evaluation(args.output,args.output/"exports"/f"RL_RC_DOT_EVAL_{time.time_ns()}.zip")),flush=True)
 
 
