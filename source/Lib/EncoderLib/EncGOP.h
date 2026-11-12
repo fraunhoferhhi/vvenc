@@ -150,6 +150,9 @@ private:
   NoMallocThreadPool*       m_threadPool;
   std::mutex                m_gopEncMutex;
   std::condition_variable   m_gopEncCond;
+  // pictures finished so far and the count waitForFreeEncoders last returned on (both guarded by m_gopEncMutex)
+  uint64_t                  m_numPicsFinished       = 0;
+  uint64_t                  m_numPicsFinishedWaited = 0;
   XUCache                   m_shrdUnitCache;
   std::mutex                m_unitCacheMutex;
 
