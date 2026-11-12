@@ -89,6 +89,19 @@ private:
   Area                m_cuAreaInSCIPU[NUM_INTER_CU_INFO_SAVE];
   double              m_cuCostInSCIPU[NUM_INTER_CU_INFO_SAVE];
   CompStorage         m_orgResiCb[5], m_orgResiCr[5]; // 0:std, 1-3:jointCbCr, 4:crossComp
+
+  // The chroma pre-selection's Cb and Cr predictions of the modes it checks (all but LM, planar and DM; up to 6, since
+  // the candidate list has mode 66 in place of planar when DM is planar). The RD check of such a mode copies them
+  // instead of predicting again when its block is the CU's whole chroma block, whose reference samples the
+  // pre-selection used. The predictions lie back to back in m_preselPreds, sized for the largest chroma transform
+  // block (a larger CU's chroma is split into several TBs): kept compact, the few KB a CU's blocks take stay in L1.
+  // Valid during estIntraPredChromaQT only.
+  static constexpr int NUM_PRESEL_CHROMA_PREDS = NUM_CHROMA_MODE - 2;
+  std::vector<Pel>    m_preselPreds;
+  int                 m_preselPredMode[NUM_PRESEL_CHROMA_PREDS];
+  int                 m_numPreselPreds = 0;
+  SizeType            m_preselPredMaxArea = 0;
+
   std::vector<ModeInfo>
                       m_parentCandList;
 
@@ -204,6 +217,11 @@ private:
   uint64_t  xGetIntraFracBitsQT       ( CodingStructure &cs, Partitioner &pm, const bool luma, CUCtx *cuCtx = nullptr );
 
   uint64_t  xGetIntraFracBitsQTChroma ( const TransformUnit& tu, const ComponentID compID, CUCtx *cuCtx );
+  // the chroma pre-selection's kept prediction of slot's mode for comp (Cb or Cr), in a block of the size of area
+  PelBuf    preselPred                ( int slot, ComponentID comp, const CompArea& area )
+  {
+    return PelBuf( m_preselPreds.data() + ( 2 * slot + ( comp == COMP_Cr ) ) * area.area(), area );
+  }
 
   void     xEncCoeffQT                ( CodingStructure& cs, Partitioner& pm, const ComponentID compID, CUCtx* cuCtx = nullptr, const int subTuIdx = -1, const PartSplit ispType = TU_NO_ISP );
 

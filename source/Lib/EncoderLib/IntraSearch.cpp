@@ -108,6 +108,11 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
     m_orgResiCb[i].create( chromaArea );
     m_orgResiCr[i].create( chromaArea );
   }
+
+  const int maxTbSize = std::min( maxCUSize, MAX_TB_SIZEY );
+  CompArea  preselPredArea( COMP_Cb, chrFormat, Area( 0, 0, maxTbSize, maxTbSize ), true );
+  m_preselPredMaxArea = preselPredArea.area();
+  m_preselPreds.resize( 2 * NUM_PRESEL_CHROMA_PREDS * m_preselPredMaxArea );
 }
 
 void IntraSearch::destroy()
@@ -841,6 +846,23 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
     initIntraPatternChType(cu, cu.Cr());
     loadLMLumaRecPels(cu, cu.Cb());
 
+    // keep the predictions for the RD checks when the CU's chroma block fits a slot (the RD checks reuse them only when
+    // it is one transform block) and the pre-selection does not predict with a chroma BDPCM left on the CU, which the
+    // RD checks of these modes reset
+    const bool keepPreds = areaCb.area() <= m_preselPredMaxArea && !cu.bdpcmM[CH_C];
+    const SizeType slotSize = areaCb.area(); // the Cr block has the Cb block's size
+    Pel* const     slots    = m_preselPreds.data();
+    int            numKept  = 0;
+    if( keepPreds )
+    {
+      // point the prediction and distortion views at slot 0 with the block's width as stride; per mode, only their
+      // buffer pointers move to the next slot
+      predCb = preselPred( 0, COMP_Cb, areaCb );
+      predCr = preselPred( 0, COMP_Cr, areaCr );
+      distParamSadCb.cur = distParamSatdCb.cur = predCb;
+      distParamSadCr.cur = distParamSatdCr.cur = predCr;
+    }
+
     for (int idx = uiMinMode; idx < uiMaxMode; idx++)
     {
       int mode = chromaCandModes[idx];
@@ -852,6 +874,15 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
       if ((mode == LM_CHROMA_IDX) || (mode == PLANAR_IDX) || (mode == DM_CHROMA_IDX)) // only pre-check regular modes and MDLM modes, not including DM ,Planar, and LM
       {
         continue;
+      }
+
+      if( keepPreds )
+      {
+        CHECKD( numKept == NUM_PRESEL_CHROMA_PREDS, "more pre-checked chroma modes than slots" );
+        Pel* slotCb = slots + 2 * numKept * slotSize;
+        distParamSadCb.cur.buf = distParamSatdCb.cur.buf = predCb.buf = slotCb;
+        distParamSadCr.cur.buf = distParamSatdCr.cur.buf = predCr.buf = slotCb + slotSize;
+        m_preselPredMode[numKept++] = mode;
       }
 
       cu.intraDir[1]    = mode; // temporary assigned, for SATD checking.
@@ -884,6 +915,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
       sad += std::min(sadCr, satdCr);
       satdSortedCost[idx] = sad;
     }
+    m_numPreselPreds = numKept;
 
     // sort the mode based on the cost from small to large.
     for (int i = uiMinMode; i <= uiMaxMode - 1; i++)
@@ -1003,6 +1035,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
         orgTUs[ j ]->copyComponentFrom( *saveCS.tus[ j ], area.compID );
       }
     }
+    m_numPreselPreds = 0;
   }
   cu.intraDir[1] = uiBestMode;
   cs.dist        = uiBestDist;
@@ -2048,7 +2081,26 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
       initIntraPatternChType(*currTU.cu, crArea);
     }
 
-    if (CU::isLMCMode(predMode))
+    // the pre-selection's prediction of this mode, made with the same reference samples, if it kept one
+    int keptIdx = -1;
+    if( samplesKept && !cu.bdpcmM[CH_C] )
+    {
+      for( int i = 0; i < m_numPreselPreds; i++ )
+      {
+        if( m_preselPredMode[i] == cu.intraDir[CH_C] )
+        {
+          keptIdx = i;
+          break;
+        }
+      }
+    }
+
+    if( keptIdx >= 0 )
+    {
+      piPredCb.copyFrom( preselPred( keptIdx, COMP_Cb, cbArea ) );
+      piPredCr.copyFrom( preselPred( keptIdx, COMP_Cr, crArea ) );
+    }
+    else if (CU::isLMCMode(predMode))
     {
       if( !samplesKept )
       {
