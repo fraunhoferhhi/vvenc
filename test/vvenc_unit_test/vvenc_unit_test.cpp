@@ -5512,9 +5512,19 @@ static bool check_one_gnsSolveByChol( const std::string& context, AlfCovariance*
   const bool refOk = ref->m_gnsSolveByChol( lhsRef, rhsRef, xRef, size );
   const bool optOk = opt->m_gnsSolveByChol( lhsOpt, rhsOpt, xOpt, size );
 
+  // The solution's rounding error scales with its size (normwise, about cond(lhs) * |x| * epsilon): with |x| up to 1e5
+  // a different order of the float operations alone moves x by more than 0.1, so the tolerance is relative to the
+  // largest |x| (not to each element: a small element's error comes from the large ones) and 0.1 at least.
+  float maxAbsX = 0.0f;
+  for( int i = 0; i < size; i++ )
+  {
+    maxAbsX = std::max( maxAbsX, std::abs( xRef[i] ) );
+  }
+  const float tolerance = std::max( 0.1f, 1e-5f * maxAbsX );
+
   bool passed = true;
   passed = compare_value( context + " Cholesky status", refOk, optOk ) && passed;
-  passed = compare_values_1d( context + " x", xRef, xOpt, size, 0.1f ) && passed;
+  passed = compare_values_1d( context + " x", xRef, xOpt, size, tolerance ) && passed;
   return passed;
 }
 
