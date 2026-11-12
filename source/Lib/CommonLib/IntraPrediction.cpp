@@ -1274,27 +1274,33 @@ void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& ch
 
   bool isFirstRowOfCtu = (lumaArea.y & ((cu.cs->sps)->CTUSize - 1)) == 0;
 
+  int addedAboveRight = 0;
+  if( aboveIsAvailable && ( cu.intraDir[1] == MDLM_L_IDX || cu.intraDir[1] == MDLM_T_IDX ) )
+  {
+    addedAboveRight = avaiAboveRightUnits * chromaUnitWidth;
+  }
+
+  // the luma row above, read by the above row and, with vertically collocated 4:2:0 chroma, by the first row of the left
+  // column and of the inner part; at a CTU top it lies in the CTU line above, which may be deblocked meanwhile: read it as
+  // encoded
+  const Pel* lumaAbove = pRecSrc0 - iRecStride;
+  if( aboveIsAvailable && isFirstRowOfCtu )
+  {
+    const int colsLeft  = 1 + ( leftIsAvailable ? logSubWidthC : 0 );   // the left column's centre is x - 2 in 4:2:x
+    const int colsRight = ( uiCWidth + addedAboveRight ) << logSubWidthC;
+    const CompArea rowAbove( COMP_Y, cu.chromaFormat, Position( lumaArea.x - colsLeft, lumaArea.y - 1 ), Size( colsLeft + colsRight, 1 ) );
+    lumaAbove = cu.cs->picture->getRecoAboveCtuTop( rowAbove ).buf + colsLeft;
+  }
+
   if (aboveIsAvailable)
   {
     pDst  = pDst0    - iDstStride;
-    int addedAboveRight = 0;
-    if ((cu.intraDir[1] == MDLM_L_IDX) || (cu.intraDir[1] == MDLM_T_IDX))
-    {
-      addedAboveRight = avaiAboveRightUnits*chromaUnitWidth;
-    }
     if( cu.chromaFormat == CHROMA_420 && !isFirstRowOfCtu && !cu.cs->sps->verCollocatedChroma )
     {
       LMLumaDownsample420( pRecSrc0 - iRecStride2, iRecStride, pDst, 0, uiCWidth + addedAboveRight, 1, leftIsAvailable );
     }
     else
     {
-      // the luma row above; at a CTU top it lies in the CTU line above, which may be deblocked meanwhile: read it as encoded
-      const Pel* lumaAbove = pRecSrc0 - iRecStride;
-      if( isFirstRowOfCtu )
-      {
-        const CompArea rowAbove( COMP_Y, cu.chromaFormat, Position( lumaArea.x - 1, lumaArea.y - 1 ), Size( 2 * ( uiCWidth + addedAboveRight ) + 1, 1 ) );
-        lumaAbove = cu.cs->picture->getRecoAboveCtuTop( rowAbove ).buf + 1;
-      }
       for (int i = 0; i < uiCWidth + addedAboveRight; i++)
       {
         const bool leftPadding = i == 0 && !leftIsAvailable;
@@ -1362,10 +1368,8 @@ void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& ch
       }
       else if (cu.cs->sps->verCollocatedChroma)
       {
-        const bool abovePadding = j == 0 && !aboveIsAvailable;
-
         int s = 4;
-        s += piSrc[-(abovePadding ? 0 : iRecStride)];
+        s += j > 0 ? piSrc[-iRecStride] : aboveIsAvailable ? lumaAbove[-1 - logSubWidthC] : piSrc[0];
         s += piSrc[0] * 4;
         s += piSrc[-1];
         s += piSrc[1];
@@ -1418,10 +1422,9 @@ void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& ch
         {
           CHECKD( !cu.cs->sps->verCollocatedChroma, "the 4:2:0 6-tap case is handled by LMLumaDownsample420" );
           const bool leftPadding  = i == 0 && !leftIsAvailable;
-          const bool abovePadding = j == 0 && !aboveIsAvailable;
 
           int s = 4;
-          s += pRecSrc0[2 * i - (abovePadding ? 0 : iRecStride)];
+          s += j > 0 ? pRecSrc0[2 * i - iRecStride] : aboveIsAvailable ? lumaAbove[2 * i] : pRecSrc0[2 * i];
           s += pRecSrc0[2 * i] * 4;
           s += pRecSrc0[2 * i - (leftPadding ? 0 : 1)];
           s += pRecSrc0[2 * i + 1];
