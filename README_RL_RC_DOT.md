@@ -1,293 +1,149 @@
-## Adapter/3 research update (2026-11-12)
+# RL-RC-DoT trên H.266/VVenC — adapter/3
 
-**Important: old adapter/2 checkpoints cannot be resumed.** The QP reference,
-auxiliary supervision, and PPO learning reward scale changed. Use a fresh
-source-pinned Kaggle notebook and `MODE='new'`.
+Nhánh làm việc: **feature/rl-rc-dot-vvc**. Mục tiêu là tái hiện RL-RC-DoT trên
+VVenC, ghi rõ các ánh xạ codec và điều chỉnh huấn luyện; chưa triển khai hướng
+phát triển Partition/MTS. Không gọi bản này là giống hệt paper ở mọi chi tiết.
 
-- Delta actions now modify native VVenC QPA QP; native preflight requires
-  zero-action bit-exact parity with the matched research anchor.
-- PPO receives 0.05 times the paper's scalar reward to reduce Critic target
-  magnitudes; reported validation/episode rewards stay in paper units.
-- Auxiliary loss uses a detection-region mask (source and reconstruction box
-  centers) and 5x weighting for positive cells, not uniform full-frame MSE.
-- Every checkpoint is compared to matched anchor AND zero-action. Validation
-  tracks actual bitrate ratios and Precision changes; controls are cached.
-- **No performance improvement has been demonstrated yet:** run native
-  preflight, smoke, Trial, and multiple-seed rate–task comparisons.
+Tài liệu RL được gộp còn hai file:
 
-See `scripts/rl_rc_dot/METHOD_MAPPING.md` for the scientific rationale.
+- File này: chọn notebook, input, training, resume, evaluation và giới hạn
+- [METHOD_MAPPING.md](scripts/rl_rc_dot/METHOD_MAPPING.md): state/action/reward,
+  kiến trúc, khác biệt với paper, bằng chứng kiểm tra và lịch sử các Trial
 
----
+## Trạng thái trước khi chạy thử
 
-# RL-RC-DoT → VVenC: integrated H.266 adaptation (adapter/3)
+Adapter/3 đã build và qua native preflight trên Windows: zero action có
+bitstream giống hệt anchor, action khác 0 tác động đúng vùng/POC, reconstruction
+khớp giải mã. Bộ kiểm tra: **62 test, 61 đạt, 1 RGB test bỏ qua do thiếu thư viện
+dùng chung trên Windows**. Kaggle/Linux vẫn bắt buộc qua RGB gate. Các test
+codec/PPO dùng detector giả lập; chúng không chứng minh hiệu quả học BDD100K.
 
-## Mini protocol and notebook selection (2026-11-12)
+**Có thể bắt đầu Mini Pilot kỹ thuật. Chưa đủ bộ đánh giá ba phương pháp.**
+Runner hiện chỉ đánh giá VVenC anchor CTU32 và VVenC+RL. H.264+RL-RC-DoT chưa
+được tích hợp vào runner/report này; không được gắn nhãn bảng hai phương pháp
+hiện tại là so sánh với paper gốc.
 
-Mini selection remains Train16 / Validation4 / Test30. Use Mini_Pilot for
-technical smoke and Mini_Trial20480 for the learning trial. Pilot, trial and
-the longer Mini phase have different rollout/validation contracts; preserve
-PHASE on resume. PHASE='full' in a Mini notebook is a longer **Mini** run,
-not a switch to Train65. It now uses at most four validation videos.
+## Bộ so sánh cần có
 
-Mini_Test30 defaults to five rates50/80/120/160/200 (150 pairs), retaining
-256 frames per video. TEST_RATES='50,120,200' is an optional quick90-pair
-survey with no BD-rate. Preserve rates and checkpoint when resuming.
-Five-rate BD results describe these short clips only, not full-video quality.
-Both setup and evaluation count against its notebook session budget.
-Training uses two GPU collectors; evaluation currently uses GPU0 sequentially.
+| Phương pháp | Ý nghĩa | Trạng thái trong pipeline này |
+|---|---|---|
+| H.264/x264 + RL-RC-DoT đã training | Tái hiện phương pháp của paper | Chưa tích hợp |
+| VVenC/H.266 không RL | Baseline, phải ghi rõ profile | Có anchor CTU32 |
+| VVenC/H.266 + RL-RC-DoT | Bản ánh xạ H.266 hiện tại | Có |
 
-Current adapter/3 keeps the declared independent actor/critic, auxiliary mask
-and reward scaling. These are experimental adaptations, not a claim that
-only the codec changed. Older workflow examples below are full-data examples;
-use the dedicated Mini notebooks for16/4/30. Adapter/2 exports remain evidence
-only; do not bypass the compatibility checks to resume them into adapter/3.
+So sánh phải dùng cùng video, đoạn frame, kích thước, detector, metric và
+bitrate thực. Hai agent cần công bố ngân sách tương tác, tập Train/Validation,
+seed và khác biệt thuật toán. Không lấy số trong paper chạy dataset khác làm
+kết quả đối chiếu cùng điều kiện. Không thay H.264+RL bằng H.264 đơn thuần.
 
-Supported branch: **feature/rl-rc-dot-vvc**. Supported training entry:
-**python -m scripts.rl_rc_dot.session** (or train.py without --trajectory).
-The old DOT_PROXY pilot is retired and fails fast. Existing v3/v4 and
-custom-PPO prototype checkpoints are **not compatible** with this schema.
+Anchor hiện tại là **VVenC research profile CTU32/DQP2/FPP0**, không phải kết quả
+stock CTU128 trước đây. Zero-action là đối chứng kiểm tra tích hợp trong
+validation, không phải phương pháp thay thế H.264+RL. Nếu cần stock-VVenC,
+phải chạy/ghép đúng profile và đúng đoạn frame, không đổi tên anchor CTU32.
 
-This is an implementation of the method on H.266 with explicitly declared
-codec adaptations. **After the 4096-transition Trial, the critic branch is
-isolated from the actor/auxiliary branch, gradients are clipped per branch,
-state cumulative bits are log-scaled and auxiliary output is bounded.** It is not the authors' released implementation, and
-working tests do not establish convergence or the paper's performance.
-Read [METHOD_MAPPING.md](scripts/rl_rc_dot/METHOD_MAPPING.md) before experiments.
+## Dataset và input
 
-## What is now connected
+- Full lock: Train65 / Validation7 / Test100
+- Mini: **Train16 / Validation4 / Test30**, tập con xác định theo seed, phân
+  tầng theo số car boxes; ba tập không trùng nhau. Đây không phải phân tầng
+  đã xác minh theo ngày/đêm/thời tiết
+- Lock và cấu hình detector đã nằm trong source. Dataset lock SHA256:
+  `f7a600f501de622f66ace04bb0b12ec5da0dab988cd54732d614f6b16495aaea`
+- Cần input **MOV BDD100K Train00 / Driving Video with Object Tracking**
+  chứa các video được chọn. `bdd100k.zip` và `snapshot.zip` cũ chứa metadata,
+  không thay thế MOV. Notebook kiểm tra hash MOV trước khi build codec
+- Bật Internet và **GPU T4×2**. Setup giữ CUDA Torch đang có, pin source
+  VVdeC/YOLO và kiểm tra weights; không so binary Kaggle với SHA Windows cũ
 
-- One causal decision → actual encoded picture → Annex-B AU bits and native
-  reconstruction → frozen YOLO reward → next state.
-- All 16 global fields and 4 local maps are populated. CU modes and QP come
-  from final CABAC coding before cleanup; completed PSNR/SSIM and actual
-  syntax-bit counters enter the next state.
-- Source-only ten-picture lookahead provides SATD and a declared temporal
-  dependency-cost approximation, not a relabelled temporal SAD.
-- Gaussian 5×7 action → floating bilinear 20×30 map → actual VVC QG pooling.
-  The encoder echoes the consumed map; the bridge and rollout buffer verify it.
-- Stable-Baselines3 **2.7.0 PPO**, with independent actor and critic CNN/64
-  latents, auxiliary block reward-prediction head on the actor branch and
-  separate actor/critic gradient clipping. This isolates large critic return-MSE
-  gradients observed in the 4096-step Trial. The auxiliary head now uses sigmoid
-  outputs in [0,1], matching its labels. Provisional settings: learning rate
-  **3e-5**, **3** optimizer epochs, **target KL 0.05**, auxiliary MSE coefficient **0.1**.
-  This is a declared training adaptation, not a claim of original-paper fidelity.
-- Finite checks on observations, actions, old logprobs, rewards, losses,
-  gradients, parameters and optimizer state. The entire rollout is checked
-  against the collecting policy before the first optimizer step.
-- Train/Validation separation, deterministic paired validation, best checkpoint,
-  restored optimizer/RNG, soft session stop, transactional checkpoint pointers,
-  sealed exports and Kaggle-safe resume.
-- Two collectors by default: worker0 uses GPU0 and worker1 uses GPU1 for YOLO.
-  PPO defaults to CPU. VVenC itself remains a CPU encoder.
+Train Mini chọn ngẫu nhiên đoạn 256 frame bắt đầu tại 0/128/256/384/512.
+Validation/Test dùng đoạn đầu theo độ dài cấu hình. Cần ghi rõ giới hạn này
+khi báo cáo, không gọi là đánh giá nguyên video.
 
-## Locked data and detector
+## Chọn notebook
 
-Bundled assets contain the approved Train65 / Validation7 / internal Test100
-split and frozen baseline protocol. They contain **no MOV videos**.
+| Bước | Notebook | Ngân sách mặc định |
+|---|---|---|
+| Kiểm tra kỹ thuật | [Mini Pilot](notebooks/RL_RC_DoT_VVC_Mini_Pilot_Kaggle.ipynb) | 256 tương tác; Val2 × 2 rate × 64 frame |
+| Kiểm tra khả năng học | [Mini Trial](notebooks/RL_RC_DoT_VVC_Mini_Trial20480_Kaggle.ipynb) | 20.480 tương tác; Val4 × 2 rate × 256 frame |
+| Đánh giá sau khi chốt checkpoint | [Mini Test30](notebooks/RL_RC_DoT_VVC_Mini_Test30_Kaggle.ipynb) | 30 video × 5 rate × 256 frame; 15 cặp bổ sung/phiên |
 
-Dataset SHA256:
-f7a600f501de622f66ace04bb0b12ec5da0dab988cd54732d614f6b16495aaea
+Pilot/Trial training dùng hai collector: YOLO trên GPU0/GPU1; PPO mặc định CPU;
+VVenC là CPU encoder. Test30 hiện dùng **GPU0 tuần tự**, chưa song song hai GPU.
 
-Kaggle still needs the actual BDD100K Train00 MOV dataset
-(Driving Video with Object Tracking). Each MOV is checked against the lock.
-The existing bdd100k.zip and snapshot.zip match the bundled lock content;
-they are metadata, not replacement video inputs.
+Phiên đầu dùng `MODE='new'`. Pilot, Trial và `PHASE='full'` trong notebook Mini
+có hợp đồng rollout/validation khác nhau: không đổi phase rồi resume checkpoint
+của phase cũ. **`PHASE='full'` trong Mini chỉ là Mini chạy dài hơn, vẫn 16/4/30**;
+không tự chuyển sang Train65. Muốn mở rộng Full65 phải tạo thí nghiệm riêng.
 
-Preprocessing: 480×320, 30fps, BT.709 TV I420. YOLOv5n v7.0, car class2,
-confidence0.25, NMS0.45, matchIoU0.5, maxdet300, FP32. Source/weights/dirty
-tracked YOLO files are checked. RGB conversion must match the frozen FFmpeg
-protocol byte-for-byte. Detection matching is confidence-ordered, one-to-one;
-empty prediction Precision is0. These details are explicit definitions where
-the publication does not provide complete implementation code.
+Mỗi notebook khóa một source commit. Không sửa pin/hyperparameter giữa các
+phiên resume. Lưu notebook và log setup của phiên đã chạy để tái lập kết quả.
 
-## Codec profile and comparison
+## Training và cách đánh giá trong phiên
 
-The integrated profile is medium, 480×320@30, internal10bit, one-pass RC,
-GOP32, native LookAhead1, CTU32, DQPsubdiv2, frame parallelism0. CTU threads
-remain enabled. This makes the frame boundary causal and permits finer QGs;
-the actual CU/QG partition can still coalesce cells. It does **not** promise
-600 independent 16×16 quantizers.
+Entry point: `python -m scripts.rl_rc_dot.session`. `train.py` không có
+`--trajectory` chuyển sang runner này; pilot DOT_PROXY cũ đã ngừng hỗ trợ.
 
-In agent mode, deltaQP is relative to the frame QP and replaces the local
-QPA offset. Zero action therefore need not equal the native-QPA anchor.
-The supplied paired anchor uses native QPA under the **same declared
-CTU32 research profile**. Label it accordingly. It is not the old stock
-CTU128 VVenC result. **Do not reuse the previous 500 baseline points as a
-matched anchor for this profile.** A stock-VVenC comparison is an additional
-experiment with its own configuration record.
+Training dùng YOLOv5n để so detection trên frame tái tạo với frame gốc làm
+pseudo-ground-truth. Reward gốc: `20*Precision - abs(log(prefix_rate/target))`.
+PPO nhận 0,05 lần reward; validation/report giữ đơn vị gốc. Mỗi bước là một
+picture trong coding order, không phải một video. Không quy về 975 episode
+hoặc 3 epoch dataset; `PPO_EPOCHS=3` là lượt tối ưu trên mỗi rollout.
 
-The mapping adds no SAC/Partition/MTS policy and no changed task reward.
-The source-derived lookahead and VVC syntax categories are adaptations that
-must be disclosed, not claimed numerically identical to x264 internals.
+Validation định kỳ so **anchor / zero-action / learned policy**, lưu Precision,
+Recall, F1, PSNR, bitrate thực và reward. Chọn best bằng macro mean reward
+validation hoàn chỉnh. `latest` phục vụ tiếp tục training; nó có thể kém `best`.
+Không dùng Test30/Test100 để chỉnh reward hoặc chọn hyperparameter.
 
-## Setup on Kaggle
+Qua Pilot không đồng nghĩa có hiệu quả học. Trước khi chạy dài, xem KL/clip
+fraction, action spread, auxiliary diagnostics, explained variance và xu hướng
+validation so với bitrate thực. Không suy chất lượng học chỉ từ test PASS.
 
-Enable Internet and T4×2. Clone this branch at a fixed commit, then:
+## Resume và lưu bằng chứng
 
-    python -m scripts.rl_rc_dot.setup_kaggle \
-      --repo /kaggle/working/vvenc_rl_source \
-      --source-commit THE_CHECKED_OUT_COMMIT \
-      --output /kaggle/working/rl_rc_dot_tools --jobs 2 --install-system
+Upload gói **`*_KAGGLE_SAFE.zip`** của đúng run; `session_payload.bin` giữ nguyên
+ZIP bên trong khi Kaggle giải nén Input. Giữ mọi export cũ để đối chiếu.
 
-Setup preserves installed CUDA Torch, pins VVdeC source and YOLO, builds
-VVenC with JSON ON, and records actual binary hashes. It does not compare
-a new compiler's binary with an unrelated historical hard-coded SHA.
+- Adapter/2, V3/V4 và DOT_PROXY **không tương thích adapter/3**; không bỏ assert
+  để nạp chúng. Với adapter/3 bắt đầu run mới
+- Resume giữ source/profile/dataset/seed/workers/rollout/validation/PPO settings;
+  được đổi ngân sách bổ sung. Source/config khác sẽ bị từ chối
+- Phục hồi model, optimizer, counters và RNG, rồi mở codec episode/rollout mới;
+  không phục hồi giữa một picture/reference buffer đang encode
+- Dừng mềm dành thời gian export; VM bị tắt đột ngột chỉ giữ checkpoint đã
+  commit còn trên đĩa. Không có bảo đảm ZIP kịp tạo khi VM bị kill
+- Validation control cache không nằm trong export hiện tại; sau resume control
+  có thể được tính lại. Đây là chi phí bổ sung, không phải policy bị mất
 
-Run the complete tests:
+Output chính: `method.json`, `session.json`, `dataset_selection.json`,
+`progress.json`, `checkpoints/`, `metrics/`, `validations/`, native/trajectory
+evidence và SAFE export. SHA/ràng buộc method được kiểm tra trước khi load.
 
-    python -m unittest discover -s scripts/rl_rc_dot -p 'test_*.py' -v
+## Test30 và chỉ số báo cáo
 
-Run native preflight (encoder/decoder paths from TOOLCHAIN.json):
+Mặc định `TEST_RATES='50,80,120,160,200'`: **150 cặp**. Có thể chọn
+`'50,120,200'` để khảo sát nhanh **90 cặp**, không báo BD-rate. Không đổi rates
+hay checkpoint khi resume. Độ dài Mini Test cố định 256 frame/video.
 
-    python -m scripts.rl_rc_dot.preflight \
-      --encoder /path/vvencapp --decoder /path/vvdecapp \
-      --output /kaggle/working/preflight --frames 32
+Report hiện có: Precision, Recall, F1, PSNR, bitrate thực, paired deltas,
+đường RD, BD-Precision và BD-rate nếu đủ năm điểm hợp lệ có miền giao nhau.
+Không ngoại suy khi hai đường không giao miền; kết quả không xác định để null.
+Không gọi BD-Precision là mAP. Chưa có segmentation/tracking/mAP trong runner.
+Các chỉ số detection ở đây là mức bảo toàn pseudo-label, không phải đánh giá
+trực tiếp so annotation thật của BDD100K.
 
-This verifies complete state/AU/POC/CU coverage, causal history statistics,
-consumed actions, spatial direction, an isolated POC probe, and byte equality
-of decoded reconstruction for every POC. The session runner also runs it.
+Thời gian setup tính trong session budget khi dùng notebook mới. Chọn resume
+Input theo đúng checkpoint, source, seed, frame và rate. Hai-method Test30 hiện
+tại chỉ là một phần của bộ so sánh ba phương pháp yêu cầu ở trên.
 
-## Short pilot before long training
+## Lệnh kiểm tra kỹ thuật
 
-Use a new output. This is a reduced technical/learning pilot, not a reportable
-full experiment. The CLI's default full-video training horizon is preserved.
+```bash
+python -m unittest discover -s scripts/rl_rc_dot -p 'test_*.py' -v
+python -m scripts.rl_rc_dot.preflight --encoder /path/vvencapp \
+  --decoder /path/vvdecapp --output /path/new_preflight --frames 32
+```
 
-    python -m scripts.rl_rc_dot.session \
-      --input-root /kaggle/input \
-      --encoder /path/vvencapp --decoder /path/vvdecapp \
-      --yolo-repo /path/yolov5 --weights /path/yolov5n_v7_locked.pt \
-      --output /kaggle/working/rcdot_pilot --mode new \
-      --workers 2 --gpu-ids 0,1 --encoder-threads 2 \
-      --rollout-steps 64 --additional-timesteps 256 \
-      --ppo-learning-rate 3e-5 --ppo-epochs 3 --ppo-target-kl 0.05 --ppo-aux-loss-coef 0.1 \
-      --validation-videos 2 --validation-rates 50,120 --validation-frames 64 \
-      --val-every-updates 2 --max-hours 10
-
-Inspect metrics, validation, action spread, target/actual bitrate, KL,
-clip fraction, `max_approx_kl_observed` and `stopped_by_target_kl`.
-The prior real-data smoke completed 256 interactions and two PPO updates,
-with approximate KL 3.95/69.14 before the first stabilization. A subsequent
-stabilized 4096-transition Trial ran end-to-end but saw degraded Validation
-reward after update2, 5/8 target-KL stops, growing auxiliary MSE (0.7→426.8)
-and enormous critic-dominated global gradients (up to 220k). See
-[specific diagnosis](scripts/rl_rc_dot/TRIAL_4096_DIAGNOSIS.md).
-
-**The corrected policy architecture is not compatible with those previous
-checkpoints. Start MODE=new, PHASE=pilot for a fresh 256-step smoke; only
-advance to a new Trial after checking the persisted diagnostic metrics.** A finite optimizer update alone does
-not prove a good policy. Do not select reward/hyperparameters using Test100.
-
-## Full experiment
-
-Start a new official run after the pilot is reviewed. Default training budget
-is **20,000,000 interactions**, following the reported paper budget rather
-than inventing a fixed3-epoch rule. Two collectors replace the paper's8 to fit
-the available hardware. Full Validation is7 clips ×5 fixed target rates.
-Time required on VVC/T4×2 must be measured, not inferred from the paper's x264
-runtime. A reduced frame budget must be reported as a reduced experiment.
-
-    python -m scripts.rl_rc_dot.session \
-      --input-root /kaggle/input \
-      --encoder /path/vvencapp --decoder /path/vvdecapp \
-      --yolo-repo /path/yolov5 --weights /path/yolov5n_v7_locked.pt \
-      --output /kaggle/working/rcdot_official --mode new \
-      --workers 2 --gpu-ids 0,1 --max-hours 11.75 \
-      --ppo-learning-rate 3e-5 --ppo-epochs 3 --ppo-target-kl 0.05
-
-For a **bounded new run**, add `--additional-timesteps 20480`; the 20M
-maximum remains in place, but the session stops at the smaller budget.
-An optional `--validation-frames 64` explicitly reduces validation cost;
-keep it unchanged when resuming and report it as a reduced validation
-protocol. Before final Test100 claims, do an appropriately long held-out
-Validation assessment. Never use Test100 to choose policy hyperparameters.
-
-max-hours includes this command's setup/preflight. To count notebook setup
-too, pass --session-start-utc with time.time() captured in its first cell.
-A reserve (default10min, capped at10% for very short sessions) is kept for
-closing encoders and exporting. This is a soft stop, not recovery from an
-instant VM kill. Checkpoints are committed after updates and at normal stop;
-an abrupt kill recovers the last committed generation available on disk.
-
-## Resume
-
-Upload the exported **_KAGGLE_SAFE.zip** package as Input. Kaggle can extract
-the outer ZIP; session_payload.bin retains the inner ZIP bytes. Both raw
-exports and verified extracted folders are supported.
-
-    python -m scripts.rl_rc_dot.session \
-      --input-root /kaggle/input \
-      --encoder /path/vvencapp --decoder /path/vvdecapp \
-      --yolo-repo /path/yolov5 --weights /path/yolov5n_v7_locked.pt \
-      --output /kaggle/working/rcdot_official --mode resume \
-      --resume-from /kaggle/input/MY_DATASET/session_payload.bin \
-      --workers 2 --gpu-ids 0,1 --max-hours 11.75 \
-      --ppo-learning-rate 3e-5 --ppo-epochs 3 --ppo-target-kl 0.05
-
-Keep the same training and validation configuration as the imported run.
-Do not promote a reduced pilot's validation score into the full experiment.
-Changing total/session interaction budget is allowed; changing method/source/
-profile/horizon/collector count is rejected.
-
-Resume restores policy, optimizer, counters, parent RNG and sampler RNG,
-then starts fresh codec episodes and a fresh on-policy rollout. It does not
-pretend to serialize an in-flight VVenC reference-picture buffer. Partial
-rollouts may be discarded. num_timesteps counts observed interactions;
-trained_frames counts completed PPO-rollout interactions.
-
-## Outputs
-
-- method.json: source/dataset/profile/algorithm/validation contract
-- progress.json: committed latest/previous/best checkpoint references
-- checkpoints/: at most current, previous and best generations, with hashes/RNG
-- metrics/: update and episode logs; validations/: completed paired validation
-- episodes/, validation_media/: compressed states, actions, AU/reconstruction
-  hashes, detections and encoder logs/bitstreams (raw YUV is cleaned)
-- exports/: sealed session ZIP and byte-preserving Kaggle-safe ZIP
-- history.json: index of previous-session evidence, retained in the user's
-  previous export; previous media is not repeatedly copied into new sessions
-
-Best selection uses the macro mean per-frame reward on Validation. Clip
-Precision/Recall/F1/PSNR/actual bitrate are also saved. Incomplete validation
-does not replace the best checkpoint. Historical exports should be retained.
-
-## Evaluation
-
-Use the sealed best-validation model.zip from checkpoints, retaining its
-manifest and the run's method.json. Evaluation verifies them before loading.
-
-    python -m scripts.rl_rc_dot.evaluate \
-      --input-root /kaggle/input --encoder /path/vvencapp \
-      --decoder /path/vvdecapp --yolo-repo /path/yolov5 \
-      --weights /path/yolov5n_v7_locked.pt \
-      --checkpoint /path/run/checkpoints/OBJECT/model.zip \
-      --output /kaggle/working/rcdot_test --max-pairs 20
-
-Default Test100 ×5 rates uses full clips. Resume reuses only points with
-matching identity and intact stream/trajectory hashes. Report uses actual
-bitrate and overlap-only PCHIP on an explicitly reported Pareto frontier;
-undefined BD results stay null. BD-Precision is **not mAP**. The paired
-VVenC anchor here is the matched CTU32 profile described above.
-
-## Evidence and limits
-
-CPU tests and real codec fixtures validate implementation contracts.
-YOLO fixtures in unit tests are labelled synthetic and prove no detection
-gain. A 256-interaction Kaggle T4×2 pilot with real BDD100K/YOLO has now
-confirmed end-to-end execution, while revealing unstable PPO updates.
-The new stability configuration still requires a **fresh Kaggle 256-step
-smoke test**, followed by a longer controlled training/validation run.
-
-Method sources:
-- https://arxiv.org/html/2501.12216v2
-- https://github.com/Puiching-Memory/RL-RC-DoT (independent reconstruction)
-- https://stable-baselines3.readthedocs.io/en/v2.7.0/modules/ppo.html
-
-The integrated SB3 extension is independently implemented from the documented
-API/update, with SB3's MIT notice in scripts/rl_rc_dot/licenses/SB3-MIT.txt.
-No source from the independent reconstruction is redistributed.
-
-Evaluation also accepts --resume-from for its own sealed export; it always
-requires the separately verified training checkpoint. Each evaluation session
-exports completed/partial evidence plus a _KAGGLE_SAFE.zip and reports only
-verified completed pairs. Retain the previous session packages for comparison.
+Linux/Kaggle runner còn bắt buộc kiểm tra RGB conversion byte-exact với
+FFmpeg. Native preflight kiểm tra state, action, CU coverage, AU bits, POC và
+decoder parity. Bảng bằng chứng và giới hạn nằm trong
+[đặc tả kỹ thuật](scripts/rl_rc_dot/METHOD_MAPPING.md#verification-and-experiment-history).
