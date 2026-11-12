@@ -1146,12 +1146,11 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
   const TCoeff    *srcCoeff = coeffs.buf;
         TCoeffSig *dstCoeff = tu.getCoeffs( compID ).buf;
 
+  // costCoeff and costSig need no clearing: the sub-block loop writes them at every scan position before reading them
+  // (costSig is set on every path of xGetCodedLevelTSPred: its first level candidate always has a finite cost)
   double *costCoeff  = m_pdCostCoeff;
   double *costSig    = m_pdCostSig;
   double *costCoeff0 = m_pdCostCoeff0;
-
-  memset( m_pdCostCoeff,  0, sizeof( double ) *  maxNumCoeff );
-  memset( m_pdCostSig,    0, sizeof( double ) *  maxNumCoeff );
 
   m_bdpcm = 0;
 
@@ -1205,56 +1204,70 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
       const Intermediate_Int levelDouble = (Intermediate_Int)std::min<int64_t>( tmpLevel, std::numeric_limits<Intermediate_Int>::max() - ( Intermediate_Int( 1 ) << ( qBits - 1 ) ) );
 
       uint32_t roundAbsLevel = std::min<uint32_t>(uint32_t(entropyCodingMaximum), uint32_t((levelDouble + (Intermediate_Int(1) << (qBits - 1))) >> qBits));
-      uint32_t minAbsLevel = (roundAbsLevel > 1 ? roundAbsLevel - 1 : 1);
-
-      uint32_t downAbsLevel = std::min<uint32_t>(uint32_t(entropyCodingMaximum), uint32_t(levelDouble >> qBits));
-      uint32_t upAbsLevel = std::min<uint32_t>(uint32_t(entropyCodingMaximum), downAbsLevel + 1);
-
-      m_testedLevels = 0;
-      coeffLevels[m_testedLevels++] = roundAbsLevel;
-
-      if (minAbsLevel != roundAbsLevel)
-        coeffLevels[m_testedLevels++] = minAbsLevel;
-
-      int rightPixel, belowPixel, predPixel;
-
-      cctx.neighTS(rightPixel, belowPixel, scanPos, dstCoeff);
-      predPixel = cctx.deriveModCoeff(rightPixel, belowPixel, upAbsLevel, 0);
-
-      if (upAbsLevel != roundAbsLevel && upAbsLevel != minAbsLevel && predPixel == 1)
-        coeffLevels[m_testedLevels++] = upAbsLevel;
 
       double dErr = double(levelDouble);
       coeffLevelError[0] = dErr * dErr * errorScale;
 
       costCoeff0[scanPos] = coeffLevelError[0];
-      dstCoeff[blkPos]    = coeffLevels[0];
+      dstCoeff[blkPos]    = roundAbsLevel;
 
       //===== coefficient level estimation =====
             unsigned    ctxIdSig = cctx.sigCtxIdAbsTS( scanPos, dstCoeff );
             uint32_t    cLevel;
-      const BinFracBits fracBitsPar = fracBits.getFracBitsArray( cctx.parityCtxIdAbsTS() );
-
-      //goRiceParam = cctx.templateAbsSumTS( scanPos, dstCoeff );
-      goRiceParam = 1;
-      unsigned ctxIdSign = cctx.signCtxIdAbsTS(scanPos, dstCoeff, 0);
-      const BinFracBits fracBitsSign = fracBits.getFracBitsArray(ctxIdSign);
-      const uint8_t     sign         = srcCoeff[ blkPos ] < 0 ? 1 : 0;
-
-      DTRACE_COND( ( coeffLevels[0] != 0 ), g_trace_ctx, D_RDOQ_MORE, " uiCtxSig=%d", ctxIdSig );
-
-      unsigned gt1CtxId = cctx.lrg1CtxIdAbsTS(scanPos, dstCoeff, 0);
-      const BinFracBits fracBitsGr1 = fracBits.getFracBitsArray(gt1CtxId);
-
       const BinFracBits fracBitsSig = fracBits.getFracBitsArray( ctxIdSig );
-      bool lastCoeff = false; //
-      if (scanPosInSB == lastPosCoded && noCoeffCoded == 0)
-      {
-        lastCoeff = true;
-      }
+
+      DTRACE_COND( ( roundAbsLevel != 0 ), g_trace_ctx, D_RDOQ_MORE, " uiCtxSig=%d", ctxIdSig );
+
+      // the sub-block's last position is coded significant when no other coefficient of the sub-block is
+      const bool lastCoeff = scanPosInSB == lastPosCoded && noCoeffCoded == 0;
       int numUsedCtxBins = 0;
-      cLevel = xGetCodedLevelTSPred(costCoeff[scanPos], costCoeff0[scanPos], costSig[scanPos], levelDouble, qBits, errorScale, coeffLevels, coeffLevelError,
-                                    &fracBitsSig, fracBitsPar, cctx, fracBits, fracBitsSign, fracBitsGr1, sign, rightPixel, belowPixel, goRiceParam, lastCoeff, maxLog2TrDynamicRange, numUsedCtxBins);
+
+      if( roundAbsLevel == 0 && !lastCoeff )
+      {
+        // Exact shortcut of xGetCodedLevelTSPred for a coefficient that rounds to zero (most coefficients, even at high rates):
+        // it codes the zero level with only the significance flag, so the level candidates and the parity, greater-1
+        // and sign contexts it would not read are skipped.
+        const bool ctxCoded = cctx.remRegBins >= 4;
+        costSig  [scanPos]  = ctxCoded ? xGetRateSigCoef( fracBitsSig, 0 ) : xGetICost( 1 << SCALE_BITS );
+        costCoeff[scanPos]  = costCoeff0[scanPos] + costSig[scanPos];
+        numUsedCtxBins      = ctxCoded ? 1 : 0;
+        cLevel              = 0;
+      }
+      else
+      {
+        uint32_t minAbsLevel = (roundAbsLevel > 1 ? roundAbsLevel - 1 : 1);
+
+        uint32_t downAbsLevel = std::min<uint32_t>(uint32_t(entropyCodingMaximum), uint32_t(levelDouble >> qBits));
+        uint32_t upAbsLevel = std::min<uint32_t>(uint32_t(entropyCodingMaximum), downAbsLevel + 1);
+
+        m_testedLevels = 0;
+        coeffLevels[m_testedLevels++] = roundAbsLevel;
+
+        if (minAbsLevel != roundAbsLevel)
+          coeffLevels[m_testedLevels++] = minAbsLevel;
+
+        int rightPixel, belowPixel, predPixel;
+
+        cctx.neighTS(rightPixel, belowPixel, scanPos, dstCoeff);
+        predPixel = cctx.deriveModCoeff(rightPixel, belowPixel, upAbsLevel, 0);
+
+        if (upAbsLevel != roundAbsLevel && upAbsLevel != minAbsLevel && predPixel == 1)
+          coeffLevels[m_testedLevels++] = upAbsLevel;
+
+        const BinFracBits fracBitsPar = fracBits.getFracBitsArray( cctx.parityCtxIdAbsTS() );
+
+        //goRiceParam = cctx.templateAbsSumTS( scanPos, dstCoeff );
+        goRiceParam = 1;
+        unsigned ctxIdSign = cctx.signCtxIdAbsTS(scanPos, dstCoeff, 0);
+        const BinFracBits fracBitsSign = fracBits.getFracBitsArray(ctxIdSign);
+        const uint8_t     sign         = srcCoeff[ blkPos ] < 0 ? 1 : 0;
+
+        unsigned gt1CtxId = cctx.lrg1CtxIdAbsTS(scanPos, dstCoeff, 0);
+        const BinFracBits fracBitsGr1 = fracBits.getFracBitsArray(gt1CtxId);
+
+        cLevel = xGetCodedLevelTSPred(costCoeff[scanPos], costCoeff0[scanPos], costSig[scanPos], levelDouble, qBits, errorScale, coeffLevels, coeffLevelError,
+                                      &fracBitsSig, fracBitsPar, cctx, fracBits, fracBitsSign, fracBitsGr1, sign, rightPixel, belowPixel, goRiceParam, lastCoeff, maxLog2TrDynamicRange, numUsedCtxBins);
+      }
 
       cctx.remRegBins -= numUsedCtxBins;
       rdStats.iNumSbbCtxBins += numUsedCtxBins;
@@ -1326,12 +1339,11 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
     }
   }
 
-  //===== estimate last position =====
-  for( int scanPos = 0; scanPos < maxNumCoeff; scanPos++ )
+  // the sum of the absolute levels: the block's coefficients are contiguous (stride == width), any order gives the sum
+  CHECKD( tu.getCoeffs( compID ).stride != (int) width,"transform-skip RDOQ expects a compact coefficient buffer" );
+  for( uint32_t i = 0; i < maxNumCoeff; i++ )
   {
-    int blkPos = cctx.blockPos( scanPos );
-    TCoeff level = dstCoeff[ blkPos ];
-    absSum += abs(level);
+    absSum += abs( dstCoeff[i] );
   }
 }
 
