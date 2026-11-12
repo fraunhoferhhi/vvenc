@@ -4,7 +4,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 import unittest
 import numpy as np
 import torch
-from scripts.rl_rc_dot.method import action_map,detection_targets,score,observation,SCHEMA
+from scripts.rl_rc_dot.method import action_map,detection_targets,score,observation,SCHEMA,auxiliary_supervision_mask,training_reward,TRAIN_REWARD_SCALE
 
 class Method(unittest.TestCase):
     def test_action_is_finite_bounded_and_rejects_nan(self):
@@ -24,6 +24,23 @@ class Method(unittest.TestCase):
         self.assertEqual((m["tp"],m["fp"],m["fn"]),(1,2,0))
         self.assertEqual(labels[1,1],.5)
         self.assertEqual(labels[1,5],0)
+    def test_mask_covers_true_false_and_missed_detection_centres(self):
+        ref=np.array([[10,10,30,30,.9],[160,100,192,132,.9]])
+        pred=np.array([[10,10,30,30,.9],[80,10,100,30,.7]])
+        mask=auxiliary_supervision_mask(ref,pred)
+        self.assertEqual(mask.shape,(20,30))
+        self.assertEqual(mask[1,1],1)
+        self.assertEqual(mask[1,5],1)
+        self.assertEqual(mask[7,11],1)
+        self.assertEqual(mask.sum(),3)
+        self.assertEqual(auxiliary_supervision_mask([],[]).sum(),0)
+
+    def test_learning_reward_scale_preserves_paper_ordering(self):
+        self.assertAlmostEqual(TRAIN_REWARD_SCALE,0.05)
+        self.assertAlmostEqual(training_reward(15),0.75)
+        self.assertGreater(training_reward(15.1),training_reward(15.0))
+        with self.assertRaises(ValueError):training_reward(float("nan"))
+
     def test_empty_frame_policy_and_rate_reward(self):
         reward,labels,m=score([],[],120000,30,120000)
         self.assertEqual(reward,0);self.assertEqual(m["precision"],0);self.assertEqual(labels.sum(),0)

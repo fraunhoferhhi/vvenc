@@ -1,4 +1,4 @@
-# Method mapping: publication → declared VVC adapter/2
+# Method mapping: publication → declared VVC adapter/3
 
 The goal is a method-level port before further RL improvements. The authors'
 training code/checkpoint and all implementation details are unavailable.
@@ -60,9 +60,10 @@ because the paper does not release all normalization constants.
 35 Gaussian actions are clipped to[-10,10] as SB3 Box actions, transformed
 by12*tanh and half-pixel bilinear interpolation to20×30. Floating maps are
 written atomically and echoed by the encoder. At each fresh QG, area pooling
-and legal QP clipping determine the native QP relative to the slice QP.
-No repeated addition to descendants is intended. Zero map replaces local
-QPA with the slice-QP reference; it is not a vanilla-parity assertion.
+and legal QP clipping adjust the native VVenC QPA QP already selected for
+that coding level, not the shared slice QP. Native preflight requires a zero
+action to reproduce the matched CTU32 anchor bit-for-bit; spatial actions
+must still change real decoded CU QPs. This changes the action's semantics.
 
 CTU32 / DQPsubdiv2 limits coalescing compared with the old CTU128 path.
 Native legal CU/QG partition and zero-residual QP prediction still govern
@@ -133,3 +134,35 @@ Stock CTU128 baseline points from previous experiments must not be silently
 substituted. Test100 remains frozen and is not used for reward or checkpoint
 selection. No claim of improvement over VVenC or the paper is justified
 until real held-out measurements are complete.
+
+## Post-20,480 trial correction (adapter/3, experimental)
+
+The user-reported 20,480-transition validation reached its best reward at
+5,120 transitions and did not improve monotonically. Precision increased over
+native VVenC but actual bitrate increased around 9–10%. Neither coding
+efficiency nor convergence has been demonstrated.
+
+**Native action:** Delta QP now adds to the QPA-derived QP (not slice QP).
+Zero action preserves QPA and must be identical to matched anchor in preflight.
+This is a deliberate VVC-oriented extension, not a bit-exact port of x264.
+
+**Auxiliary:** Each state is supervised only at the centre cells of source
+and reconstructed detections. This includes missed objects and false positives
+and avoids hundreds of invented background negatives. Positive target cells
+receive 5x the active-negative MSE weight; zero-object batches get no
+auxiliary gradients. Diagnostic logs include active/positive-cell fractions.
+The auxiliary target is still detector-derived, NOT true causal QP saliency.
+
+**Critic:** PPO receives 0.05 times the original published reward. Validation,
+checkpoint selection, and raw episode rewards retain the published units.
+A uniform positive scalar does not change the reward's optimal ordering,
+but it changes training dynamics and the relative optimizer loss scales.
+
+**Validation:** Use three paired modes: native-QPA anchor, zero-action, and
+learned policy. Cache fixed native/zero results across checkpoints inside
+one sealed run and report changes in both Precision and actual bitrate.
+
+**Compatibility:** Schema v3, source fingerprint and training contract make all
+adapter/2 checkpoints incompatible. Start MODE=new; retrain from scratch.
+Research claims require native preflight and real Kaggle learning curves,
+not only a successful Python unit test or CI build.

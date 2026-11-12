@@ -1,3 +1,24 @@
+## Adapter/3 research update (2026-11-12)
+
+**Important: old adapter/2 checkpoints cannot be resumed.** The QP reference,
+auxiliary supervision, and PPO learning reward scale changed. Use a fresh
+source-pinned Kaggle notebook and `MODE='new'`.
+
+- Delta actions now modify native VVenC QPA QP; native preflight requires
+  zero-action bit-exact parity with the matched research anchor.
+- PPO receives 0.05 times the paper's scalar reward to reduce Critic target
+  magnitudes; reported validation/episode rewards stay in paper units.
+- Auxiliary loss uses a detection-region mask (source and reconstruction box
+  centers) and 5x weighting for positive cells, not uniform full-frame MSE.
+- Every checkpoint is compared to matched anchor AND zero-action. Validation
+  tracks actual bitrate ratios and Precision changes; controls are cached.
+- **No performance improvement has been demonstrated yet:** run native
+  preflight, smoke, Trial, and multiple-seed rate–task comparisons.
+
+See `scripts/rl_rc_dot/METHOD_MAPPING.md` for the scientific rationale.
+
+---
+
 # RL-RC-DoT → VVenC: integrated H.266 adaptation (adapter/2)
 
 Supported branch: **feature/rl-rc-dot-vvc**. Supported training entry:

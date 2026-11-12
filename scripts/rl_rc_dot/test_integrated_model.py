@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import gymnasium as gym
 from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv
-from scripts.rl_rc_dot.model import OBSERVATIONS,ACTIONS,AuxPPO,AuxiliaryLabels,build,clip_actor_critic_gradients
+from scripts.rl_rc_dot.model import OBSERVATIONS,ACTIONS,AuxPPO,AuxiliaryLabels,build,clip_actor_critic_gradients,masked_auxiliary_mse
 from scripts.rl_rc_dot.method import action_map,wire_map
 
 torch.set_num_threads(2)
@@ -27,13 +27,26 @@ class Fixture(gym.Env):
         self.t+=1
         consumed=wire_map(action_map(action))
         if self.bad_action:consumed[:]=10
-        return self.obs(),float(self.t)/10,self.t==4,False,{"block_reward":np.zeros((20,30),np.float32),
+        labels=np.zeros((20,30),np.float32);labels[1,1]=1
+        mask=np.zeros((20,30),np.float32);mask[1,1]=1;mask[1,2]=1
+        return self.obs(),float(self.t)/10,self.t==4,False,{"block_reward":labels,"block_mask":mask,
                   "consumed_action":consumed.ravel().tolist()}
     def rng_state(self):return {"generator":self.np_random.bit_generator.state,"episodes_started":0}
     def restore_rng_state(self,state):self.np_random.bit_generator.state=state["generator"]
     def suspend_episode(self):pass
 
 class IntegratedModel(unittest.TestCase):
+    def test_masked_auxiliary_ignores_597_background_cells(self):
+        pred=torch.full((1,600),0.5,requires_grad=True)
+        target=torch.zeros_like(pred);target[0,1]=1
+        mask=torch.zeros_like(pred);mask[0,1]=1;mask[0,2]=1
+        loss=masked_auxiliary_mse(pred,target,mask)
+        self.assertAlmostEqual(loss.item(),0.25,places=6)
+        loss.backward()
+        self.assertNotEqual(pred.grad[0,1].item(),0)
+        self.assertEqual(pred.grad[0,3].item(),0)
+        self.assertEqual(masked_auxiliary_mse(pred.detach(),target,torch.zeros_like(mask)).item(),0)
+
     def test_two_spawned_collectors_share_one_on_policy_update(self):
         model=build(SubprocVecEnv([Fixture,Fixture],start_method="spawn"),7,n_steps=4,batch_size=4,n_epochs=1,device="cpu")
         try:
@@ -41,7 +54,8 @@ class IntegratedModel(unittest.TestCase):
             self.assertEqual(model.completed_rollouts,1)
             self.assertEqual(model.trained_frames,8)
             for metric in ("explained_variance_defined","return_mean","return_rmse",
-                           "actor_gradient_norm","critic_gradient_norm","auxiliary_target_mean"):
+                           "actor_gradient_norm","critic_gradient_norm","auxiliary_target_mean",
+                           "auxiliary_active_fraction","auxiliary_positive_fraction"):
                 self.assertIn(metric,model.last_update_metrics)
             self.assertLessEqual(model.last_update_metrics["auxiliary_loss"],1.0)
             model.assert_checkpoint_finite()

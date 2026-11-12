@@ -47,7 +47,9 @@ class NativeIntegration(unittest.TestCase):
             self.assertIsNotNone(progress["best"])
             result=json.loads((root/progress["best"]["validation"]).read_text())
             self.assertEqual(len(result["points"]),1)
-            self.assertIn("anchor",result["points"][0]);self.assertIn("agent",result["points"][0])
+            self.assertIn("anchor",result["points"][0]);self.assertIn("zero",result["points"][0])
+            self.assertIn("agent",result["points"][0])
+            self.assertIn("macro_rate_ratio_vs_zero",result)
 
     def test_real_rollout_update_and_fresh_checkpoint_rollout(self):
         torch.set_num_threads(2)
