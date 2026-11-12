@@ -1402,6 +1402,23 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
       }
     }
 
+    // A frame rate whose frame duration is not a whole number of ticks of the default 27 MHz clock (e.g. 19001/317 from a
+    // variable-rate source) is refused by the encoder. Use the largest tick rate below the default that fits the frame rate
+    // instead: timestamps stay exact and nothing else changes.
+    if( c->m_TicksPerSecond == VVENC_TICKS_PER_SEC_DEF && c->m_FrameRate > 0 && c->m_FrameScale > 0
+        && ( (int64_t)VVENC_TICKS_PER_SEC_DEF * c->m_FrameScale ) % c->m_FrameRate != 0 )
+    {
+      int a = c->m_FrameRate, b = c->m_FrameScale;
+      while( b ) { const int r = a % b; a = b; b = r; }   // a = gcd( FrameRate, FrameScale )
+      const int ticksStep = c->m_FrameRate / a;            // every multiple of it gives a whole number of ticks per frame
+      if( ticksStep <= VVENC_TICKS_PER_SEC_DEF )
+      {
+        c->m_TicksPerSecond = VVENC_TICKS_PER_SEC_DEF / ticksStep * ticksStep;
+        err.warn( "TicksPerSecond" ) << "frame rate " << c->m_FrameRate << "/" << c->m_FrameScale << " does not fit the default "
+                                     << VVENC_TICKS_PER_SEC_DEF << ", using " << c->m_TicksPerSecond << "\n";
+      }
+    }
+
     if( sdrMode != VVENC_HDR_OFF || hdrMode != VVENC_HDR_OFF )
     {
       // check if at least one mode has changed, but error when both changed
