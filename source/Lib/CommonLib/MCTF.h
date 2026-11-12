@@ -217,7 +217,42 @@ private:
 
   void xFinalizeBlkLine (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrenght) const;
 
-  void motionEstimationMCTF(Picture* curPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, const PelStorage& origBuf, PelStorage& origSubsampled2, PelStorage& origSubsampled4, PelStorage& origSubsampled8, std::vector<double>& mvErr, double& minError, bool addLevel, bool calcErr);
+  // One level of the motion search of one reference: the arguments of motionEstimationLuma.
+  struct MotionSearchJob
+  {
+    Array2D<MotionVector>*       mvs;
+    const PelStorage*            orig;
+    const PelStorage*            buffer;
+    int                          refMargin;
+    int                          blockSize;
+    const Array2D<MotionVector>* previous;
+    int                          factor;
+    bool                         doubleRes;
+  };
+  // Runs the jobs' row tasks together and waits once, so the rows of one job fill the threads the others leave idle.
+  void motionEstimationLumaJobs( const std::vector<MotionSearchJob>& jobs ) const;
+
+  // The search pyramid of one reference picture: its subsampled lumas and the vectors of each level.
+  struct ReferenceSearch
+  {
+    TemporalFilterSourcePicInfo* srcPic = nullptr;
+    PelStorage                   bufferSub2;
+    PelStorage                   bufferSub4;
+    PelStorage                   bufferSub8;
+    Array2D<MotionVector>        mv_m;
+    Array2D<MotionVector>        mv_0;
+    Array2D<MotionVector>        mv_1;
+    Array2D<MotionVector>        mv_2;
+  };
+
+  // Builds the reference's subsampled lumas (1/2, 1/4 and, with addLevel, 1/8 resolution).
+  void subsampleReference( ReferenceSearch& ref, const bool addLevel ) const;
+  // The same for all references, one pool task each.
+  void subsampleReferences( std::deque<ReferenceSearch>& refs, const bool addLevel ) const;
+
+  // Searches the reference pictures refPics level by level, all references of a level at once; appends one
+  // srcFrameInfo entry per reference and, with calcErr, one mvErr entry, in the order of refPics.
+  void motionEstimationMCTF(const std::vector<Picture*>& refPics, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, const PelStorage& origBuf, PelStorage& origSubsampled2, PelStorage& origSubsampled4, PelStorage& origSubsampled8, std::vector<double>& mvErr, double& minError, bool addLevel, bool calcErr);
 
 }; // END CLASS DEFINITION MCTF
 

@@ -664,60 +664,120 @@ void MCTF::processPictures( const PicList& picList, AccessUnitList& auList, PicL
   m_filterPoc += 1;
 }
 
-void MCTF::motionEstimationMCTF(Picture* curPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, const PelStorage& origBuf, PelStorage& origSubsampled2, PelStorage& origSubsampled4, PelStorage& origSubsampled8, std::vector<double> &mvErr, double &minError, bool addLevel, bool calcErr)
+void MCTF::subsampleReference( ReferenceSearch& ref, const bool addLevel ) const
 {
-  srcFrameInfo.push_back(TemporalFilterSourcePicInfo());
-  TemporalFilterSourcePicInfo& srcPic = srcFrameInfo.back();
+  subsampleLuma( ref.srcPic->picBuffer, ref.bufferSub2 );
+  subsampleLuma( ref.bufferSub2, ref.bufferSub4 );
+  if( addLevel )
+  {
+    subsampleLuma( ref.bufferSub4, ref.bufferSub8 );
+  }
+}
 
+void MCTF::subsampleReferences( std::deque<ReferenceSearch>& refs, const bool addLevel ) const
+{
+  if( !m_threadPool || refs.size() < 2 )
+  {
+    for( ReferenceSearch& ref : refs )
+    {
+      subsampleReference( ref, addLevel );
+    }
+    return;
+  }
+
+  struct SubsampleParams
+  {
+    const MCTF*      mctf;
+    ReferenceSearch* ref;
+    bool             addLevel;
+  };
+  static auto task = []( int, void* taskParam )
+  {
+    SubsampleParams* params = static_cast<SubsampleParams*>( taskParam );
+    params->mctf->subsampleReference( *params->ref, params->addLevel );
+    return true;
+  };
+
+  std::vector<SubsampleParams> params( refs.size() );   // sized up front: the tasks point into it
+  WaitCounter taskCounter;
+  for( size_t i = 0; i < refs.size(); i++ )
+  {
+    params[i] = { this, &refs[i], addLevel };
+    m_threadPool->addBarrierTask( task, &params[i], &taskCounter );
+  }
+  taskCounter.wait();
+}
+
+void MCTF::motionEstimationMCTF(const std::vector<Picture*>& refPics, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, const PelStorage& origBuf, PelStorage& origSubsampled2, PelStorage& origSubsampled4, PelStorage& origSubsampled8, std::vector<double> &mvErr, double &minError, bool addLevel, bool calcErr)
+{
+  if( refPics.empty() )
+  {
+    return;
+  }
   const int wInBlks = (m_area.width + m_mctfUnitSize - 1) / m_mctfUnitSize;
   const int hInBlks = (m_area.height + m_mctfUnitSize - 1) / m_mctfUnitSize;
+  const int width   = m_area.width;
+  const int height  = m_area.height;
 
-  srcPic.picBuffer.createFromBuf(curPic->getOrigBuf());
-  srcPic.mvs.allocate(wInBlks, hInBlks);
-  srcPic.index = std::min(5, std::abs(curPic->poc - m_filterPoc) - 1);
-
-
+  // Each reference's srcPic points into srcFrameInfo, a deque, whose elements stay in place while more are appended.
+  std::deque<ReferenceSearch> refs;
+  for( Picture* refPic : refPics )
   {
-    const int width = m_area.width;
-    const int height = m_area.height;
-    Array2D<MotionVector> mv_0(width / (m_mctfUnitSize * 8) + 1, height / (m_mctfUnitSize * 8) + 1);
-    Array2D<MotionVector> mv_1(width / (m_mctfUnitSize * 4) + 1, height / (m_mctfUnitSize * 4) + 1);
-    Array2D<MotionVector> mv_2(width / (m_mctfUnitSize * 2) + 1, height / (m_mctfUnitSize * 2) + 1);
+    srcFrameInfo.push_back(TemporalFilterSourcePicInfo());
+    TemporalFilterSourcePicInfo& srcPic = srcFrameInfo.back();
+    srcPic.picBuffer.createFromBuf(refPic->getOrigBuf());
+    srcPic.mvs.allocate(wInBlks, hInBlks);
+    srcPic.index = std::min(5, std::abs(refPic->poc - m_filterPoc) - 1);
 
-    PelStorage bufferSub2;
-    PelStorage bufferSub4;
-
-    subsampleLuma(srcPic.picBuffer, bufferSub2);
-    subsampleLuma(bufferSub2, bufferSub4);
-
+    refs.emplace_back();
+    ReferenceSearch& ref = refs.back();
+    ref.srcPic = &srcPic;
+    ref.mv_0.allocate(width / (m_mctfUnitSize * 8) + 1, height / (m_mctfUnitSize * 8) + 1);
+    ref.mv_1.allocate(width / (m_mctfUnitSize * 4) + 1, height / (m_mctfUnitSize * 4) + 1);
+    ref.mv_2.allocate(width / (m_mctfUnitSize * 2) + 1, height / (m_mctfUnitSize * 2) + 1);
     if (addLevel)
     {
-      Array2D<MotionVector> mv_m(width / (m_mctfUnitSize * 16) + 1, height / (m_mctfUnitSize * 16) + 1);
-      PelStorage bufferSub8;
-      subsampleLuma(bufferSub4, bufferSub8);
-      motionEstimationLuma(mv_m, origSubsampled8, bufferSub8, m_padding, 2 * m_mctfUnitSize);
-      motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, m_padding, 2 * m_mctfUnitSize, &mv_m, 2);
+      ref.mv_m.allocate(width / (m_mctfUnitSize * 16) + 1, height / (m_mctfUnitSize * 16) + 1);
     }
-    else
-    {
-      motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, m_padding, 2 * m_mctfUnitSize);
-    }
-    motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, m_padding, 2 * m_mctfUnitSize, &mv_0, 2);
-    motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, MCTF_FRAME_MARGIN, 2 * m_mctfUnitSize, &mv_1, 2);
+  }
+  subsampleReferences( refs, addLevel );
 
-    motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, MCTF_FRAME_MARGIN, m_mctfUnitSize, &mv_2, 1, true);
-
-    if (calcErr)
+  // The search levels, coarse to fine: 1/8 resolution (only with addLevel), 1/4, 1/2, full resolution with blocks of
+  // 2 x blockSize, full resolution with blockSize; each level starts from the previous level's vectors of the same
+  // reference, so the levels run in turn, while the references of one level are independent and run together.
+  const int blockSize = m_mctfUnitSize;
+  std::vector<MotionSearchJob> jobs( refs.size() );
+  for( int level = addLevel ? 0 : 1; level < 5; level++ )
+  {
+    for( size_t i = 0; i < refs.size(); i++ )
     {
-      double sumErr = 0.0;
-      for (int y = 0; y < srcPic.mvs.h(); y++) // going over ref pic in block steps
+      ReferenceSearch& r = refs[i];
+      switch( level )
       {
-        for (int x = 0; x < srcPic.mvs.w(); x++)
+      case 0:  jobs[i] = { &r.mv_m,        &origSubsampled8, &r.bufferSub8,        m_padding,         2 * blockSize, nullptr,                   1, false }; break;
+      case 1:  jobs[i] = { &r.mv_0,        &origSubsampled4, &r.bufferSub4,        m_padding,         2 * blockSize, addLevel ? &r.mv_m : nullptr, addLevel ? 2 : 1, false }; break;
+      case 2:  jobs[i] = { &r.mv_1,        &origSubsampled2, &r.bufferSub2,        m_padding,         2 * blockSize, &r.mv_0,                   2, false }; break;
+      case 3:  jobs[i] = { &r.mv_2,        &origBuf,         &r.srcPic->picBuffer, MCTF_FRAME_MARGIN, 2 * blockSize, &r.mv_1,                   2, false }; break;
+      default: jobs[i] = { &r.srcPic->mvs, &origBuf,         &r.srcPic->picBuffer, MCTF_FRAME_MARGIN,     blockSize, &r.mv_2,                   1, true  }; break;
+      }
+    }
+    motionEstimationLumaJobs( jobs );
+  }
+
+  if (calcErr)
+  {
+    for( const ReferenceSearch& ref : refs )
+    {
+      const Array2D<MotionVector>& mvs = ref.srcPic->mvs;
+      double sumErr = 0.0;
+      for (int y = 0; y < mvs.h(); y++) // going over ref pic in block steps
+      {
+        for (int x = 0; x < mvs.w(); x++)
         {
-          sumErr += srcPic.mvs.get(x, y).error;
+          sumErr += mvs.get(x, y).error;
         }
       }
-      double S = 1.0 / (srcPic.mvs.w() * srcPic.mvs.h());
+      double S = 1.0 / (mvs.w() * mvs.h());
       mvErr.push_back(sumErr * S);
       minError = std::min(minError, sumErr * S);
     }
@@ -786,6 +846,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
+    std::vector<Picture*> refPics;
     for ( int i = dropFramesFront; i < picFifo.size() - dropFramesBack; i++ )
     {
       Picture* curPic = picFifo[ i ];
@@ -793,8 +854,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       {
         continue;
       }
-      motionEstimationMCTF(curPic, srcFrameInfo, origBuf, origSubsampled2, origSubsampled4, origSubsampled8 ,mvErr, minError, condAddLevel, useMCTFadaptation);
+      refPics.push_back( curPic );
     }
+    motionEstimationMCTF(refPics, srcFrameInfo, origBuf, origSubsampled2, origSubsampled4, origSubsampled8 ,mvErr, minError, condAddLevel, useMCTFadaptation);
 
     int lastIndexRefFr = -1;
     if ((m_encCfg->m_vvencMCTF.MCTFSpeed < 4) && (minError > 80))
@@ -823,6 +885,10 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       int newFilterFrames = minErrCond ? filterFrames : (filterFrames + 2 - avgErrCond);
       if (filterFrames <= 2 && newFilterFrames > 3)   newFilterFrames = 3;
 
+      // MCTFSpeed 4 stops at the first reference whose error is too large, so it searches them one at a time; otherwise
+      // all further references are searched together after the loop
+      const bool stopOnError = m_encCfg->m_vvencMCTF.MCTFSpeed == 4;
+      std::vector<Picture*> furtherRefPics;
       for (int curIdx = filterFrames + 1; (curIdx < newFilterFrames + 1)&&((lastIndexRefFr == -1)); curIdx++)
       {
         for (int i = 0; i < picFifo.size(); i++)
@@ -830,20 +896,23 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           Picture* curPic = picFifo[i];
           if (curIdx == std::abs(curPic->poc - m_filterPoc))
           {
-            motionEstimationMCTF(curPic, srcFrameInfo, origBuf, origSubsampled2, origSubsampled4, origSubsampled8, mvErr, minError, condAddLevel, m_encCfg->m_vvencMCTF.MCTFSpeed == 4);
-            if (m_encCfg->m_vvencMCTF.MCTFSpeed == 4)
+            if( !stopOnError )
             {
-              int nSize = (int(srcFrameInfo.size()) & 1) + int(srcFrameInfo.size());
-              const double errThrcur = 0.75 * minError * nSize;
-              if (mvErr.back() > errThrcur)
-              {
-                lastIndexRefFr = curIdx;
-                break;
-              }
+              furtherRefPics.push_back( curPic );
+              continue;
+            }
+            motionEstimationMCTF({ curPic }, srcFrameInfo, origBuf, origSubsampled2, origSubsampled4, origSubsampled8, mvErr, minError, condAddLevel, true);
+            int nSize = (int(srcFrameInfo.size()) & 1) + int(srcFrameInfo.size());
+            const double errThrcur = 0.75 * minError * nSize;
+            if (mvErr.back() > errThrcur)
+            {
+              lastIndexRefFr = curIdx;
+              break;
             }
           }
         }
       }
+      motionEstimationMCTF(furtherRefPics, srcFrameInfo, origBuf, origSubsampled2, origSubsampled4, origSubsampled8, mvErr, minError, condAddLevel, false);
       if ((lastIndexRefFr != -1))
       {
         for (auto it = srcFrameInfo.begin(); it != srcFrameInfo.end(); )
@@ -1521,8 +1590,11 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
 
 void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int blockSize, const Array2D<MotionVector> *previous, const int factor, const bool doubleRes) const
 {
-  const int stepSize = blockSize;
-  const int origHeight = orig.Y().height;
+  motionEstimationLumaJobs( { MotionSearchJob{ &mvs, &orig, &buffer, refMargin, blockSize, previous, factor, doubleRes } } );
+}
+
+void MCTF::motionEstimationLumaJobs( const std::vector<MotionSearchJob>& jobs ) const
+{
   const int bitDepth = m_encCfg->m_internalBitDepth[CH_L];
 
   if( m_threadPool )
@@ -1544,60 +1616,74 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       const MCTF* mctf;
     };
 
-    std::vector<EstParams> EstParamsArray( origHeight/stepSize + 1 );
+    size_t numRows = 0;
+    for( const MotionSearchJob& job : jobs )
+    {
+      numRows += job.orig->Y().height / job.blockSize + 1;
+    }
+    std::vector<EstParams> EstParamsArray( numRows );
+
+    static auto task = []( int, void* task_param )
+    {
+      ITT_TASKSTART( itt_domain_MCTF_est, itt_handle_est );
+
+      EstParams* params = static_cast<EstParams*>( task_param );
+      bool ret = params->mctf->estimateLumaLn( params->blockX, params->prevLineX, *params->mvs, *params->orig, *params->buffer, params->refMargin, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY, params->bitDepth );
+
+      ITT_TASKEND( itt_domain_MCTF_est, itt_handle_est );
+      return ret;
+    };
+    // Ready only when the line can make progress: it is the first line, it has no block left (the task then finishes
+    // at once; a level narrower than 8 samples has none, and the line above never moves), or the line above is ahead of
+    // it (the test estimateLumaLn makes first). A blocked line then costs a few compares in the pool's scan, instead of
+    // a task run that returns at once and the wake-up of the idle thread after it.
+    static auto ready = []( int, void* task_param )
+    {
+      const EstParams* params = static_cast<const EstParams*>( task_param );
+      const int blockX = params->blockX.load();
+      return !params->prevLineX || blockX + 8 > int( params->orig->Y().width ) || blockX < params->prevLineX->load();
+    };
 
     WaitCounter taskCounter;
 
-    for( int n = 0, blockY = 0; blockY + 8 <= origHeight; blockY += stepSize, n++ )
+    int n = 0;
+    for( const MotionSearchJob& job : jobs )
     {
-      static auto task = []( int, void* task_param )
+      const int origHeight = job.orig->Y().height;
+      const int firstRow   = n;   // each job's rows wait only on the row above in the same job
+      for( int blockY = 0; blockY + 8 <= origHeight; blockY += job.blockSize, n++ )
       {
-        ITT_TASKSTART( itt_domain_MCTF_est, itt_handle_est );
+        EstParams& cEstParams = EstParamsArray[n];
+        cEstParams.blockX = 0;
+        cEstParams.prevLineX = n == firstRow ? nullptr : &EstParamsArray[n-1].blockX;
+        cEstParams.mvs = job.mvs;
+        cEstParams.orig = job.orig;
+        cEstParams.buffer = job.buffer;
+        cEstParams.refMargin = job.refMargin;
+        cEstParams.previous = job.previous;
+        cEstParams.blockSize = job.blockSize;
+        cEstParams.factor = job.factor;
+        cEstParams.doubleRes = job.doubleRes;
+        cEstParams.mctf = this;
+        cEstParams.blockY = blockY;
+        cEstParams.bitDepth = bitDepth;
 
-        EstParams* params = static_cast<EstParams*>( task_param );
-        bool ret = params->mctf->estimateLumaLn( params->blockX, params->prevLineX, *params->mvs, *params->orig, *params->buffer, params->refMargin, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY, params->bitDepth );
-
-        ITT_TASKEND( itt_domain_MCTF_est, itt_handle_est );
-        return ret;
-      };
-      // Ready only when the line can make progress: it is the first line, it has no block left (the task then finishes
-      // at once; a level narrower than 8 samples has none, and the line above never moves), or the line above is ahead of
-      // it (the test estimateLumaLn makes first). A blocked line then costs a few compares in the pool's scan, instead of
-      // a task run that returns at once and the wake-up of the idle thread after it.
-      static auto ready = []( int, void* task_param )
-      {
-        const EstParams* params = static_cast<const EstParams*>( task_param );
-        const int blockX = params->blockX.load();
-        return !params->prevLineX || blockX + 8 > int( params->orig->Y().width ) || blockX < params->prevLineX->load();
-      };
-
-      EstParams& cEstParams = EstParamsArray[n];
-      cEstParams.blockX = 0;
-      cEstParams.prevLineX = n == 0 ? nullptr : &EstParamsArray[n-1].blockX;
-      cEstParams.mvs = &mvs; 
-      cEstParams.orig = &orig;
-      cEstParams.buffer = &buffer; 
-      cEstParams.refMargin = refMargin;
-      cEstParams.previous = previous;
-      cEstParams.blockSize = blockSize; 
-      cEstParams.factor = factor;
-      cEstParams.doubleRes = doubleRes;
-      cEstParams.mctf = this;
-      cEstParams.blockY = blockY;
-      cEstParams.bitDepth = bitDepth;
-
-      m_threadPool->addBarrierTask( task, &cEstParams, &taskCounter, nullptr, {}, ready );
+        m_threadPool->addBarrierTask( task, &cEstParams, &taskCounter, nullptr, {}, ready );
+      }
     }
     taskCounter.wait();
   }
   else
   {
-    for( int blockY = 0; blockY + 8 <= origHeight; blockY += stepSize )
+    for( const MotionSearchJob& job : jobs )
     {
-      std::atomic_int blockX( 0 ), prevBlockX( orig.Y().width + stepSize );
-      estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, refMargin, blockSize, previous, factor, doubleRes, blockY, bitDepth );
+      const PelStorage& orig = *job.orig;
+      for( int blockY = 0; blockY + 8 <= orig.Y().height; blockY += job.blockSize )
+      {
+        std::atomic_int blockX( 0 ), prevBlockX( orig.Y().width + job.blockSize );
+        estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, *job.mvs, orig, *job.buffer, job.refMargin, job.blockSize, job.previous, job.factor, job.doubleRes, blockY, bitDepth );
+      }
     }
-
   }
 }
 
