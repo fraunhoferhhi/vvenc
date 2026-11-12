@@ -85,7 +85,8 @@ routes auxiliary gradients to the actor branch, clips each branch separately
 at the existing max_grad_norm and bounds the [0,1] auxiliary predictions by
 sigmoid. The 16-D cumulative-bit observation also uses log1p compression to
 avoid 30-plus-valued features dominating other normalized global inputs.
-**Unscaled task reward and rollout returns are deliberately unchanged.**
+**Historical adapter/2 only:** task reward and rollout returns were unscaled.
+Adapter/3 uses the scaling described in the final versioned section below.
 The PPO update JSONL now includes explained variance, return/value statistics
 and per-branch gradient norms; aux_loss_coef is a sealed optional ablation.
 The change affects the policy architecture and input semantics, so OLD
@@ -102,7 +103,7 @@ formula.
 Matching is confidence-ordered, one-to-one, IoU>=0.5. Empty Precision=0.
 A prediction contributes1 if matched, otherwise0, to the16×16 cell
 containing its centre. Multiple predictions in a cell are averaged.
-Empty cells have target0 and **uniform** MSE weight. False positives remain
+In historical adapter/2, empty cells had target0 and **uniform** MSE weight. False positives remain
 supervised at0. This label placement/matching convention is disclosed; exact
 author block-assignment code is unavailable.
 
