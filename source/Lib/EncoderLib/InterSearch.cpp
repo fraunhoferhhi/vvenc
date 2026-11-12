@@ -4157,6 +4157,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       }
     }
 
+    // The CU's final recount (encodeResAndCalcRdInterCU) codes this unit's residuals again, in this order: keep their
+    // coding for it to replay. In a split the recount's contexts on entry can differ; the replay checks them.
+    CUCtx*   resiFlags   = nullptr;
+    bool     resiStarted = false;
+    uint64_t resiBits    = 0;
     for (uint32_t ch = 0; ch < numValidComp; ch++)
     {
       const ComponentID compID = ComponentID(ch);
@@ -4169,10 +4174,21 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         }
         if( TU::getCbf( tu, compID ) )
         {
-          m_CABACEstimator->residual_coding( tu, compID );
+          if( !resiStarted )
+          {
+            resiFlags   = m_resiCodingCache.startTU( tu, m_CABACEstimator->getCtx() );   // nullptr when full
+            resiStarted = true;
+          }
+          const uint64_t bitsBefore = m_CABACEstimator->getEstFracBits();
+          m_CABACEstimator->residual_coding( tu, compID, resiFlags );
+          resiBits += m_CABACEstimator->getEstFracBits() - bitsBefore;
         }
         uiSingleDist += uiSingleDistComp[compID];
       }
+    }
+    if( resiFlags )
+    {
+      m_resiCodingCache.endTU( m_CABACEstimator->getCtx(), resiBits );
     }
     if( tu.noResidual )
     {
@@ -4319,6 +4335,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
 
   const TempCtx ctxStart( m_CtxCache, m_CABACEstimator->getCtx() );
 
+  m_resiCodingCache.clear();
   xEstimateInterResidualQT(cs, partitioner, &zeroDistortion );
   TransformUnit& firstTU = *cs.getTU( partitioner.chType );
 
@@ -4344,6 +4361,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
     cu.rootCbf = false;
 
     cs.clearTUs();
+    m_resiCodingCache.clear();   // the new transform unit may reuse a cleared one's address
 
     // add a new "empty" TU spanning the whole CU
     cs.addEmptyTUs( partitioner, &cu );
@@ -4436,8 +4454,11 @@ uint64_t InterSearch::xGetSymbolFracBitsInter(CodingStructure &cs, Partitioner &
     CUCtx cuCtx;
     cuCtx.isDQPCoded = true;
     cuCtx.isChromaQpAdjCoded = true;
+    // replays the residual coding of xEstimateInterResidualQT's final pass instead of coding it again
+    m_CABACEstimator->setResidualCodingCache( &m_resiCodingCache );
     m_CABACEstimator->cu_residual ( cu, partitioner, cuCtx );
-    fracBits       += m_CABACEstimator->getEstFracBits();
+    m_CABACEstimator->setResidualCodingCache( nullptr );
+    fracBits       += m_CABACEstimator->getEstFracBits() + m_resiCodingCache.replayedBits();
   }
 
   return fracBits;

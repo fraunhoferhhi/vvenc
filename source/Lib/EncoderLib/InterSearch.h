@@ -438,6 +438,7 @@ protected:
   // RD computation
   CABACWriter*      m_CABACEstimator;
   CtxCache*         m_CtxCache;
+  ResidualCodingCache m_resiCodingCache;   // encodeResAndCalcRdInterCU: the residual estimate's coding, replayed by the recount
   DistParam         m_cDistParam;
   RdCost*           m_pcRdCost;
   std::vector<uint32_t> m_mvBitsHor;   // xPatternSearch: the motion vector bits of each column's horizontal component

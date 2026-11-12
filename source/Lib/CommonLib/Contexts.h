@@ -275,6 +275,8 @@ public:
   static const CtxSet   Sao;
   static const CtxSet   Alf;
   static const CtxSet   MergeData;  // the contexts merge_flag and merge_data code
+  static const CtxSet   ResidualCoding;    // SigCoeffGroup .. LastY: residual_coding's contexts besides TransformSkipFlag
+  static const CtxSet   TsResidualCoding;  // TsSigCoeffGroup .. TsResidualSign: residual_codingTS's contexts
 public:
   static const std::vector<uint8_t>&  getInitTable( unsigned initId );
 private:
@@ -291,6 +293,10 @@ public:
 public:
   void copyFrom   ( const CtxStore& src )                        { checkInit(); ::memcpy( m_Ctx,               src.m_Ctx,               sizeof( BinProbModel ) * ContextSetCfg::NumberOfContexts ); }
   void copyFrom   ( const CtxStore& src, const CtxSet& ctxSet )  { checkInit(); ::memcpy( m_Ctx+ctxSet.Offset, src.m_Ctx+ctxSet.Offset, sizeof( BinProbModel ) * ctxSet.Size ); }
+  bool sameStates ( const CtxStore& other, const CtxSet& ctxSet ) const   // all six bytes of a BinProbModel are defined
+  {
+    return m_Ctx && other.m_Ctx && ! ::memcmp( m_Ctx+ctxSet.Offset, other.m_Ctx+ctxSet.Offset, sizeof( BinProbModel ) * ctxSet.Size );
+  }
   void init       ( int qp, int initId );
   void setWinSizes( const std::vector<uint8_t>&   log2WindowSizes );
   void loadPStates( const std::vector<uint16_t>&  probStates );
@@ -349,6 +355,11 @@ public:
   void  init ( int qp, int initId )
   {
     m_CtxStore  .init( qp, initId );
+  }
+
+  bool  sameStates( const Ctx& ctx, const CtxSet& ctxSet ) const
+  {
+    return m_CtxStore.sameStates( ctx.m_CtxStore, ctxSet );
   }
 
   void  loadPStates( const std::vector<uint16_t>& probStates )

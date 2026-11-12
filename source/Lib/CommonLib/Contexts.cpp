@@ -882,6 +882,15 @@ const CtxSet ContextSetCfg::MergeData = { ContextSetCfg::MergeFlag, ContextSetCf
                                           ContextSetCfg::MmvdMergeIdx, ContextSetCfg::MmvdStepMvpIdx, ContextSetCfg::SubblockMergeFlag,
                                           ContextSetCfg::AffMergeIdx, ContextSetCfg::CiipFlag };
 
+const CtxSet ContextSetCfg::ResidualCoding = { ContextSetCfg::SigCoeffGroup[0], ContextSetCfg::SigCoeffGroup[1], ContextSetCfg::SigFlag[0], ContextSetCfg::SigFlag[1],
+                                               ContextSetCfg::SigFlag[2], ContextSetCfg::SigFlag[3], ContextSetCfg::SigFlag[4], ContextSetCfg::SigFlag[5],
+                                               ContextSetCfg::ParFlag[0], ContextSetCfg::ParFlag[1], ContextSetCfg::GtxFlag[0], ContextSetCfg::GtxFlag[1],
+                                               ContextSetCfg::GtxFlag[2], ContextSetCfg::GtxFlag[3], ContextSetCfg::LastX[0], ContextSetCfg::LastX[1],
+                                               ContextSetCfg::LastY[0], ContextSetCfg::LastY[1] };
+
+const CtxSet ContextSetCfg::TsResidualCoding = { ContextSetCfg::TsSigCoeffGroup, ContextSetCfg::TsSigFlag, ContextSetCfg::TsParFlag, ContextSetCfg::TsGtxFlag,
+                                                 ContextSetCfg::TsLrg1Flag, ContextSetCfg::TsResidualSign };
+
 CtxStore::CtxStore()
   : m_CtxBuffer ()
   , m_Ctx       ( nullptr )

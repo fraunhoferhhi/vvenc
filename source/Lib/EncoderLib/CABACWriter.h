@@ -55,11 +55,51 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 class EncCu;
+
+// The residual coding of transform units that a search has estimated already, kept so that a later recount of the same
+// coding unit can replay it: InterSearch keeps the final in-order pass of xEstimateInterResidualQT for the CU's final
+// recount, which codes the same transform units again. The replay is exact: the same transform unit coded with the same
+// residual contexts on entry gives the same bits, the same contexts after and the same CUCtx flags. A unit whose
+// contexts on entry differ (another coding order) is coded again.
+class ResidualCodingCache
+{
+public:
+  void      clear       ()       { m_numTUs = 0; m_replayedBits = 0; m_open = nullptr; }
+  uint64_t  replayedBits() const { return m_replayedBits; }
+
+  // Around the residual_coding calls of one transform unit. startTU returns the flags to pass to residual_coding, or
+  // nullptr when the cache is full (nothing is kept then); endTU takes the bits of those calls.
+  CUCtx*    startTU     ( const TransformUnit& tu, const Ctx& ctx );
+  void      endTU       ( const Ctx& ctx, uint64_t bits );
+  // Replays the unit's residual_coding calls if it was kept with these contexts on entry: sets the contexts after,
+  // adds the flags to cuCtx and the bits to replayedBits.
+  bool      replay      ( const TransformUnit& tu, Ctx& ctx, CUCtx& cuCtx );
+
+private:
+  static const int MAX_TUS = 16;   // a 128x128 coding unit with 32x32 transform units (Log2MaxTbSize 5); 4 with 64x64
+
+  struct Entry
+  {
+    const TransformUnit* tu;
+    uint64_t             bits;
+    CUCtx                flags;
+    Ctx                  ctxIn;    // only the residual coding contexts are set
+    Ctx                  ctxOut;
+  };
+  Entry    m_entries[MAX_TUS];
+  int      m_numTUs       = 0;
+  Entry*   m_open         = nullptr;
+  uint64_t m_replayedBits = 0;
+};
+
 class CABACWriter : public DeriveCtx
 {
 public:
   CABACWriter(BinEncIf& binEncoder)   : m_BinEncoder(binEncoder), m_Bitstream(0)   { m_TestCtx = m_BinEncoder.getCtx(); }  
   virtual ~CABACWriter() {}
+
+  // while set, transform_unit replays the residual coding of the units the cache holds (see ResidualCodingCache)
+  void        setResidualCodingCache    ( ResidualCodingCache* cache )                        { m_resiCodingCache = cache; }
 
 public:
   DeriveCtx&  getDeriveCtx              ()                                                    { return *this; }
@@ -182,6 +222,7 @@ private:
 
   Partitioner        m_partitioner[2];
   CtxTpl             m_tplBuf[CTX_TPL_BUF_SIZE];
+  ResidualCodingCache* m_resiCodingCache = nullptr;
  };
 
 

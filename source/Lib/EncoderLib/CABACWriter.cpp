@@ -60,6 +60,71 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+// residual_coding reads and updates these contexts and no others
+static void copyResidualCodingCtx( Ctx& dst, const Ctx& src )
+{
+  dst = SubCtx( Ctx::ResidualCoding,    src );
+  dst = SubCtx( Ctx::TransformSkipFlag, src );
+  dst = SubCtx( Ctx::TsResidualCoding,  src );
+}
+
+static bool sameResidualCodingCtx( const Ctx& a, const Ctx& b )
+{
+  return a.sameStates( b, Ctx::ResidualCoding ) && a.sameStates( b, Ctx::TransformSkipFlag ) && a.sameStates( b, Ctx::TsResidualCoding );
+}
+
+CUCtx* ResidualCodingCache::startTU( const TransformUnit& tu, const Ctx& ctx )
+{
+  CHECKD( m_open, "residual coding of the previous transform unit not ended" );
+  int i = 0;
+  while( i < m_numTUs && m_entries[i].tu != &tu )
+  {
+    i++;
+  }
+  if( i == MAX_TUS )
+  {
+    return nullptr;
+  }
+  m_numTUs    = std::max( m_numTUs, i + 1 );
+  m_open      = &m_entries[i];
+  m_open->tu  = &tu;
+  m_open->flags = CUCtx();
+  copyResidualCodingCtx( m_open->ctxIn, ctx );
+  return &m_open->flags;
+}
+
+void ResidualCodingCache::endTU( const Ctx& ctx, uint64_t bits )
+{
+  CHECKD( !m_open, "no transform unit started" );
+  m_open->bits = bits;
+  copyResidualCodingCtx( m_open->ctxOut, ctx );
+  m_open = nullptr;
+}
+
+bool ResidualCodingCache::replay( const TransformUnit& tu, Ctx& ctx, CUCtx& cuCtx )
+{
+  for( int i = 0; i < m_numTUs; i++ )
+  {
+    const Entry& e = m_entries[i];
+    if( e.tu == &tu )
+    {
+      if( !sameResidualCodingCtx( e.ctxIn, ctx ) )
+      {
+        return false;
+      }
+      copyResidualCodingCtx( ctx, e.ctxOut );
+      cuCtx.violatesLfnstConstrained[CH_L] |= e.flags.violatesLfnstConstrained[CH_L];
+      cuCtx.violatesLfnstConstrained[CH_C] |= e.flags.violatesLfnstConstrained[CH_C];
+      cuCtx.violatesMtsCoeffConstraint     |= e.flags.violatesMtsCoeffConstraint;
+      cuCtx.mtsLastScanPos                 |= e.flags.mtsLastScanPos;
+      cuCtx.lfnstLastScanPos               |= e.flags.lfnstLastScanPos;
+      m_replayedBits += e.bits;
+      return true;
+    }
+  }
+  return false;
+}
+
 void CABACWriter::initCtxModels( const Slice& slice )
 {
   int       qp                = slice.sliceQp;
@@ -2151,6 +2216,11 @@ void CABACWriter::transform_unit( const TransformUnit& tu, CUCtx& cuCtx, Partiti
   if( !lumaOnly )
   {
     joint_cb_cr( tu, ( cbf[COMP_Cb] ? 2 : 0 ) + ( cbf[COMP_Cr] ? 1 : 0 ) );
+  }
+
+  if( m_resiCodingCache && m_resiCodingCache->replay( tu, getCtx(), cuCtx ) )
+  {
+    return;   // the residual_coding calls below, coded before with the same contexts
   }
 
   if( cbfLuma )
