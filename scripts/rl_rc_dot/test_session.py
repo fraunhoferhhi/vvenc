@@ -39,6 +39,12 @@ class Session(unittest.TestCase):
             second=contract_for(spec)
         self.assertNotEqual(first,second)
         self.assertEqual(first["ppo"]["target_kl"],0.05)
+        self.assertEqual(first["dataset_mode"],"full")
+        spec["dataset_mode"]="mini"
+        with patch("scripts.rl_rc_dot.session.digest",return_value="test-hash"), \
+             patch("scripts.rl_rc_dot.session.source_fingerprint",return_value="source"):
+            third=contract_for(spec)
+        self.assertNotEqual(second,third)
 
 
     def test_final_update_is_saved_and_validated_even_without_next_rollout(self):

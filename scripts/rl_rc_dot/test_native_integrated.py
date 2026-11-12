@@ -40,7 +40,7 @@ class NativeIntegration(unittest.TestCase):
             contract={"synthetic_task_fixture":True};atomic_json(root/"method.json",contract)
             factory=lambda:VVenCEnv(FixtureCatalog(),FixtureDetector(),spec["encoder"],root/"episodes",frame_limit=8,threads=2)
             model=build(DummyVecEnv([factory]),7,n_steps=8,batch_size=4,n_epochs=1,device="cpu")
-            validator=partial(validate,detector_factory=lambda *args:FixtureDetector(),catalog_factory=lambda *args:FixtureCatalog())
+            validator=partial(validate,detector_factory=lambda *args:FixtureDetector(),catalog_factory=lambda *args,**kwargs:FixtureCatalog())
             try:model.learn(8,callback=SaveAndValidate(spec,contract,validator=validator))
             finally:model.get_env().close()
             progress=json.loads((root/"progress.json").read_text())
