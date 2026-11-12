@@ -19,7 +19,28 @@ See `scripts/rl_rc_dot/METHOD_MAPPING.md` for the scientific rationale.
 
 ---
 
-# RL-RC-DoT → VVenC: integrated H.266 adaptation (adapter/2)
+# RL-RC-DoT → VVenC: integrated H.266 adaptation (adapter/3)
+
+## Mini protocol and notebook selection (2026-11-12)
+
+Mini selection remains Train16 / Validation4 / Test30. Use Mini_Pilot for
+technical smoke and Mini_Trial20480 for the learning trial. Pilot, trial and
+the longer Mini phase have different rollout/validation contracts; preserve
+PHASE on resume. PHASE='full' in a Mini notebook is a longer **Mini** run,
+not a switch to Train65. It now uses at most four validation videos.
+
+Mini_Test30 defaults to five rates50/80/120/160/200 (150 pairs), retaining
+256 frames per video. TEST_RATES='50,120,200' is an optional quick90-pair
+survey with no BD-rate. Preserve rates and checkpoint when resuming.
+Five-rate BD results describe these short clips only, not full-video quality.
+Both setup and evaluation count against its notebook session budget.
+Training uses two GPU collectors; evaluation currently uses GPU0 sequentially.
+
+Current adapter/3 keeps the declared independent actor/critic, auxiliary mask
+and reward scaling. These are experimental adaptations, not a claim that
+only the codec changed. Older workflow examples below are full-data examples;
+use the dedicated Mini notebooks for16/4/30. Adapter/2 exports remain evidence
+only; do not bypass the compatibility checks to resume them into adapter/3.
 
 Supported branch: **feature/rl-rc-dot-vvc**. Supported training entry:
 **python -m scripts.rl_rc_dot.session** (or train.py without --trajectory).
