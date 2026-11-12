@@ -123,6 +123,10 @@ public:
   void                      (**m_invICT)(PelBuf&,PelBuf&);
   std::pair<int64_t,int64_t>(**m_fwdICT)(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
 
+  // low frequency non-separable transform kernels (public for the unit test)
+  void (*m_fwdLfnstNxN)( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
+  void (*m_invLfnstNxN)( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
+
 protected:
   TCoeff*   m_plTempCoeff;
   bool      m_bEnc;
@@ -150,9 +154,6 @@ private:
 
   void                      (*m_invICTMem[1+2*maxAbsIctMode])(PelBuf&,PelBuf&);
   std::pair<int64_t,int64_t>(*m_fwdICTMem[1+2*maxAbsIctMode])(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
-
-  void (*m_fwdLfnstNxN)( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
-  void (*m_invLfnstNxN)( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
 
   uint32_t xGetLFNSTIntraMode( const Area& tuArea, const uint32_t dirMode );
   bool     xGetTransposeFlag(uint32_t intraMode);

@@ -1035,67 +1035,197 @@ void cpyCoeff_SSE( const Pel* src, ptrdiff_t stride, TCoeff* dst, unsigned width
 #endif
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// LFNST with 16-bit multiply-adds. The matrices are int8; g_lfnst*Pairs (Rom.h) hold them in int16 with the
+// coefficients of inputs 2p and 2p+1 side by side in each 32-bit lane, one lane per output. madd_epi16 of the broadcast
+// input pair (x[2p], x[2p+1]) with such a row adds both products for 4 (SSE) or 8 (AVX2) outputs at once. With inputs
+// in int16 every product and sum is exact in 32 bit: at most 48 terms with |x| <= 32768 and |c| <= 128 sum to less
+// than 2^31 in magnitude, and a madd pair is at most 2 * 2^22. The results equal the scalar code bit for bit.
+// The inverse inputs are dequantized coefficients, clipped to the 16-bit transform dynamic range (maxLog2TrDynamicRange
+// is 15); the forward inputs are checked and the 32-bit kernel takes any block with a value outside int16.
+// ---------------------------------------------------------------------------------------------------------------------
+
+// inputs src[0..n-1] (n a multiple of 8) as int16 pairs: pairs[p] = ( src[2p] & 0xffff ) | ( src[2p+1] << 16 ),
+// saturated; returns true if all inputs fit int16 (then nothing saturated)
+template<X86_VEXT vext>
+static inline bool lfnstPackPairs( const int* src, int n, int32_t* pairs )
+{
+#if USE_AVX2
+  if( vext >= AVX2 && ( n & 15 ) == 0 )
+  {
+    const __m256i vbias = _mm256_set1_epi32( 32768 );
+    __m256i       vor   = _mm256_setzero_si256();
+    for( int i = 0; i < n; i += 16 )
+    {
+      const __m256i va = _mm256_loadu_si256( ( const __m256i* ) &src[i] );
+      const __m256i vb = _mm256_loadu_si256( ( const __m256i* ) &src[i + 8] );
+      vor = _mm256_or_si256( vor, _mm256_or_si256( _mm256_add_epi32( va, vbias ), _mm256_add_epi32( vb, vbias ) ) );
+      // packs works per 128-bit lane: (a0..a3, b0..b3 | a4..a7, b4..b7); the 64-bit permute puts them in order
+      _mm256_storeu_si256( ( __m256i* ) &pairs[i >> 1], _mm256_permute4x64_epi64( _mm256_packs_epi32( va, vb ), 0xd8 ) );
+    }
+    // x + 32768 is in [0, 65535] exactly when x is in [-32768, 32767]
+    return _mm256_testz_si256( vor, _mm256_set1_epi32( -65536 ) );   // 0xffff0000
+  }
+#endif
+  const __m128i vbias = _mm_set1_epi32( 32768 );
+  __m128i       vor   = _mm_setzero_si128();
+  for( int i = 0; i < n; i += 8 )
+  {
+    const __m128i va = _mm_loadu_si128( ( const __m128i* ) &src[i] );
+    const __m128i vb = _mm_loadu_si128( ( const __m128i* ) &src[i + 4] );
+    vor = _mm_or_si128( vor, _mm_or_si128( _mm_add_epi32( va, vbias ), _mm_add_epi32( vb, vbias ) ) );
+    _mm_storeu_si128( ( __m128i* ) &pairs[i >> 1], _mm_packs_epi32( va, vb ) );
+  }
+  return _mm_testz_si128( vor, _mm_set1_epi32( -65536 ) );   // 0xffff0000
+}
+
+// dst[0..NumOut-1] = Clip3( -32768, 32767, ( sum over the pairs + 64 ) >> 7 ), table rows of NumOut int16 pairs
+template<X86_VEXT vext, int NumOut>
+static inline void lfnstInvMadd( const int32_t* pairs, const int numPairs, const int16_t* table, int* dst )
+{
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    constexpr int NumVec = NumOut / 8;
+    __m256i       vacc[NumVec];
+    for( int v = 0; v < NumVec; v++ )
+    {
+      vacc[v] = _mm256_setzero_si256();
+    }
+    for( int p = 0; p < numPairs; p++, table += 2 * NumOut )
+    {
+      const __m256i vin = _mm256_set1_epi32( pairs[p] );
+      for( int v = 0; v < NumVec; v++ )
+      {
+        vacc[v] = _mm256_add_epi32( vacc[v], _mm256_madd_epi16( vin, _mm256_loadu_si256( ( const __m256i* ) &table[16 * v] ) ) );
+      }
+    }
+    const __m256i vrnd = _mm256_set1_epi32( 64 );
+    const __m256i vmin = _mm256_set1_epi32( -32768 );
+    const __m256i vmax = _mm256_set1_epi32( 32767 );
+    for( int v = 0; v < NumVec; v++ )
+    {
+      const __m256i vout = _mm256_srai_epi32( _mm256_add_epi32( vacc[v], vrnd ), 7 );
+      _mm256_storeu_si256( ( __m256i* ) &dst[8 * v], _mm256_min_epi32( _mm256_max_epi32( vout, vmin ), vmax ) );
+    }
+    _mm256_zeroupper();
+    return;
+  }
+#endif
+  constexpr int NumVec = NumOut / 4;
+  __m128i       vacc[NumVec];
+  for( int v = 0; v < NumVec; v++ )
+  {
+    vacc[v] = _mm_setzero_si128();
+  }
+  for( int p = 0; p < numPairs; p++, table += 2 * NumOut )
+  {
+    const __m128i vin = _mm_set1_epi32( pairs[p] );
+    for( int v = 0; v < NumVec; v++ )
+    {
+      vacc[v] = _mm_add_epi32( vacc[v], _mm_madd_epi16( vin, _mm_loadu_si128( ( const __m128i* ) &table[8 * v] ) ) );
+    }
+  }
+  const __m128i vrnd = _mm_set1_epi32( 64 );
+  const __m128i vmin = _mm_set1_epi32( -32768 );
+  const __m128i vmax = _mm_set1_epi32( 32767 );
+  for( int v = 0; v < NumVec; v++ )
+  {
+    const __m128i vout = _mm_srai_epi32( _mm_add_epi32( vacc[v], vrnd ), 7 );
+    _mm_storeu_si128( ( __m128i* ) &dst[4 * v], _mm_min_epi32( _mm_max_epi32( vout, vmin ), vmax ) );
+  }
+}
+
 template<X86_VEXT vext>
 void simdInvLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize )
 {
   CHECK( index > 2 || ( zeroOutSize != 8 && zeroOutSize != 16 ), "Wrong parameters" );
 
-  static constexpr int maxLog2TrDynamicRange = 15;
-  const TCoeff    outputMinimum = -( 1 << maxLog2TrDynamicRange );
-  const TCoeff    outputMaximum =  ( 1 << maxLog2TrDynamicRange ) - 1;
-  const int8_t*   trMat         = ( size > 4 ) ? g_lfnstInv8x8[mode][index][0] : g_lfnstInv4x4[mode][index][0];
-  const int       trSize        = ( size > 4 ) ? 48 : 16;
-  int*            out           = dst;
+  // the 16 inputs (the inverse reads the first zeroOutSize) are clipped to the 16-bit transform dynamic range
+  alignas( 32 ) int32_t pairs[8];
+  const bool inRange = lfnstPackPairs<vext>( src, 16, pairs );
+  CHECKD( !inRange, "inverse LFNST input outside the 16-bit dynamic range" );
+  (void) inRange;
 
-  const __m128i vzero = _mm_setzero_si128();
-  const __m128i vmin  = _mm_set1_epi32( outputMinimum );
-  const __m128i vmax  = _mm_set1_epi32( outputMaximum );
-
-  for( int j = 0; j < trSize; j += 4, out += 4 )
+  if( size > 4 )
   {
-    __m128i       vsum[4];
-
-    for( int k = 0; k < 4; k++, trMat += 16 )
-    {
-      const int8_t* trMatTmp = trMat;
-      int* srcPtr = src;
-
-      __m128i vsrc;
-      __m128i vtr;
-      __m128i vtmp;
-      __m128i vcur = vzero;
-
-      for( int i = 0; i < zeroOutSize; i += 8, srcPtr += 8, trMatTmp += 8 )
-      {
-        vsrc = _mm_loadu_si128( ( const __m128i* ) srcPtr );
-        vtr  = _vv_loadl_epi64( ( const __m128i* ) trMatTmp );
-        vtr  = _mm_cvtepi8_epi16( vtr );
-        vtmp = _mm_cvtepi16_epi32( vtr );
-
-        vtmp = _mm_mullo_epi32( vsrc, vtmp );
-        vcur = _mm_add_epi32( vtmp, vcur );
-
-        vsrc = _mm_loadu_si128( ( const __m128i* ) &srcPtr[4] );
-        vtmp = _mm_cvtepi16_epi32( _mm_unpackhi_epi64( vtr, vzero ) );
-      
-        vtmp = _mm_mullo_epi32( vsrc, vtmp );
-        vcur = _mm_add_epi32( vtmp, vcur );
-      }
-
-      vsum[k] = vcur;
-    }
-
-    __m128i vout = _mm_hadd_epi32( _mm_hadd_epi32( vsum[0], vsum[1] ), _mm_hadd_epi32( vsum[2], vsum[3] ) );
-    vout = _mm_add_epi32( vout, _mm_set1_epi32( 64 ) );
-    vout = _mm_srai_epi32( vout, 7 );
-    vout = _mm_min_epi32( _mm_max_epi32( vmin, vout ), vmax );
-
-    _mm_storeu_si128( ( __m128i* ) out, vout );
+    lfnstInvMadd<vext, 48>( pairs, zeroOutSize >> 1, g_lfnstInv8x8Pairs[mode][index][0][0], dst );
+  }
+  else
+  {
+    lfnstInvMadd<vext, 16>( pairs, zeroOutSize >> 1, g_lfnstInv4x4Pairs[mode][index][0][0], dst );
   }
 }
 
+// dst[0..numOut-1] = ( sum over the NumPairs pairs + 64 ) >> 7 with numOut 8 or 16, table rows of 16 int16 pairs
+template<X86_VEXT vext, int NumPairs>
+static inline void lfnstFwdMadd( const int32_t* pairs, const int16_t* table, const int numOut, int* dst )
+{
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i vrnd  = _mm256_set1_epi32( 64 );
+    __m256i       vacc0 = _mm256_setzero_si256();
+    __m256i       vacc1 = _mm256_setzero_si256();
+    if( numOut == 16 )
+    {
+      for( int p = 0; p < NumPairs; p++, table += 32 )
+      {
+        const __m256i vin = _mm256_set1_epi32( pairs[p] );
+        vacc0 = _mm256_add_epi32( vacc0, _mm256_madd_epi16( vin, _mm256_loadu_si256( ( const __m256i* ) &table[ 0] ) ) );
+        vacc1 = _mm256_add_epi32( vacc1, _mm256_madd_epi16( vin, _mm256_loadu_si256( ( const __m256i* ) &table[16] ) ) );
+      }
+      _mm256_storeu_si256( ( __m256i* ) &dst[0], _mm256_srai_epi32( _mm256_add_epi32( vacc0, vrnd ), 7 ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[8], _mm256_srai_epi32( _mm256_add_epi32( vacc1, vrnd ), 7 ) );
+    }
+    else
+    {
+      // outputs 0..7 only: even and odd pairs in two sums, which shortens the dependency chain
+      for( int p = 0; p < NumPairs; p += 2, table += 64 )
+      {
+        vacc0 = _mm256_add_epi32( vacc0, _mm256_madd_epi16( _mm256_set1_epi32( pairs[p    ] ), _mm256_loadu_si256( ( const __m256i* ) &table[ 0] ) ) );
+        vacc1 = _mm256_add_epi32( vacc1, _mm256_madd_epi16( _mm256_set1_epi32( pairs[p + 1] ), _mm256_loadu_si256( ( const __m256i* ) &table[32] ) ) );
+      }
+      _mm256_storeu_si256( ( __m256i* ) &dst[0], _mm256_srai_epi32( _mm256_add_epi32( _mm256_add_epi32( vacc0, vacc1 ), vrnd ), 7 ) );
+    }
+    _mm256_zeroupper();
+    return;
+  }
+#endif
+  const __m128i vrnd  = _mm_set1_epi32( 64 );
+  __m128i       vacc0 = _mm_setzero_si128();
+  __m128i       vacc1 = _mm_setzero_si128();
+  if( numOut == 16 )
+  {
+    __m128i vacc2 = _mm_setzero_si128();
+    __m128i vacc3 = _mm_setzero_si128();
+    for( int p = 0; p < NumPairs; p++, table += 32 )
+    {
+      const __m128i vin = _mm_set1_epi32( pairs[p] );
+      vacc0 = _mm_add_epi32( vacc0, _mm_madd_epi16( vin, _mm_loadu_si128( ( const __m128i* ) &table[ 0] ) ) );
+      vacc1 = _mm_add_epi32( vacc1, _mm_madd_epi16( vin, _mm_loadu_si128( ( const __m128i* ) &table[ 8] ) ) );
+      vacc2 = _mm_add_epi32( vacc2, _mm_madd_epi16( vin, _mm_loadu_si128( ( const __m128i* ) &table[16] ) ) );
+      vacc3 = _mm_add_epi32( vacc3, _mm_madd_epi16( vin, _mm_loadu_si128( ( const __m128i* ) &table[24] ) ) );
+    }
+    _mm_storeu_si128( ( __m128i* ) &dst[ 8], _mm_srai_epi32( _mm_add_epi32( vacc2, vrnd ), 7 ) );
+    _mm_storeu_si128( ( __m128i* ) &dst[12], _mm_srai_epi32( _mm_add_epi32( vacc3, vrnd ), 7 ) );
+  }
+  else
+  {
+    for( int p = 0; p < NumPairs; p++, table += 32 )
+    {
+      const __m128i vin = _mm_set1_epi32( pairs[p] );
+      vacc0 = _mm_add_epi32( vacc0, _mm_madd_epi16( vin, _mm_loadu_si128( ( const __m128i* ) &table[0] ) ) );
+      vacc1 = _mm_add_epi32( vacc1, _mm_madd_epi16( vin, _mm_loadu_si128( ( const __m128i* ) &table[8] ) ) );
+    }
+  }
+  _mm_storeu_si128( ( __m128i* ) &dst[0], _mm_srai_epi32( _mm_add_epi32( vacc0, vrnd ), 7 ) );
+  _mm_storeu_si128( ( __m128i* ) &dst[4], _mm_srai_epi32( _mm_add_epi32( vacc1, vrnd ), 7 ) );
+}
+
+// the 32-bit kernel, for forward inputs outside int16
 template<X86_VEXT vext>
-void simdFwdLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize )
+static void simdFwdLfnstNxN32( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize )
 {
   const int8_t *trMat  = ( size > 4 ) ? g_lfnstFwd8x8[mode][index][0] : g_lfnstFwd4x4[mode][index][0];
   const int     trSize = ( size > 4 ) ? 48 : 16;
@@ -1154,6 +1284,30 @@ void simdFwdLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t in
   }
 
   ::memset( out, 0, ( trSize - zeroOutSize ) * sizeof( int ) );
+}
+
+template<X86_VEXT vext>
+void simdFwdLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize )
+{
+  const int trSize = ( size > 4 ) ? 48 : 16;
+
+  alignas( 32 ) int32_t pairs[24];
+  if( !lfnstPackPairs<vext>( src, trSize, pairs ) )
+  {
+    simdFwdLfnstNxN32<vext>( src, dst, mode, index, size, zeroOutSize );
+    return;
+  }
+
+  if( size > 4 )
+  {
+    lfnstFwdMadd<vext, 24>( pairs, g_lfnstFwd8x8Pairs[mode][index][0][0], zeroOutSize, dst );
+  }
+  else
+  {
+    lfnstFwdMadd<vext, 8>( pairs, g_lfnstFwd4x4Pairs[mode][index][0][0], zeroOutSize, dst );
+  }
+
+  ::memset( dst + zeroOutSize, 0, ( trSize - zeroOutSize ) * sizeof( int ) );
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

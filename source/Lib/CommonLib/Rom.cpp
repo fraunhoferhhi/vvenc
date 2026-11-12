@@ -1381,6 +1381,43 @@ const int8_t    g_angle2mirror[GEO_NUM_ANGLES] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
                                              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2 };
 int16_t   g_weightOffset[GEO_NUM_CU_SIZE][GEO_NUM_CU_SIZE][GEO_NUM_PARTITION_MODE][2];
 
+alignas( 32 ) int16_t g_lfnstFwd8x8Pairs[4][2][24][16][2];
+alignas( 32 ) int16_t g_lfnstFwd4x4Pairs[4][2][ 8][16][2];
+alignas( 32 ) int16_t g_lfnstInv8x8Pairs[4][2][ 8][48][2];
+alignas( 32 ) int16_t g_lfnstInv4x4Pairs[4][2][ 8][16][2];
+
+void InitGeoRom::initLfnstPairs() const
+{
+  for( int mode = 0; mode < 4; mode++ )
+  {
+    for( int index = 0; index < 2; index++ )
+    {
+      for( int k = 0; k < 2; k++ )
+      {
+        for( int pair = 0; pair < 24; pair++ )
+        {
+          for( int out = 0; out < 16; out++ )
+          {
+            g_lfnstFwd8x8Pairs[mode][index][pair][out][k] = g_lfnstFwd8x8[mode][index][out][2 * pair + k];
+          }
+        }
+        for( int pair = 0; pair < 8; pair++ )
+        {
+          for( int out = 0; out < 16; out++ )
+          {
+            g_lfnstFwd4x4Pairs[mode][index][pair][out][k] = g_lfnstFwd4x4[mode][index][out][2 * pair + k];
+            g_lfnstInv4x4Pairs[mode][index][pair][out][k] = g_lfnstInv4x4[mode][index][out][2 * pair + k];
+          }
+          for( int out = 0; out < 48; out++ )
+          {
+            g_lfnstInv8x8Pairs[mode][index][pair][out][k] = g_lfnstInv8x8[mode][index][out][2 * pair + k];
+          }
+        }
+      }
+    }
+  }
+}
+
 const InitGeoRom g_scanOrderRom;
 
 // ====================================================================================================================
