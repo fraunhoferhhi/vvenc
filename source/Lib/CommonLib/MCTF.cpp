@@ -559,6 +559,7 @@ MCTF::MCTF( bool enableOpt )
   m_motionErrorLumaFrac8[0] = motionErrorLumaFrac6;
   m_motionErrorLumaFracX[1] = motionErrorLumaFrac4;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac4;
+  m_filterColumn4             = nullptr;
   m_motionErrorLumaFracColumn = nullptr;
   m_applyFrac[0][0]         = applyFrac8Core_6Tap;
   m_applyFrac[0][1]         = applyFrac8Core_4Tap;
@@ -1245,8 +1246,11 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 // error as testing them one by one, on every SIMD level: every per-vector kernel (C, SSE, AVX2, NEON, SVE) returns the exact
 // error when it is below the best error passed in and some value not below it otherwise, so a vector replaces the best
 // in exactly the same cases. Every other vector is tested as before, with the early exit against the best error so far.
+// The filtered rows of a column are kept in columns, so a later step of the same block that needs rows of the same
+// horizontal position (the column of the best vector so far) takes them from there: they depend only on that position
+// and the reference rows.
 void MCTF::testSubpelLattice( const PelStorage& orig, const PelStorage& buffer, const int refMargin, const int x, const int y, const int bs,
-                              const MotionVector& center, const int range, const int step, MotionVector& best ) const
+                              const MotionVector& center, const int range, const int step, FilteredColumns& columns, MotionVector& best ) const
 {
   static constexpr int MAX_VECTORS = 48;   // ( 2 * 12 / 4 + 1 )^2 - 1: the widest lattice (MCTFSpeed 0)
   static constexpr int MAX_COLUMN  = 4;    // vectors per column in the widest 4-tap lattice, y2 in { -6, -2, 2, 6 }
@@ -1271,8 +1275,9 @@ void MCTF::testSubpelLattice( const PelStorage& orig, const PelStorage& buffer, 
 
   const int w = std::min<int>( bs, orig.Y().width  - x ) & ~7;
   const int h = std::min<int>( bs, orig.Y().height - y ) & ~7;
-  if( m_motionErrorLumaFracColumn && m_lowResFltSearch && w >= 16 && ( w & 15 ) == 0 )
+  if( m_filterColumn4 && m_motionErrorLumaFracColumn && m_lowResFltSearch && w >= 16 && ( w & 15 ) == 0 )
   {
+    CHECKD( w > FilteredColumns::MAX_WIDTH || h > FilteredColumns::MAX_WIDTH, "The block is larger than MCTFUnitSize allows" );
     for( int i = 0; i < num; i++ )
     {
       if( known[i] || ( dx[i] & 15 ) == 0 )
@@ -1308,11 +1313,20 @@ void MCTF::testSubpelLattice( const PelStorage& orig, const PelStorage& buffer, 
         yFilter[k]   = m_interpolationFilter4[dy[column[k]] & 15];
         rowOffset[k] = ( dy[column[k]] >> 4 ) - top;
       }
-      // the reference rows of all vectors of the column: h plus the one-row spread of their vertical positions
-      ptrdiff_t  buffStride = 0;
-      const Pel* buf        = getRefBlock( buffer.Y(), refMargin, x + ( dx[i] >> 4 ), y + top, w, h + bottom - top, buffStride );
-      m_motionErrorLumaFracColumn( orig.Y().buf + x + y * orig.Y().stride, orig.Y().stride, buf, buffStride, w, h, m_interpolationFilter4[dx[i] & 15],
-                                   n, yFilter, rowOffset, m_encCfg->m_internalBitDepth[CH_L], columnError );
+      // the filtered rows of all vectors of the column: a kept column of this position whose rows include them, else
+      // the horizontal pass of h plus the one-row spread of their vertical positions (and the vertical taps), kept in a
+      // free slot or, with none left, in the last one
+      const Pel* filtered = columns.find( dx[i], top, bottom, w );
+      if( !filtered )
+      {
+        Pel* rows = columns.add( dx[i], top, bottom );
+        ptrdiff_t  buffStride = 0;
+        const Pel* buf        = getRefBlock( buffer.Y(), refMargin, x + ( dx[i] >> 4 ), y + top, w, h + bottom - top, buffStride );
+        m_filterColumn4( buf, buffStride, w, h + 3 + bottom - top, m_interpolationFilter4[dx[i] & 15], m_encCfg->m_internalBitDepth[CH_L], rows );
+        filtered = rows;
+      }
+      m_motionErrorLumaFracColumn( orig.Y().buf + x + y * orig.Y().stride, orig.Y().stride, filtered, w, h, n, yFilter, rowOffset,
+                                   m_encCfg->m_internalBitDepth[CH_L], columnError );
       for( int k = 0; k < n; k++ )
       {
         error[column[k]] = columnError[k];
@@ -1570,18 +1584,19 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     if (doubleRes)
     { // merge into one loop, probably with precision array (here [12, 3] or maybe [4, 1]) with setable number of iterations
       PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH_SUBPEL );
+      FilteredColumns columns;   // the block's horizontally filtered columns, shared by the three iterations
 
       // first iteration, 49 - 1 or 16 checks or 9 - 1 checks
       prevBest = best;
-      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, m_searchPttrn ? 6 : 12, m_searchPttrn == 2 ? 6 : 4, best );
+      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, m_searchPttrn ? 6 : 12, m_searchPttrn == 2 ? 6 : 4, columns, best );
 
       // second iteration, 9 - 1 checks
       prevBest = best;
-      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, 2, 2, best );
+      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, 2, 2, columns, best );
 
       // third iteration, 9 - 1 checks
       prevBest = best;
-      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, 1, 1, best );
+      testSubpelLattice( orig, buffer, refMargin, blockX, blockY, blockSize, prevBest, 1, 1, columns, best );
     } 
     if( blockY > 0 )
     {

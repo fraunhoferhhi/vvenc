@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
   \brief   This vvenclibtest.cpp file contains the main entry point of the test application.
 */
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <limits.h>
@@ -2441,22 +2442,30 @@ static bool check_motionErrorLumaFrac8( MCTF* ref, MCTF* opt, int w, int h )
   return true;
 }
 
-// One case of the column kernel against the per-vector 4-tap kernel of the reference (exact errors, no early exit).
+// One case of the column kernels (the horizontal pass, then the vertical pass per vector) against the per-vector 4-tap
+// kernel of the reference (exact errors, no early exit). The rows are filtered once as the column needs them and once with
+// one more row above, read from the second row on, as a column reusing the rows of a column that started a row higher.
 static bool check_one_motionErrorLumaFracColumn( MCTF* ref, MCTF* opt, const Pel* org, unsigned orgStride, const Pel* buff, unsigned bufStride,
                                                  int w, int h, int bitDepth, const int16_t* xFilter, int num, const int16_t* const* yFilter,
                                                  const int* rowOffset )
 {
-  int error[4];
-  opt->m_motionErrorLumaFracColumn( org, orgStride, buff, bufStride, w, h, xFilter, num, yFilter, rowOffset, bitDepth, error );
-  for( int i = 0; i < num; i++ )
+  const int maxOffset = *std::max_element( rowOffset, rowOffset + num );
+  std::vector<Pel> filtered( 36 * 32 );
+  for( int above = 0; above <= 1 && h + 3 + maxOffset + above <= 36; above++ )
   {
-    std::ostringstream sstm;
-    sstm << "motionErrorLumaFracColumn w=" << w << " h=" << h << " bitDepth=" << bitDepth << " vector " << i << " of " << num;
-    const int expected = ref->m_motionErrorLumaFrac8[1]( org, orgStride, buff + rowOffset[i] * bufStride, bufStride, w, h, xFilter, yFilter[i],
-                                                         bitDepth, INT_MAX );
-    if( !compare_value( sstm.str(), expected, error[i] ) )
+    int error[4];
+    opt->m_filterColumn4( buff - above * bufStride, bufStride, w, h + 3 + maxOffset + above, xFilter, bitDepth, filtered.data() );
+    opt->m_motionErrorLumaFracColumn( org, orgStride, filtered.data() + above * w, w, h, num, yFilter, rowOffset, bitDepth, error );
+    for( int i = 0; i < num; i++ )
     {
-      return false;
+      std::ostringstream sstm;
+      sstm << "motionErrorLumaFracColumn w=" << w << " h=" << h << " bitDepth=" << bitDepth << " rows above " << above << " vector " << i << " of " << num;
+      const int expected = ref->m_motionErrorLumaFrac8[1]( org, orgStride, buff + rowOffset[i] * bufStride, bufStride, w, h, xFilter, yFilter[i],
+                                                           bitDepth, INT_MAX );
+      if( !compare_value( sstm.str(), expected, error[i] ) )
+      {
+        return false;
+      }
     }
   }
   return true;
@@ -2466,7 +2475,7 @@ static bool check_one_motionErrorLumaFracColumn( MCTF* ref, MCTF* opt, const Pel
 // filter and row offset, 8- and 10-bit, inputs outside the sample range.
 static bool check_motionErrorLumaFracColumn( MCTF* ref, MCTF* opt, unsigned num_cases )
 {
-  if( !opt->m_motionErrorLumaFracColumn )
+  if( !opt->m_motionErrorLumaFracColumn || !opt->m_filterColumn4 )
   {
     return true;
   }

@@ -663,38 +663,35 @@ static int motionErrorLumaFracH_loRes_AVX2( const Pel* org, const ptrdiff_t orig
   return sumOfLanes_AVX2( verror );
 }
 
-// MCTF::m_motionErrorLumaFracColumn: the exact errors of num vectors with the same horizontal position. The horizontal
-// pass of the union of their rows is done once into a buffer, then the vertical pass per vector, rowOffset[i] rows lower.
-static void motionErrorLumaFracColumn_loRes_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h,
-                                                  const int16_t* xFilter, const int num, const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error )
+// MCTF::m_filterColumn4: the horizontal pass of a column of vectors, row r of filtered from source row r - 1 (unaligned
+// stores: the caller's alignment only avoids split loads in the vertical pass).
+static void filterColumn4_AVX2( const Pel* buf, const ptrdiff_t buffStride, const int w, const int numRows, const int16_t* xFilter, const int bitDepth, Pel* filtered )
 {
-  static constexpr int MAX_SIZE = 32;   // the block size of the subpel search, MCTFUnitSize, is at most 32 (vvencCfg)
-  CHECKD( w > MAX_SIZE || h > MAX_SIZE || ( w & 15 ), "Unsupported block size" );
+  CHECKD( w > 32 || numRows > 36 || ( w & 15 ), "Unsupported block size" );   // MCTFUnitSize is at most 32 (vvencCfg)
 
   const __m256i xfilt12   = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[0] ), _mm256_set1_epi16( xFilter[1] ) );
   const __m256i xfilt34   = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[2] ), _mm256_set1_epi16( xFilter[3] ) );
   const __m256i maxSample = _mm256_set1_epi16( ( 1 << bitDepth ) - 1 );
   const __m256i rounding  = _mm256_set1_epi32( 1 << 5 );
-
-  // row r of filtered is the horizontal pass of source row r - 1; a vector needs h + 3 rows from its offset on
-  int maxOffset = 0;
-  for( int i = 0; i < num; i++ )
-  {
-    maxOffset = std::max( maxOffset, rowOffset[i] );
-  }
-  CHECKD( maxOffset > 1, "The vectors of a column span more than two rows" );
-  // h + 3 + maxOffset <= MAX_SIZE + 4 rows; unaligned stores, the alignment only avoids split loads
-  alignas( 32 ) Pel filtered[( MAX_SIZE + 4 ) * MAX_SIZE];
-  for( int r = 0; r < h + 3 + maxOffset; r++ )
+  for( int r = 0; r < numRows; r++ )
   {
     for( int x = 0; x < w; x += 16 )
     {
       _mm256_storeu_si256( ( __m256i* ) &filtered[r * w + x], horizontal4Tap_AVX2( buf + ( r - 1 ) * buffStride + x, xfilt12, xfilt34, rounding, maxSample ) );
     }
   }
+}
+
+// MCTF::m_motionErrorLumaFracColumn: the exact errors of num vectors with the same horizontal position, from the rows of
+// filterColumn4_AVX2: the vertical pass per vector, rowOffset[i] rows lower (a vector reads h + 3 rows from there).
+static void motionErrorLumaFracColumn_loRes_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* filtered, const int w, const int h, const int num,
+                                                  const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error )
+{
+  CHECKD( w > 32 || h > 32 || ( w & 15 ), "Unsupported block size" );   // MCTFUnitSize is at most 32 (vvencCfg)
 
   for( int i = 0; i < num; i++ )
   {
+    CHECKD( rowOffset[i] < 0 || rowOffset[i] > 1, "The vectors of a column span more than two rows" );
     const Pel* rows = filtered + rowOffset[i] * w;
     // a full-sample vertical position takes the filtered rows as they are: output row y is row y + 1
     error[i] = isIdentityFilter4( yFilter[i] ) ? squaredError_AVX2( org, origStride, rows + w, w, w, h )
@@ -2009,6 +2006,7 @@ void MCTF::_initMCTF_X86()
 #if USE_AVX2
   if( vext >= AVX2 )
   {
+    m_filterColumn4             = filterColumn4_AVX2;
     m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_AVX2;
   }
 #endif

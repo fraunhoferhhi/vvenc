@@ -51,7 +51,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <sstream>
 #include <map>
 #include <deque>
+#include <algorithm>
 #include <atomic>
+#include <cstdint>
 
 namespace vvenc {
 
@@ -170,10 +172,14 @@ public:
 
   int ( *m_motionErrorLumaFracX[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
   int ( *m_motionErrorLumaFrac8[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
-  // The exact errors (no early exit) of num <= 4 vectors that share their horizontal position, for the 4-tap filters:
-  // vector i uses yFilter[i] and starts rowOffset[i] (0 or 1) rows below buf; w is a multiple of 16, w and h are at
-  // most 32 (MCTFUnitSize). nullptr where no such kernel exists.
-  void ( *m_motionErrorLumaFracColumn )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int num, const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error );
+  // The horizontal 4-tap pass of a column of vectors: numRows rows of w samples into filtered (stride w), row r from
+  // source row r - 1 of buf, rounded and clipped to the sample range; w is a multiple of 16 and at most 32 (MCTFUnitSize),
+  // numRows at most 36. nullptr where no such kernel exists.
+  void ( *m_filterColumn4 )( const Pel* buf, const ptrdiff_t buffStride, const int w, const int numRows, const int16_t* xFilter, const int bitDepth, Pel* filtered );
+  // The exact errors (no early exit) of num <= 4 vectors that share their horizontal position, for the 4-tap filters,
+  // from the rows of m_filterColumn4: vector i uses yFilter[i] and starts rowOffset[i] (0 or 1) rows below filtered; w is
+  // a multiple of 16, w and h are at most 32 (MCTFUnitSize). nullptr where no such kernel exists.
+  void ( *m_motionErrorLumaFracColumn )( const Pel* org, const ptrdiff_t origStride, const Pel* filtered, const int w, const int h, const int num, const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error );
 
   void( *m_applyFrac[MAX_NUM_CH][2] )( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth );
 
@@ -212,8 +218,56 @@ private:
 
   // refMargin is the width of the replicated border around the reference frame buffer.
   int motionErrorLuma   (const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;
+  // The horizontally filtered columns (m_filterColumn4) of one block's subpel search, kept across its refinement steps:
+  // a later step's column with the same horizontal position and rows inside a kept one reuses its rows.
+  class FilteredColumns
+  {
+  public:
+    static constexpr int MAX_WIDTH = 32;   // MCTFUnitSize
+
+    // The w-wide rows of the column at horizontal position dx (1/16 samples) whose vectors start top to bottom full
+    // rows below the block (dy >> 4), from a kept column of the same position that covers them, or nullptr.
+    const Pel* find( const int dx, const int top, const int bottom, const int w )
+    {
+      for( int c = 0; c < m_num; c++ )
+      {
+        if( m_dx[c] == dx && m_top[c] <= top && m_bottom[c] >= bottom )
+        {
+          return rows( c ) + ( top - m_top[c] ) * w;
+        }
+      }
+      return nullptr;
+    }
+
+    // The buffer for the rows of a new column, a free slot or, with none left, the last one.
+    Pel* add( const int dx, const int top, const int bottom )
+    {
+      const int c = std::min( m_num, MAX_COLUMNS - 1 );
+      m_num       = c + 1;
+      m_dx[c]     = dx;
+      m_top[c]    = top;
+      m_bottom[c] = bottom;
+      return rows( c );
+    }
+
+  private:
+    static constexpr int MAX_COLUMNS = 8;
+    static constexpr int MAX_ROWS    = MAX_WIDTH + 4;          // h + 3 rows per vector plus the one-row spread of a column
+    static constexpr int COLUMN_SIZE = MAX_ROWS * MAX_WIDTH;   // a multiple of 16 samples (32 bytes)
+    static constexpr int ALIGNMENT   = 32;                     // bytes: the 256-bit loads of the vertical pass do not split
+
+    Pel* rows( const int c )
+    {
+      const uintptr_t start = ( reinterpret_cast<uintptr_t>( m_storage ) + ALIGNMENT - 1 ) & ~uintptr_t( ALIGNMENT - 1 );
+      return reinterpret_cast<Pel*>( start ) + c * COLUMN_SIZE;
+    }
+
+    int m_dx[MAX_COLUMNS], m_top[MAX_COLUMNS], m_bottom[MAX_COLUMNS];
+    int m_num = 0;
+    Pel m_storage[MAX_COLUMNS * COLUMN_SIZE + ALIGNMENT / sizeof( Pel )];
+  };
   void testSubpelLattice( const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int x, const int y, const int bs,
-                          const MotionVector &center, const int range, const int step, MotionVector &best ) const;
+                          const MotionVector &center, const int range, const int step, FilteredColumns &columns, MotionVector &best ) const;
   void testIntegerLattice( const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int x, const int y, const int bs,
                            const int centerX, const int centerY, const int range, const int step, const MotionVector &tested, MotionVector &best ) const;
 
