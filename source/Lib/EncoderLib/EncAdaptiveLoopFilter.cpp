@@ -6314,26 +6314,35 @@ void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs
         const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == pcv.lumaWidth );
         const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
         const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-        PelUnitBuf recBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
-        recBuf.copyFrom( recYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ), 
-                                                                              yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+        const int  padL = clipL ? 0 : MAX_ALF_PADDING_SIZE;
+        const int  padT = clipT ? 0 : MAX_ALF_PADDING_SIZE;
+        PelUnitBuf recBuf  = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        PelBuf     recLuma = recBuf.get( COMP_Y );
+        // Only luma is copied with the padding the filter taps reach into. Chroma is read at the block's own samples only
+        // (getBlkStatsCcAlf, as in the in-place branch below), so only the block is copied: the CTU lines above and below
+        // may be in their CC-ALF reconstruction meanwhile, and the statistics do not wait for them.
+        recLuma.copyFrom( recYuv.get( COMP_Y ).subBuf( Position( xStart - padL, yStart - padT ), Size( wBuf, hBuf ) ) );
         // pad top-left unavailable samples for raster slice
         if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
         {
-          recBuf.padBorderPel( MAX_ALF_PADDING_SIZE, 1 );
+          recLuma.padBorderPel( MAX_ALF_PADDING_SIZE, MAX_ALF_PADDING_SIZE, 1 );
         }
 
         // pad bottom-right unavailable samples for raster slice
         if( xEnd == xPos + width && yEnd == yPos + height && ( rasterSliceAlfPad & 2 ) )
         {
-          recBuf.padBorderPel( MAX_ALF_PADDING_SIZE, 2 );
+          recLuma.padBorderPel( MAX_ALF_PADDING_SIZE, MAX_ALF_PADDING_SIZE, 2 );
         }
-        recBuf.extendBorderPel( MAX_ALF_PADDING_SIZE );
-        recBuf = recBuf.subBuf( UnitArea(
-          cs.area.chromaFormat, Area( clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h ) ) );
+        recLuma.extendBorderPel( MAX_ALF_PADDING_SIZE, MAX_ALF_PADDING_SIZE );
+        recBuf = recBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( padL, padT, w, h ) ) );
 
         const UnitArea area( m_chromaFormat, Area( 0, 0, w, h ) );
         const UnitArea areaDst( m_chromaFormat, Area( xStart, yStart, w, h ) );
+        for( int comp = COMP_Cb; comp < getNumberValidComponents( m_chromaFormat ); comp++ )
+        {
+          const CompArea& blk = areaDst.blocks[comp];
+          recBuf.bufs[comp].copyFrom( recYuv.bufs[comp].subBuf( blk.pos(), blk.size() ) );
+        }
 
         getBlkStatsCcAlf( covarianceCb, covarianceCr, m_filterShapesCcAlf[COMP_Cb - 1], orgYuv, recBuf, areaDst, area, yPos );
 
