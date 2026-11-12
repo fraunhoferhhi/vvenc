@@ -17,7 +17,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from .artifacts import (RUN_SCHEMA,export_run,import_run,load_resume,
                         policy_digest,save_checkpoint)
-from .data import ASSETS,FrozenDetector,VideoCatalog,atomic_json,digest,source_fingerprint
+from .data import ASSETS,MINI_COUNTS,FrozenDetector,VideoCatalog,atomic_json,digest,source_fingerprint
 from .environment import VVenCEnv
 from .method import SCHEMA
 from .model import build
@@ -33,21 +33,25 @@ def append_json(path,row):
 
 def make_env(spec,rank):
     device=f"cuda:{spec['gpu_ids'][rank%len(spec['gpu_ids'])]}" if spec["gpu_ids"] else "cpu"
-    catalog=VideoCatalog(spec["input_root"],spec["ffmpeg"],spec["ffprobe"])
+    catalog=VideoCatalog(spec["input_root"],spec["ffmpeg"],spec["ffprobe"],
+                         mode=spec.get("dataset_mode","full"),seed=spec["seed"])
     detector=FrozenDetector(spec["yolo_repo"],spec["weights"],device)
     print("COLLECTOR_READY",json.dumps({"rank":rank,"pid":os.getpid(),
           "cuda_visible_devices":os.environ.get("CUDA_VISIBLE_DEVICES"),
           "detector_device":str(detector.device)}),flush=True)
     return VVenCEnv(catalog,detector,spec["encoder"],Path(spec["output"])/"episodes"/f"worker{rank}",
-                    frame_limit=spec["frames"],threads=spec["encoder_threads"])
+                    frame_limit=spec["frames"],threads=spec["encoder_threads"],
+                    random_windows=spec.get("dataset_mode","full")=="mini")
 
 def validate(model,spec,deadline=float("inf"),detector_factory=FrozenDetector,catalog_factory=VideoCatalog):
-    catalog=catalog_factory(spec["input_root"],spec["ffmpeg"],spec["ffprobe"])
+    catalog=catalog_factory(spec["input_root"],spec["ffmpeg"],spec["ffprobe"],
+                            mode=spec.get("dataset_mode","full"),seed=spec["seed"])
     device=f"cuda:{spec['gpu_ids'][0]}" if spec["gpu_ids"] else "cpu"
     detector=detector_factory(spec["yolo_repo"],spec["weights"],device)
     points=[]
     try:
-        for video in catalog.lock["splits"]["val"][:spec["validation_videos"]]:
+        val_ids=catalog.selected["val"] if hasattr(catalog,"selected") else catalog.lock["splits"]["val"]
+        for video in val_ids[:spec["validation_videos"]]:
             for rate in spec["validation_rates"]:
                 pair={}
                 controls=Path(spec["output"])/"validation_controls"
@@ -158,6 +162,7 @@ def contract_for(spec):
             "encoder_sha256":digest(spec["encoder"]),"detector_weights_sha256":digest(spec["weights"]),
             "profile":"480x320_30fps_medium_ctu32_dqp2_fpp0_10bit_lookahead10",
             "frames":spec["frames"],"seed":spec["seed"],"workers":spec["workers"],"rollout_steps":spec["rollout_steps"],
+            "dataset_mode":spec.get("dataset_mode","full"),"subset_version":"car_box_quartiles_sha256_mini_v1",
             "encoder_threads":spec["encoder_threads"],"algorithm":"SB3 2.7.0 PPO; isolated actor/critic; per-branch gradient clip; bounded auxiliary reward",
             "ppo":spec["ppo"],
             "reward":"paper=20*confidence_ordered_precision-abs(log(prefix_actual_bps/target_bps)); PPO_learning=0.05*paper",
@@ -177,7 +182,9 @@ def parser():
     p.add_argument("--ppo-epochs",type=int,default=3,help="Optimizer passes per PPO rollout")
     p.add_argument("--ppo-target-kl",type=float,default=0.05,help="Stop PPO epoch early above 1.5 times this approximate KL")
     p.add_argument("--ppo-aux-loss-coef",type=float,default=0.1,help="Bounded block-reward MSE weight; set 0 for a controlled ablation")
-    p.add_argument("--frames",type=int,default=0,help="0 = entire source clip; a limit is an explicitly reduced experiment")
+    p.add_argument("--dataset-mode",choices=("mini","full"),default="full",
+                   help="mini selects locked 16/4/30 without modifying dataset_lock.json")
+    p.add_argument("--frames",type=int,default=0,help="0 = entire source clip; mini requires 256")
     p.add_argument("--validation-frames",type=int,default=0)
     p.add_argument("--validation-videos",type=int,default=7)
     p.add_argument("--validation-rates",default="50,80,120,160,200")
@@ -200,6 +207,9 @@ def main():
     if (a.total_timesteps<1 or a.additional_timesteps<0 or a.rollout_steps<2 or a.workers<1 or a.frames<0 or a.validation_frames<0
             or not 1<=a.validation_videos<=7 or a.encoder_threads<1 or a.val_every_updates<0
             or a.max_hours<0 or a.reserve_minutes<0):p.error("Invalid training budget or configuration")
+    if a.dataset_mode=="mini" and (a.frames!=256 or a.validation_frames not in (64,128,256)
+                                   or a.validation_videos>MINI_COUNTS["val"]):
+        p.error("Mini mode requires --frames 256, validation frames 64/128/256, and <=4 validation videos")
     if importlib.metadata.version("stable-baselines3")!="2.7.0":raise RuntimeError("Install stable-baselines3==2.7.0")
     torch.set_num_threads(2)
     try:ppo=ppo_options(a)
@@ -225,8 +235,15 @@ def main():
         raise ValueError("Resume source/profile/data/training/validation contract differs")
     atomic_json(config,contract)
     atomic_json(output/"session.json",{**spec,"runtime":{"torch":torch.__version__,"sb3":importlib.metadata.version("stable-baselines3")}})
-    catalog=VideoCatalog(spec["input_root"],spec["ffmpeg"],spec["ffprobe"])
+    catalog=VideoCatalog(spec["input_root"],spec["ffmpeg"],spec["ffprobe"],
+                         mode=spec["dataset_mode"],seed=spec["seed"])
     catalog.check_available(("train","val"))
+    selection={"dataset_mode":spec["dataset_mode"],"seed":spec["seed"],"splits":catalog.selected,
+               "train_frames":spec["frames"],"validation_frames":spec["validation_frames"],
+               "validation_ids":catalog.selected["val"][:spec["validation_videos"]],
+               "random_train_starts":[0,128,256,384,512] if spec["dataset_mode"]=="mini" else [0]}
+    atomic_json(output/"dataset_selection.json",selection)
+    print("DATASET_SELECTION_PASS",json.dumps(selection),flush=True)
     from .pixels import verify_conversion
     print("RGB_PROTOCOL_PASS",json.dumps(verify_conversion(a.ffmpeg)),flush=True)
     seconds=a.max_hours*3600
