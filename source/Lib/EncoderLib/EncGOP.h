@@ -227,7 +227,7 @@ private:
   // The film grain SEI fitted to the grain the coding lost (xScaleToLostGrain): per component, intensity interval and
   // temporal layer, the interval's summed spectra of the latest LOST_GRAIN_POOL pictures of that layer and the last
   // cut-offs and scaling factor written; per component and temporal layer, the last cut-off shift. Cleared at every
-  // random access point (--fga 2 only).
+  // random access point (--fga 2 and 3).
   struct LostGrainSums
   {
     double orig[ 256 ] = {};
@@ -249,6 +249,14 @@ private:
   std::map<LostGrainKey, std::deque<LostGrainSums>>        m_lostGrainHistory;
   std::map<LostGrainKey, LostGrainFitted>                  m_lostGrainFitted;
   std::map<std::pair<int, unsigned>, std::pair<int, int>> m_lostGrainShift;   ///< (component, layer) -> (dh, dw)
+  // With the auto-regressive model (--fga 3): per component, the grain of the filter last signalled (FGAnalyzer::arGrain
+  // is computed once per filter, the fit runs for every picture).
+  struct ArGrainOfFilter
+  {
+    std::vector<int>    filter;   ///< log2 scale factor, then the model values after the scaling factor
+    FGAnalyzer::ArGrain grain;
+  };
+  ArGrainOfFilter           m_arGrain[ MAX_NUM_COMP ];
 
 public:
   EncGOP( MsgLog& msglog );
@@ -310,6 +318,8 @@ private:
   bool xFitsLostGrain                ( ) const;
   void xStoreLostGrainSpectra        ( Picture& pic ) const;
   void xScaleToLostGrain             ( Picture& pic, const Slice& slice, SeiFgc& sei );
+  void xFitLostGrainAr               ( int c, unsigned layer, int bitDepth, int log2ScaleFactor,
+                                       const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm );
   void xFitLostGrain                 ( int c, unsigned layer, int bitDepth, bool chroma420, int log2ScaleFactor,
                                        const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm );
   void xWriteLeadingSEIs              ( Picture& pic, AccessUnitList& accessUnit );

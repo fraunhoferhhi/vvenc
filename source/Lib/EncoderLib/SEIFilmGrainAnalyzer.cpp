@@ -2902,6 +2902,41 @@ void FGAnalyzer::fitArFilter( ComponentID compId )
   f.valid = true;
 }
 
+FGAnalyzer::ArGrain FGAnalyzer::arGrain( const std::vector<int>& modelValues, int log2ScaleFactor, int bitDepth, bool luma )
+{
+  constexpr int N = BLOCK_SIZE;
+  const double one = 1 << log2ScaleFactor;
+  const int coef[ 6 ] = { 0, modelValues[ 1 ], 0, modelValues[ 3 ], modelValues[ 4 ], modelValues[ 5 ] };
+
+  static const ArSpectrum arSpectrum;
+  double model[ N * N ];
+  std::vector<double> scratch( ArSpectrum::SCRATCH_SIZE );
+  const double nonDcShare = arSpectrum.compute( coef[ 1 ] / one, coef[ 3 ] / one, coef[ 5 ] / one, coef[ 4 ] / one, model, scratch );
+  double sum = 1.0;   // as in fitArFilter: the chroma spectrum is the one vvdec synthesizes
+  if( !luma )
+  {
+    const float* ratio = &AR_SYNTHESIS_RATIO_CHROMA[ 0 ][ 0 ];   // [ vertical * N + horizontal ]
+    sum = 0.0;
+    for( int i = 0; i < N * N; i++ )
+    {
+      model[ i ] *= ratio[ i ];
+      sum        += model[ i ];
+    }
+  }
+  const ArBandPower bands = arBandPower( model, sum );
+
+  ArGrain grain;
+  grain.stddevPerScale = std::ldexp( AR_PATTERN_STDDEV[ luma ? 0 : 1 ] * std::sqrt( arEnergy( coef, log2ScaleFactor ) ), -( log2ScaleFactor + 10 - bitDepth ) );
+  for( int g = 0; g < LostGrainPower::GROUPS; g++ )
+  {
+    for( int d = 0; d < LostGrainPower::DIRECTIONS; d++ )
+    {
+      grain.bandPower[ g ][ d ] = N * N * nonDcShare * bands.p[ g ][ d ];
+    }
+  }
+  return grain;
+}
+
 // Estimates horizontal and vertical cut-off frequencies per intensity interval from the accumulated squared DCT of the
 // grain, then fills missing values, limits the spread and the number of different pairs.
 void FGAnalyzer::estimateCutoffFreq( ComponentID compId, int bitDepth )
@@ -3606,6 +3641,108 @@ double FGAnalyzer::lostGrainFit( const LostGrainPower& power, int bitDepth, bool
       break;
     }
     const double cost = lostGrainCost( power, var, ps );
+    if( best < 0 || cost < best )
+    {
+      best  = cost;
+      scale = s;
+    }
+  }
+  return best;
+}
+
+int FGAnalyzer::lostGrainCapScaleAr( int s0 )
+{
+  return std::min( MAX_SCALING_FACTOR, (int) ( s0 * std::sqrt( LOST_GRAIN_CAP_POWER ) + 0.5 ) );
+}
+
+// The synthesis rounds the grain it adds to whole sample values. Gaussian grain of standard deviation stddev (in sample
+// units), rounded, is gain times the grain plus an error that is not correlated with it and is close to white (Bussgang's
+// decomposition): from two sample units on the gain is 1 and the error's variance 1 / 12; below, the sums over the whole
+// values n give both. Weak grain is mostly this white error: on Top Gun (grain of 0.95 sample units at 10 bits) the
+// synthesized grain measured 0.37 / 0.19 / 0.15 / 0.28 of its power in the bands u + v 3-5 / 6-8 / 9-12 / 13-30 at a
+// standard deviation of 0.74-0.76 there; the filter alone gives 0.44 / 0.21 / 0.15 / 0.19 at 0.68, with the rounding
+// 0.39 / 0.20 / 0.16 / 0.26 at 0.74. The error's power at the finest frequencies there (0.054 per sample) is more than
+// the coding lost (0.032), which a fit without it cannot see.
+static void roundedGrain( double stddev, double& gain, double& errorVariance )
+{
+  gain          = 1.0;
+  errorVariance = 1.0 / 12.0;
+  if( stddev >= 2.0 )
+  {
+    return;
+  }
+  if( stddev <= 0.0 )
+  {
+    gain = errorVariance = 0.0;
+    return;
+  }
+  constexpr int    MAX_VALUE = 14;   // beyond 6 standard deviations of the largest stddev handled here
+  constexpr double SQRT_2PI  = 2.5066282746310002;
+  double outputVariance = 0.0;
+  gain = 0.0;
+  for( int n = 1; n <= MAX_VALUE; n++ )
+  {
+    const double low = ( n - 0.5 ) / stddev, high = ( n + 0.5 ) / stddev;   // the values rounded to +-n, in stddev units
+    outputVariance += n * n * ( std::erf( high / std::sqrt( 2.0 ) ) - std::erf( low / std::sqrt( 2.0 ) ) );
+    gain           += 2.0 * n * ( std::exp( -0.5 * low * low ) - std::exp( -0.5 * high * high ) ) / ( stddev * SQRT_2PI );
+  }
+  errorVariance = std::max( 0.0, outputVariance - gain * gain * stddev * stddev );
+}
+
+// The most a band of reconstruction plus synthesis may exceed the original's power in the fit of the auto-regressive
+// model: 1.1 times in amplitude.
+static constexpr double LOST_GRAIN_AR_MAX_OVERSHOOT = 1.1 * 1.1;
+
+double FGAnalyzer::lostGrainFitAr( const LostGrainPower& power, const ArGrain& grain, int s0, int& scale )
+{
+  scale = s0;
+  if( power.blocks <= 0 || s0 <= 0 )
+  {
+    return -1.0;
+  }
+  // the number of coefficients per group and direction: the rounding error has the same power in every coefficient
+  double coefficients[ LostGrainPower::GROUPS ][ LostGrainPower::DIRECTIONS ] = {};
+  for( int k = 1; k < BLOCK_SIZE * BLOCK_SIZE; k++ )
+  {
+    coefficients[ lostGrainGroup( k ) ][ 0 ] += lostGrainHorizontalShare( k );
+    coefficients[ lostGrainGroup( k ) ][ 1 ] += 1.0 - lostGrainHorizontalShare( k );
+  }
+  const int cap = lostGrainCapScaleAr( s0 );
+  double best = -1.0;
+  for( int s = 0; s <= cap; s++ )
+  {
+    double gain, errorVariance;
+    roundedGrain( s * grain.stddevPerScale, gain, errorVariance );
+    const double variance = gain * gain * s * grain.stddevPerScale * s * grain.stddevPerScale;   // of the filtered part
+    double synthesized[ LostGrainPower::GROUPS ][ LostGrainPower::DIRECTIONS ];
+    for( int g = 0; g < LostGrainPower::GROUPS; g++ )
+    {
+      for( int d = 0; d < LostGrainPower::DIRECTIONS; d++ )
+      {
+        synthesized[ g ][ d ] = variance * grain.bandPower[ g ][ d ] + errorVariance * coefficients[ g ][ d ];
+      }
+    }
+    // The cost alone lets a band end far above the original where the coding lost mostly coarse grain: the filter's grain
+    // has the same shape at every strength, so more of it at the coarse frequencies is also more at the finest (Top Gun's
+    // sky: the decoded picture with grain had 1.47-1.49 of the source's finest band, to lift u + v 3-5 from 0.37-0.39 of
+    // the source's to 0.43-0.44). So no band from u + v = 3 may end more than LOST_GRAIN_AR_MAX_OVERSHOOT above the
+    // original's power; a little above is accepted where the cost finds the bands better matched on average. Bands where
+    // the reconstruction alone is above the original do not count: no grain can change that.
+    // The synthesized power grows with the scaling factor, so the search ends at the first one that exceeds.
+    bool exceeds = false;
+    for( int g = LOST_GRAIN_FIRST_FITTED_GROUP; g < LostGrainPower::GROUPS && s > 0; g++ )
+    {
+      for( int d = 0; d < LostGrainPower::DIRECTIONS; d++ )
+      {
+        exceeds = exceeds || ( power.reco[ g ][ d ] <= power.orig[ g ][ d ]
+                               && power.reco[ g ][ d ] + synthesized[ g ][ d ] > LOST_GRAIN_AR_MAX_OVERSHOOT * power.orig[ g ][ d ] );
+      }
+    }
+    if( exceeds )
+    {
+      break;
+    }
+    const double cost = lostGrainCost( power, 1.0, synthesized );
     if( best < 0 || cost < best )
     {
       best  = cost;

@@ -172,6 +172,25 @@ public:
   // scale s0 at (h0, w0).
   static int lostGrainCapScale( int s0, bool chroma420, int h0, int w0, int h, int w );
 
+  // The grain the synthesis makes with a filter of the auto-regressive model (--fga 3): its standard deviation per unit
+  // of the scaling factor, and its power in a 16x16 block per unit of grain variance in each u + v frequency group and
+  // direction of the lost-grain fit.
+  struct ArGrain
+  {
+    double stddevPerScale = 0.0;
+    double bandPower[ LostGrainPower::GROUPS ][ LostGrainPower::DIRECTIONS ] = {};
+  };
+  // modelValues: an intensity interval's signalled model values (scaling factor, a1, 0, a3, r, a5; the filter is the same
+  // in all intervals of a component).
+  static ArGrain arGrain( const std::vector<int>& modelValues, int log2ScaleFactor, int bitDepth, bool luma );
+  // The scaling factor (0 to twice s0, the analyzer's: LOST_GRAIN_CAP_POWER in power) whose synthesized grain, rounded
+  // to whole sample values as the synthesis rounds it, added to the reconstruction, best matches the original's power
+  // per frequency group and direction (the cost of lostGrainFit), among those that leave no group from u + v = 3 more
+  // than 1.1 times above the original in amplitude. Returns the cost, -1: nothing to fit.
+  static double lostGrainFitAr( const LostGrainPower& power, const ArGrain& grain, int s0, int& scale );
+  // The largest scaling factor that fit may give: LOST_GRAIN_CAP_POWER times the power of the analyzer's s0.
+  static int lostGrainCapScaleAr( int s0 );
+
   // A plane of samples with its own storage; the analysis works on whole planes.
   struct Plane
   {

@@ -2691,11 +2691,11 @@ void EncGOP::xStoreLostGrainSpectra( Picture& pic ) const
   }
 }
 
-// The film grain SEIs are fitted to the grain the coding lost: with the improved analysis's frequency model (--fga 2), in
-// the final pass, when the SEI is written with the pictures (not as one SEI for the whole sequence).
+// The film grain SEIs are fitted to the grain the coding lost: with the improved analysis (--fga 2 and 3), in the final
+// pass, when the SEI is written with the pictures (not as one SEI for the whole sequence).
 bool EncGOP::xFitsLostGrain() const
 {
-  return m_pcEncCfg->m_fga == 2 && m_pcEncCfg->m_fg.m_fgcSEIEnabled && !m_pcEncCfg->m_fg.m_fgcSEIPerPictureSEI
+  return m_pcEncCfg->m_fga >= 2 && m_pcEncCfg->m_fg.m_fgcSEIEnabled && !m_pcEncCfg->m_fg.m_fgcSEIPerPictureSEI
          && m_pcRateCtrl->rcIsFinalPass && !m_isPreAnalysis;
 }
 
@@ -2744,7 +2744,8 @@ static void signalBothCutoffs( SeiFgc::CompModel& cm )
 // coding keeps part of it (the full synthesis would add it twice) and loses the fine band first (the analyzer's cut-offs
 // are those of the source's grain). Per component: the summed spectra of each interval over this picture and the previous
 // LOST_GRAIN_POOL - 1 pictures of its temporal layer (only those at most LOST_GRAIN_POOL_SPAN pictures back), then
-// xFitLostGrain. Random access points start over. Frees the picture's spectra.
+// xFitLostGrain or xFitLostGrainAr. Random access points start over. Frees
+// the picture's spectra.
 void EncGOP::xScaleToLostGrain( Picture& pic, const Slice& slice, SeiFgc& sei )
 {
   constexpr int N = 16 * 16;
@@ -2762,7 +2763,11 @@ void EncGOP::xScaleToLostGrain( Picture& pic, const Slice& slice, SeiFgc& sei )
     {
       continue;
     }
-    signalBothCutoffs( cm );
+    const bool arModel = sei.filmGrainModelId == 1;
+    if( !arModel )
+    {
+      signalBothCutoffs( cm );
+    }
     const int n = cm.numIntensityIntervals;
     // the picture's sums per interval: a block mean belongs to the first interval holding it
     std::vector<LostGrainSums> sums( n );
@@ -2814,7 +2819,14 @@ void EncGOP::xScaleToLostGrain( Picture& pic, const Slice& slice, SeiFgc& sei )
     }
     const ComponentID compId   = ComponentID( c );
     const int         bitDepth = m_pcEncCfg->m_internalBitDepth[ toChannelType( compId ) ];
-    xFitLostGrain( c, slice.TLayer, bitDepth, c != COMP_Y && pic.chromaFormat == CHROMA_420, sei.log2ScaleFactor, power, cm );
+    if( arModel )
+    {
+      xFitLostGrainAr( c, slice.TLayer, bitDepth, sei.log2ScaleFactor, power, cm );
+    }
+    else
+    {
+      xFitLostGrain( c, slice.TLayer, bitDepth, c != COMP_Y && pic.chromaFormat == CHROMA_420, sei.log2ScaleFactor, power, cm );
+    }
     eraseOtherIntervals( m_lostGrainHistory, c, slice.TLayer, cm );
     eraseOtherIntervals( m_lostGrainFitted, c, slice.TLayer, cm );
   }
@@ -2839,8 +2851,8 @@ static constexpr int MIN_POOLED_BLOCKS = 32;
 // to be fitted. So that the synthesized grain does not pulse, per picture of a temporal layer the shift moves at most 1 and
 // the scaling factor rises at most max(1, s0 / 8) (s0 the analyzer's scaling factor) from its last value moved to the new
 // cut-offs at equal power; a lower fit is taken at once (a limit on the way down held the grain above the fit for many
-// pictures). A picture with nothing to fit keeps the shift, an interval without a fit keeps its last grain power (at
-// first the analyzer's).
+// pictures, see xFitLostGrainAr). A picture with nothing to fit keeps the shift, an interval without a fit keeps its last
+// grain power (at first the analyzer's).
 void EncGOP::xFitLostGrain( int c, unsigned layer, int bitDepth, bool chroma420, int log2ScaleFactor,
                             const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm )
 {
@@ -2937,6 +2949,70 @@ void EncGOP::xFitLostGrain( int c, unsigned layer, int bitDepth, bool chroma420,
   }
 }
 
+// The lost-grain fit of the auto-regressive model (--fga 3): the filter stays the analyzer's (one per component; fitting
+// its shape to the lost grain as well gained little: on Top Gun's sky the bands u + v 3-5 / 6-8 / 9-12 / 13-30 of
+// reconstruction plus synthesis reached 0.22 / 0.38 / 1.39 / 1.21 of the original's power against 0.21 / 0.31 / 1.32 /
+// 1.33), and every interval's scaling factor is fitted to the grain the coding lost (FGAnalyzer::lostGrainFitAr), at most
+// FGAnalyzer::LOST_GRAIN_CAP_POWER times the analyzer's grain power. Without it the whole analysed grain was synthesized
+// on top of the grain the coding kept. As in xFitLostGrain, an interval needs MIN_POOLED_BLOCKS pooled blocks to be
+// fitted and an interval without a fit keeps its last value (at first the analyzer's). A fit below the last value of the
+// interval and temporal layer is taken at once: a limit on the way down held the grain far above what the fit asked
+// for, and it did so for many pictures (gangster_chase: after one fit of 112 the fits fell to 84 and 48, the value only
+// to 105 and 97, and that picture had 1.96 times the source's finest band between neighbours at 1.0). On the way up the
+// scaling factor rises at most an eighth of its last value per picture of the layer (at least 1, at most s0 / 8), so
+// that the grain does not pulse; the price is that a value near 0 rises slowly.
+void EncGOP::xFitLostGrainAr( int c, unsigned layer, int bitDepth, int log2ScaleFactor,
+                              const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm )
+{
+  if( cm.numIntensityIntervals == 0 )
+  {
+    return;
+  }
+  // the grain of the component's filter, computed anew only when the filter changed
+  const std::vector<int>& first = cm.intensityValues[ 0 ].compModelValue;
+  std::vector<int> filter( first.begin() + 1, first.end() );
+  filter.insert( filter.begin(), log2ScaleFactor );
+  if( m_arGrain[ c ].filter != filter )
+  {
+    const FGAnalyzer::ArGrain newGrain = FGAnalyzer::arGrain( first, log2ScaleFactor, bitDepth, c == COMP_Y );
+    // the scaling factors last written are in units of the old filter's grain: keep their grain level, so that a new
+    // analysis does not make the grain jump
+    for( auto& fitted : m_lostGrainFitted )
+    {
+      if( std::get<0>( fitted.first ) == c && !m_arGrain[ c ].filter.empty() && newGrain.stddevPerScale > 0.0 )
+      {
+        fitted.second.scale = (int) std::lround( fitted.second.scale * m_arGrain[ c ].grain.stddevPerScale / newGrain.stddevPerScale );
+      }
+    }
+    m_arGrain[ c ].grain  = newGrain;
+    m_arGrain[ c ].filter = filter;
+  }
+  const FGAnalyzer::ArGrain& grain = m_arGrain[ c ].grain;
+
+  for( int i = 0; i < cm.numIntensityIntervals; i++ )
+  {
+    SeiFgc::CompModelIntensityValues& iv = cm.intensityValues[ i ];
+    const int s0 = iv.compModelValue[ 0 ];   // the analyzer's
+    const LostGrainKey key( c, iv.intensityIntervalLowerBound, iv.intensityIntervalUpperBound, layer );
+    const auto last   = m_lostGrainFitted.find( key );
+    const bool fitted = last != m_lostGrainFitted.end();
+    int  scale = fitted ? last->second.scale : s0;
+    int  fit;
+    const bool fits = power[ i ].blocks >= MIN_POOLED_BLOCKS && FGAnalyzer::lostGrainFitAr( power[ i ], grain, s0, fit ) >= 0;
+    if( fits )
+    {
+      const int step = std::max( 1, std::min( s0, scale ) / 8 );
+      scale = fitted ? std::min( fit, scale + step ) : fit;   // the first fit is free
+    }
+    scale = std::min( scale, FGAnalyzer::lostGrainCapScaleAr( s0 ) );
+    iv.compModelValue[ 0 ] = scale;
+    if( fits || fitted )
+    {
+      m_lostGrainFitted[ key ] = { 0, 0, scale };
+    }
+  }
+}
+
 void EncGOP::xWriteLeadingSEIs( Picture& pic, AccessUnitList& accessUnit )
 {
   const Slice* slice = pic.slices[ 0 ];
@@ -2994,8 +3070,8 @@ void EncGOP::xWriteLeadingSEIs( Picture& pic, AccessUnitList& accessUnit )
     }
 
     SeiFgc sei = xFilmGrainSei( xFilmGrainParametersAt( slice->poc ), pic.chromaFormat );
-    // With the improved analysis's frequency model (--fga 2), every picture's message is scaled to the grain its coding
-    // lost, so every picture carries one.
+    // With the improved analysis (--fga 2 and 3), every picture's message is scaled to the grain its coding lost, so every
+    // picture carries one.
     const bool scaled = xFitsLostGrain();
     if( scaled )
     {
