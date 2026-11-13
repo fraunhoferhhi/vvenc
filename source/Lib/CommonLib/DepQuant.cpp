@@ -514,7 +514,7 @@ namespace DQIntern
            | diffOfCtxs<149, 11>( a, b ) ) == 0;     // GtxFlag[3]
   }
 
-  void RateEstimator::initCtx( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
+  bool RateEstimator::initCtx( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
                                RateTablesMemo& memo )
   {
     // The sig and gtx tables depend only on the channel type and the states of the coefficient-coding contexts. The
@@ -523,7 +523,8 @@ namespace DQIntern
     const ChannelType chType = tuPars.m_chType;
     RateTablesMemo::Channel& kept = memo.channel[ chType ];
     const uint8_t* ctxStates = reinterpret_cast<const uint8_t*>( &fracBitsAccess[ Ctx::SigCoeffGroup[ 0 ].Offset ] );
-    if( !equalCoeffCtxStates( kept.ctxStates, ctxStates, chType ) )
+    const bool built = !equalCoeffCtxStates( kept.ctxStates, ctxStates, chType );
+    if( built )
     {
       xSetSigSbbFracBits( fracBitsAccess, chType, kept.tables );
       xSetSigFlagBits   ( fracBitsAccess, chType, kept.tables );
@@ -532,6 +533,34 @@ namespace DQIntern
     }
     m_tables = &kept.tables;
     xSetLastCoeffOffset( fracBitsAccess, tuPars, tu, compID );
+    return built;
+  }
+
+  void RateEstimator::xSetZeroProofRates( ZeroProofRates& r ) const
+  {
+    // chroma context ranges: sig_coeff_flag 4..7 for a diagonal < 2, else 0..3; gtx 6..10 for diagonal 0, else 1..5
+    for( int d = 0; d < 2; d++ )
+    {
+      const int sigFirst = d == 0 ? 4 : 0;
+      r.sig0[d] = r.sig1[d] = std::numeric_limits<int32_t>::max();
+      for( unsigned set = 0; set < sm_numCtxSetsSig; set++ )
+      {
+        for( int c = sigFirst; c < sigFirst + 4; c++ )
+        {
+          r.sig0[d] = std::min<int32_t>( r.sig0[d], m_tables->sig[set][c].intBits[0] );
+          r.sig1[d] = std::min<int32_t>( r.sig1[d], m_tables->sig[set][c].intBits[1] );
+        }
+      }
+      const int gtxFirst = d == 0 ? 6 : 1;
+      r.level[d] = std::numeric_limits<int32_t>::max();
+      for( int c = gtxFirst; c < gtxFirst + 5; c++ )
+      {
+        r.level[d] = std::min( r.level[d], *std::min_element( m_tables->gtx[c].bits + 1, m_tables->gtx[c].bits + 6 ) );
+      }
+    }
+    r.lastLevel = *std::min_element( m_tables->gtx[0].bits + 1, m_tables->gtx[0].bits + 6 );
+    r.sbb0      = std::min<int32_t>( m_tables->sigSbb[0].intBits[0], m_tables->sigSbb[1].intBits[0] );
+    r.sbb1      = std::min<int32_t>( m_tables->sigSbb[0].intBits[1], m_tables->sigSbb[1].intBits[1] );
   }
 
   void RateEstimator::xSetLastCoeffOffset( const FracBitsAccess& fracBitsAccess, const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID )
@@ -1193,7 +1222,20 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   }
 
   //===== real init =====
-  RateEstimator::initCtx( tuPars, tu, compID, ctx.getFracBitsAcess(), m_rateTablesMemo );
+  if( RateEstimator::initCtx( tuPars, tu, compID, ctx.getFracBitsAcess(), m_rateTablesMemo ) && isChroma( compID ) )
+  {
+    m_zeroProofRatesStale = true;   // xProvesAllZero's rate minima come from the chroma tables
+  }
+
+  // Chroma in P and B slices: when no path can beat the all-zero TU, skip the trellis (qCoeff and absSum are already 0).
+  // Not in I slices, where the proof rarely succeeds and costs more than it saves.
+  if( isChroma( compID ) && !enableScalingLists && !tu.cs->slice->isIntra()
+      && xProvesAllZero( tuPars, tCoeff, firstTestPos, defaultQuantisationCoefficient ) )
+  {
+    tu.lastPos[compID] = -1;
+    return;
+  }
+
   m_commonCtx.reset( tuPars, *this );
   for( int k = 0; k < 4; k++ )
   {
@@ -1273,6 +1315,122 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
 void DepQuant::xDequantDQ( const TransformUnit& tu,  CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP, bool enableScalingLists, int* piDequantCoef )
 {
   m_quant.dequantBlock( tu, compID, cQP, recCoeff, enableScalingLists, piDequantCoef );
+}
+
+// Whether no trellis path can cost less than the all-zero TU (cost 0): then the trellis returns all zero, since it keeps
+// a nonzero level only for a path cost strictly below 0 (the best-path search starts at minPathCost 0, the test is <).
+// For a chroma TU without scaling lists, with the rate tables initCtx loaded. A path is fixed by its start (its last
+// nonzero position p) and the levels below p; its cost, in the trellis's own integers, is at least
+//   minDelta( p ) + lastOffset( p ) + lastLevel                          the start (checkRdCostStart)
+//   + the sum of reg( i ) over the positions i below p in p's sub-block  (its sb_coded_flag is inferred)
+//   + the sum over the sub-blocks below of min( sbb0, sbb1 + the sum of their positions' terms )   (sub-block 0: no flag)
+// minDelta( i ): the smallest deltaDist among xDecide's candidate levels at i; reg( i ) = min( sig0, minDelta( i ) + sig1
+// + level ) where the sig flag is coded; at a coded sub-block's first position (insidePos 0) it may be inferred, so the
+// term there leaves out sig1. The rate minima come from ZeroProofRates; all other rates (Rice and remainder bits) are >= 0.
+// Bypass guard: remRegBins starts at initRemRegBins; the start spends at most 3 bins and every later position at most 4,
+// so the j-th position below the start still has >= 4 bins for j <= jmax. Further down, a position may code no sig /
+// sb_coded_flag / gtx bins: a zero there costs >= 0, a nonzero >= minDelta + 1 bit (the sign), and its sub-block's term
+// becomes min( sbb0, the sum of those terms ).
+// The start costs are evaluated upward from DC, each from the sums of the positions below it, so the first negative one
+// ends the proof at once (TUs that are not all zero mostly end it near DC). The loop is scalar; the early
+// exit would have to go if it were ever vectorised.
+bool DepQuant::xProvesAllZero( const DQIntern::TUParameters& tuPars, const TCoeff* tCoeff, const int firstTestPos, const TCoeff quantCoeff )
+{
+  using namespace DQIntern;
+
+  // from the chroma tables initCtx just built or restored: refreshed here, not in xQuantDQ, once they were built again
+  if( m_zeroProofRatesStale )
+  {
+    xSetZeroProofRates( m_zeroProofRates );
+    m_zeroProofRatesStale = false;
+  }
+  const ZeroProofRates& rate     = m_zeroProofRates;
+  const int64_t         signBit  = int64_t( 1 ) << SCALE_BITS;
+  const int             log2Sbb  = tuPars.m_log2SbbSize;
+  const int             sbbSize  = 1 << log2Sbb;
+  // the trellis's initRemRegBins (xQuantDQ; chroma has no zero-out)
+  const int             initBins = ( std::min<int>( 32, tuPars.m_width ) * std::min<int>( 32, tuPars.m_height ) * MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT ) / 16;
+  const int             jmax     = initBins >= 7 ? ( initBins - 7 ) / 4 + 1 : 0;
+
+  // the sums of the sub-block terms below sub-block u (index u): with every position regular, or with bypass allowed
+  // (at most 32 x 32 positions are scanned, in sub-blocks of at least 4); each entry is written before it is read
+  int64_t sbbSumReg [MAX_TB_SIZEY * MAX_TB_SIZEY / 16 + 1];
+  int64_t sbbSumSafe[MAX_TB_SIZEY * MAX_TB_SIZEY / 16 + 1];
+  // in the current sub-block, the sums of the terms of its positions below insidePos k (index k); MLS_CG_SIZE is the
+  // log2 of the largest sub-block's number of positions
+  CHECKD( sbbSize > ( 1 << MLS_CG_SIZE ), "sub-block larger than the position sums hold" );
+  int64_t posSumReg [( 1 << MLS_CG_SIZE ) + 1];
+  int64_t posSumSafe[( 1 << MLS_CG_SIZE ) + 1];
+  sbbSumReg[0] = sbbSumSafe[0] = posSumReg[0] = posSumSafe[0] = 0;
+  int64_t sbbReg = 0, sbbSafe = 0;   // the current sub-block's own sums so far
+
+  for( int i = 0; i <= firstTestPos; i++ )
+  {
+    const ScanInfo& scanInfo = tuPars.m_scanInfo[i];
+    const int       u        = i >> log2Sbb;
+    const int       k        = scanInfo.insidePos;
+    CHECKD( k != i - ( u << log2Sbb ), "a sub-block's positions must be consecutive in the scan" );
+
+    // the smallest deltaDist of xDecide's candidate levels, with its integers
+    const int64_t scaledOrg = int64_t( abs( tCoeff[scanInfo.rasterPos] ) ) * quantCoeff;
+    TCoeff        qIdx      = TCoeff( ( scaledOrg + m_quant.m_QAdd ) >> m_quant.m_QShift );
+    int64_t       minDelta;
+    if( qIdx < 0 )
+    {
+      const int64_t scaledAdd = m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
+      minDelta = std::min( ( scaledAdd + m_quant.m_DistAdd ) >> m_quant.m_DistShift,
+                           ( ( scaledAdd + m_quant.m_DistStepAdd ) * 2 + m_quant.m_DistAdd ) >> m_quant.m_DistShift );
+    }
+    else
+    {
+      qIdx = std::max<TCoeff>( 1, std::min<TCoeff>( m_quant.m_maxQIdx, qIdx ) );
+      const int64_t scaledAdd = qIdx * m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
+      minDelta = std::numeric_limits<int64_t>::max();
+      for( int j = 0; j < 4; j++ )
+      {
+        minDelta = std::min( minDelta, ( ( scaledAdd + j * m_quant.m_DistStepAdd ) * ( qIdx + j ) + m_quant.m_DistAdd ) >> m_quant.m_DistShift );
+      }
+    }
+
+    // the least cost of a path starting here; positions >= i - jmax are surely regular
+    const int     q         = i - jmax;
+    const int     kq        = std::min( std::max( q - ( u << log2Sbb ), 0 ), k );
+    const int     ur        = std::min( q <= 0 ? 0 : ( q + sbbSize - 1 ) >> log2Sbb, u );
+    const int64_t startCost = minDelta + lastOffset( scanInfo ) + rate.lastLevel + ( posSumReg[k] - posSumReg[kq] ) + posSumSafe[kq]
+                            + ( sbbSumReg[u] - sbbSumReg[ur] ) + sbbSumSafe[ur];
+    if( startCost < 0 )
+    {
+      return false;
+    }
+
+    // the position's terms for the starts above it
+    const int     diag   = scanInfo.posX + scanInfo.posY;
+    const int     d      = diag < 2 ? 0 : 1;
+    const int     dl     = diag < 1 ? 0 : 1;
+    const int64_t bypass = std::min<int64_t>( 0, minDelta + signBit );
+    const int64_t reg    = std::min<int64_t>( rate.sig0[d], minDelta + rate.sig1[d] + rate.level[dl] );
+    const int64_t safe   = std::min( reg, bypass );
+    posSumReg [k + 1]    = posSumReg [k] + reg;
+    posSumSafe[k + 1]    = posSumSafe[k] + safe;
+    if( u > 0 && k == 0 )
+    {
+      const int64_t regInferable = std::min<int64_t>( rate.sig0[d], minDelta + rate.level[dl] );
+      sbbReg  += regInferable;
+      sbbSafe += std::min( regInferable, bypass );
+    }
+    else
+    {
+      sbbReg  += reg;
+      sbbSafe += safe;
+    }
+    if( k == sbbSize - 1 )
+    {
+      sbbSumReg [u + 1] = sbbSumReg [u] + ( u == 0 ? sbbReg  : std::min<int64_t>( rate.sbb0, rate.sbb1 + sbbReg ) );
+      sbbSumSafe[u + 1] = sbbSumSafe[u] + ( u == 0 ? sbbSafe : std::min<int64_t>( rate.sbb0, sbbSafe ) );
+      sbbReg = sbbSafe = 0;
+    }
+  }
+  return true;
 }
 
 DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool enableOpt ) : QuantRDOQ2( other, useScalingLists, enableOpt ), RateEstimator(), m_commonCtx()

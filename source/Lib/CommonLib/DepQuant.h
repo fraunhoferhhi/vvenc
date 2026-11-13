@@ -178,12 +178,25 @@ namespace DQIntern
 
   struct RateTablesMemo;
 
+  // Lower bounds of the chroma rates the all-zero proof (DepQuant::xProvesAllZero) adds up: the minimum over the three sig
+  // context sets and over the context range a coefficient's diagonal ( x + y ) selects
+  struct ZeroProofRates
+  {
+    int32_t sig0   [2];   // sig_coeff_flag 0 (diagonal < 2: contexts 4..7, else 0..3)
+    int32_t sig1   [2];   // sig_coeff_flag 1
+    int32_t level  [2];   // the gtx bits of a nonzero level, bits[1..5] (sign bit included; diagonal 0: contexts 6..10, else 1..5)
+    int32_t lastLevel;    // the same for the last position, which uses gtx context 0
+    int32_t sbb0;         // sb_coded_flag 0 and 1, both contexts
+    int32_t sbb1;
+  };
+
   class RateEstimator
   {
   public:
     RateEstimator () {}
     ~RateEstimator() {}
-    void initCtx  ( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
+    // returns whether the sig and gtx tables were built (not taken from the memo)
+    bool initCtx  ( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
                     RateTablesMemo& memo );
 
     inline const BinFracBits *sigSbbFracBits() const { return m_tables->sigSbb; }
@@ -200,6 +213,9 @@ namespace DQIntern
 
   private:
     void  xSetLastCoeffOffset ( const FracBitsAccess& fracBitsAccess, const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID );
+
+  protected:
+    void  xSetZeroProofRates  ( ZeroProofRates& rates ) const;   // from the chroma tables held now
 
   public:
     static const unsigned sm_numCtxSetsSig    = 3;
@@ -496,6 +512,7 @@ public:
 
 private:
   void    xQuantDQ          ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff );
+  bool    xProvesAllZero    ( const DQIntern::TUParameters& tuPars, const TCoeff* tCoeff, const int firstTestPos, const TCoeff quantCoeff );
   void    xDequantDQ        ( const TransformUnit& tu, CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP, bool enableScalingLists, int* quantCoeff );
   // DepQuantDecide.h: templates on the set of per-coefficient kernels (PointerKernels in DepQuant.cpp, one per x86 SIMD level)
   template<class Kernels>
@@ -518,6 +535,9 @@ private:
   DQIntern::RateTablesMemo m_rateTablesMemo;   // after the trellis and state arrays: see RateTablesMemo
   DQIntern::QuantBlockMemo m_quantBlockMemo;
   int                 m_firstScanIdx = 0;   // the scan position the current block's trellis starts at
+  // the rate minima of xProvesAllZero, refreshed by it after the chroma tables were built; after the trellis members, so that they keep their offsets
+  DQIntern::ZeroProofRates m_zeroProofRates;
+  bool                     m_zeroProofRatesStale = true;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   void initDepQuantX86();
