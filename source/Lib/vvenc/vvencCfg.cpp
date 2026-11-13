@@ -973,7 +973,16 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ?      0.0 : 0.5 ;
   if( c->m_maxParallelFrames < 0 )
   {
-    c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
+    // MTProfile 0 has no tiles, WPP or IFP: a picture starts only when its references are fully reconstructed and
+    // keeps only about four workers busy along its CTU wavefront (measured at 4K medium), so with 20 or more threads four pictures in flight
+    // leave workers idle and eight keep them busy (more memory: one picture encoder each). With CTU 64 (presets fast
+    // and faster) the CTUs are short and four pictures already fill the threads; eight cost more than they gain.
+    // Rate control supports up to four parallel frames, and they must not exceed the GOP size. Rate capping and
+    // all-intra coding keep four (not measured).
+    const bool rateCapped     = c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX;
+    const bool manyFramesHelp = c->m_mtProfile == 0 && c->m_numThreads >= 20 && c->m_CTUSize == 128
+                                && c->m_RCTargetBitrate == 0 && !rateCapped && c->m_GOPSize >= 8 && c->m_IntraPeriod != 1;
+    c->m_maxParallelFrames    = std::min( c->m_numThreads, manyFramesHelp ? 8 : 4 );
   }
 
   if( c->m_ifpLines > 0 && !c->m_ifp )
