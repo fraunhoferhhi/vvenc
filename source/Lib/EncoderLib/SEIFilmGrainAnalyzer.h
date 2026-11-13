@@ -232,6 +232,7 @@ private:
   {
     double a1 = 0.0, a3 = 0.0, a5 = 0.0, r = 1.0;
     double nonDcShare = 1.0;   // share of the grain variance outside the DC coefficient of 16x16 blocks
+    double powerScale = 1.0;   // share of the measured grain power the synthesized grain gets (fitArFilter)
     bool   valid = false;
   };
   bool              m_arModel = false;
@@ -290,6 +291,7 @@ private:
 
   void getVtmParameters      ( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
   void getArParameters       ( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
+  bool arParametersAt        ( double strength, int log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ], bool& usable ) const;
   void fitArFilter           ( ComponentID compId );
 
   void estimateCutoffFreq    ( ComponentID compId, int bitDepth );

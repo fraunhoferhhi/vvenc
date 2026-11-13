@@ -195,7 +195,19 @@ constexpr int    GRAIN_CHANGE_MIN_BLOCKS   = 64;
 constexpr double AR_PATTERN_STDDEV[ 2 ] = { 3.83, 3.60 };   // luma, chroma
 constexpr int    AR_SPECTRUM_BINS         = 64;    // frequency bins per direction of the AR spectrum computation
 constexpr int    AR_FIT_ITERATIONS        = 200;   // largest number of Nelder-Mead iterations of the AR filter fit
-constexpr double AR_FIT_TOLERANCE         = 1e-5;  // the fit stops when its simplex spans less than this L1 error
+constexpr double AR_FIT_TOLERANCE         = 1e-5;  // the fit stops when its simplex spans less than this cost
+// The fitted filter must be stable (arFilterStable) with this margin: poles no closer to the unit circle, so that the
+// quantized filter is stable too and the grain reaches its level within the few rows the synthesis runs in before its
+// pattern starts.
+constexpr double AR_STABILITY_MARGIN      = 1.05;
+// Largest variance gain of the fitted filter (variance of its output per variance of the noise it filters). vvdec builds
+// the pattern in 8 bits, clipped to +-127, from noise of standard deviation 31.5: at gain 4 the pattern's is 63 and 4 % of
+// its samples clip (10 % at gain 6), which the calibration of the scaling factors (AR_PATTERN_STDDEV) does not model.
+constexpr double AR_MAX_GAIN              = 4.0;
+// In the fit of the filter, grain power beyond the measured counts this many times more than power missing, as in the
+// fit to the grain the coding lost (LOST_GRAIN_OVERSHOOT_WEIGHT): too much grain is worse than too little.
+constexpr double AR_OVERSHOOT_WEIGHT      = 4.0;
+constexpr double AR_MIN_POWER_SCALE       = 0.05;  // smallest share of the measured grain power the fit may give
 
 // Outliers of the temporal residual: per intensity bin (16 bins), blocks above this ratio of the median grain variance
 // are motion compensation failures; bins need this many blocks for the median.
@@ -579,13 +591,15 @@ public:
   static constexpr size_t SCRATCH_SIZE = AR_SPECTRUM_BINS * AR_SPECTRUM_BINS + 16 * AR_SPECTRUM_BINS;
 
   // spec: 256 values, the DC coefficient set to 0 and the rest normalized to sum 1; returns the share of the power
-  // outside the DC coefficient. scratch: SCRATCH_SIZE values.
-  double compute( double a1, double a3, double a5, double r, double* spec, std::vector<double>& scratch ) const
+  // outside the DC coefficient. scratch: SCRATCH_SIZE values. gain, if given, receives the filter's variance gain (the
+  // mean of its power spectrum).
+  double compute( double a1, double a3, double a5, double r, double* spec, std::vector<double>& scratch, double* gain = nullptr ) const
   {
     constexpr int N = 16, K = AR_SPECTRUM_BINS;
     scratch.resize( SCRATCH_SIZE );
     double* psd  = scratch.data();
     double* rows = psd + K * K;
+    double  psdSum = 0.0;
     for( int ky = 0; ky < K; ky++ )
     {
       for( int kx = 0; kx < K; kx++ )
@@ -597,6 +611,7 @@ public:
         const double im = -( a1 * m_sin[ kx ] + a1 * r * m_sin[ ky ] + a3 * r * ( m_sin[ sum ] + m_sin[ diff ] )
                         + a5 * m_sin[ x2 ] + a5 * r * r * m_sin[ y2 ] );
         psd[ ky * K + kx ] = 1.0 / std::max( ( 1.0 - re ) * ( 1.0 - re ) + im * im, 1e-6 );
+        psdSum            += psd[ ky * K + kx ];
       }
     }
     for( int v = 0; v < N; v++ )
@@ -631,6 +646,10 @@ public:
     {
       spec[ i ] /= nonDc;
     }
+    if( gain )
+    {
+      *gain = psdSum / ( K * K );
+    }
     return nonDc / total;
   }
 
@@ -648,6 +667,57 @@ struct ArTaps
     : left( c[ 1 ] ), top( ( c[ 1 ] * c[ 4 ] ) >> log2 ), diag( ( c[ 3 ] * c[ 4 ] ) >> log2 ), leftLeft( c[ 5 ] ),
       topTop( ( c[ 5 ] * c[ 4 ] * c[ 4 ] ) >> ( 2 * log2 ) ) {}
 };
+
+// Whether the recursion of vvdec's SEI AR mode, x = left * x(-1, 0) + leftLeft * x(-2, 0) + top * x(0, -1)
+// + diag * ( x(-1, -1) + x(1, -1) ) + topTop * x(0, -2) + noise, is stable, with poles at least the factor margin away
+// from the unit circle. It is a recursive filter on a non-symmetric half plane (the row above reaches to the right), stable
+// exactly when (Ekstrom and Woods, "Two-dimensional spectral factorization with applications in recursive digital
+// filtering", IEEE Trans. ASSP, 1976)
+//  - the row part 1 - left z^-1 - leftLeft z^-2 has both roots inside the unit circle (Jury's conditions), and
+//  - at every horizontal frequency w, the polynomial of the vertical delay v, c0 + c1 v + c2 v^2 with
+//    c0 = 1 - left e^-iw - leftLeft e^-2iw, c1 = -( top + 2 diag cos w ) and c2 = -topTop, has no root with |v| <= 1.
+// The sum of the absolute tap weights below 1, the test used before, is sufficient but far from necessary: it rejects the
+// filters whose spectrum falls off toward the finest frequencies as film grain's does (a1 0.746, a3 -0.140, a5 -0.259,
+// r 0.89 has the sum 2.12 and is stable). On 260 random filters the test agreed with the recursion run on noise except
+// for 7 that it calls unstable and that had not grown yet after 160 rows.
+bool arFilterStable( double left, double top, double diag, double leftLeft, double topTop, double margin )
+{
+  constexpr double PI = 3.14159265358979323846;
+  // the row part with z scaled by the margin: z^2 - l z - ll with both roots inside the unit circle
+  const double l = left * margin, ll = leftLeft * margin * margin;
+  if( std::fabs( ll ) >= 1.0 || 1.0 - l - ll <= 0.0 || 1.0 + l - ll <= 0.0 )
+  {
+    return false;
+  }
+  const double c2 = -topTop;
+  for( int k = 0; k < AR_SPECTRUM_BINS; k++ )
+  {
+    const double w    = 2.0 * PI * k / AR_SPECTRUM_BINS;
+    const double c0re = 1.0 - left * std::cos( w ) - leftLeft * std::cos( 2.0 * w );
+    const double c0im = left * std::sin( w ) + leftLeft * std::sin( 2.0 * w );
+    const double c1   = -( top + 2.0 * diag * std::cos( w ) );
+    if( std::fabs( c2 ) < 1e-12 )
+    {
+      // one root, v = -c0 / c1
+      if( c0re * c0re + c0im * c0im <= margin * margin * c1 * c1 )
+      {
+        return false;
+      }
+      continue;
+    }
+    // the roots ( -c1 +- sqrt( c1^2 - 4 c2 c0 ) ) / ( 2 c2 ): the complex square root of the discriminant d
+    const double dre = c1 * c1 - 4.0 * c2 * c0re, dim = -4.0 * c2 * c0im;
+    const double mod = std::sqrt( dre * dre + dim * dim );
+    const double sre = std::sqrt( std::max( 0.0, ( mod + dre ) / 2.0 ) );
+    const double sim = ( dim < 0.0 ? -1.0 : 1.0 ) * std::sqrt( std::max( 0.0, ( mod - dre ) / 2.0 ) );
+    const double limit = 2.0 * std::fabs( c2 ) * margin;   // |root| > margin  <=>  |-c1 +- s| > limit
+    if( ( -c1 + sre ) * ( -c1 + sre ) + sim * sim <= limit * limit || ( -c1 - sre ) * ( -c1 - sre ) + sim * sim <= limit * limit )
+    {
+      return false;
+    }
+  }
+  return true;
+}
 
 // Energy of the impulse response of vvdec's AR filter with the signalled (integer) coefficients c[ 1 ] to c[ 5 ].
 double arEnergy( const int c[ 6 ], int log2 )
@@ -1056,61 +1126,85 @@ void FGAnalyzer::getVtmParameters( double strength, int& log2ScaleFactor, SeiFgc
 // The parameters of the auto-regressive model: model values scale, a1, 0 (no correlation between the components), a3,
 // r and a5, the last four in units of 2^-log2ScaleFactor. The scaling factors are calibrated with the impulse response
 // energy of the quantized filter (AR_PATTERN_STDDEV); the log2 scale factor is the largest (2 to 7) at which they stay
-// at MAX_SCALING_FACTOR or below and every filter coefficient fits [MIN_AR_COEF, MAX_AR_COEF], for the finest steps of
-// both the scaling factors and the filter coefficients.
+// at MAX_SCALING_FACTOR or below, for the finest steps of both the scaling factors and the filter coefficients, and at
+// which the quantized filters can be signalled (stable, coefficients in range). When the scaling factors fit at none of
+// those, the smallest such log2 scale factor is taken and the scaling factors are limited (weaker grain); without any, no
+// grain is signalled.
 void FGAnalyzer::getArParameters( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const
 {
-  // H.274 limits the model values of the auto-regressive model to +-2^(film grain bit depth - 1). Without a separate colour
-  // description in the SEI (as here) FFmpeg takes that bit depth as 8, so it accepts only [-128, 127] and drops the whole
-  // access unit otherwise. r above 1 (grain correlated further vertically than horizontally) reached 145 to 469 at log2 7
-  // on film sources (game_of_death, sintel_trailer, tears_of_steel).
-  constexpr int MIN_AR_COEF = -128, MAX_AR_COEF = 127;
+  int smallestUsable = 0;
   for( log2ScaleFactor = 7; log2ScaleFactor >= 2; log2ScaleFactor-- )
   {
-    const int one = 1 << log2ScaleFactor;
-    bool fits = true;
-    for( int c = 0; c < MAX_NUM_COMP; c++ )
-    {
-      SeiFgc::CompModel& cm = compModel[ c ];
-      cm = m_compModel[ c ];
-      const ArFilter& f = m_arFilter[ c ];
-      if( !cm.presentFlag || strength <= 0.0 || !f.valid )
-      {
-        cm.presentFlag = false;
-        continue;
-      }
-      int coef[ 6 ] = { 0, (int) std::lround( f.a1 * one ), 0, (int) std::lround( f.a3 * one ), (int) std::lround( f.r * one ),
-                        (int) std::lround( f.a5 * one ) };
-      for( int k = 1; k < 6; k++ )
-      {
-        fits = fits && coef[ k ] >= MIN_AR_COEF && coef[ k ] <= MAX_AR_COEF;
-        if( log2ScaleFactor == 2 )   // the last step: clamp before the energy calibration below, so both use the signalled
-        {                            // filter (only r can exceed the range there, |a| < 0.98; a smaller r is more stable)
-          coef[ k ] = Clip3( MIN_AR_COEF, MAX_AR_COEF, coef[ k ] );
-        }
-      }
-      const int bitDepth = m_bitDepths[ toChannelType( ComponentID( c ) ) ];
-      const double patternStddev = AR_PATTERN_STDDEV[ c == COMP_Y ? 0 : 1 ] * std::sqrt( arEnergy( coef, log2ScaleFactor ) );
-      bool anyGrain = false;
-      cm.numModelValues = 6;
-      for( int i = 0; i < cm.numIntensityIntervals; i++ )
-      {
-        std::vector<int>& v = cm.intensityValues[ i ].compModelValue;
-        const double stddev = v[ 0 ] / ( 2.0 * m_strengthScale ) / std::sqrt( f.nonDcShare );
-        const double scale  = std::ldexp( stddev * strength, log2ScaleFactor + 10 - bitDepth ) / patternStddev;
-        fits     = fits && scale <= MAX_SCALING_FACTOR + 0.5;
-        v.assign( 6, 0 );
-        v[ 0 ]   = std::min( MAX_SCALING_FACTOR, (int) ( scale + 0.5 ) );
-        std::copy( coef + 1, coef + 6, v.begin() + 1 );
-        anyGrain = anyGrain || v[ 0 ] > 0;
-      }
-      cm.presentFlag = anyGrain;
-    }
-    if( fits || log2ScaleFactor == 2 )
+    bool usable = true;
+    const bool fits = arParametersAt( strength, log2ScaleFactor, compModel, usable );
+    if( fits && usable )
     {
       return;
     }
+    smallestUsable = usable ? log2ScaleFactor : smallestUsable;
   }
+  log2ScaleFactor = std::max( smallestUsable, 2 );
+  bool usable = true;
+  arParametersAt( strength, log2ScaleFactor, compModel, usable );
+  for( int c = 0; !usable && c < MAX_NUM_COMP; c++ )
+  {
+    compModel[ c ].presentFlag = false;
+  }
+}
+
+// H.274 limits the model values of the auto-regressive model to +-2^(film grain bit depth - 1). Without a separate colour
+// description in the SEI (as here) FFmpeg takes that bit depth as 8: it accepts only [-128, 127] and drops the whole
+// access unit otherwise. The ratio r of the vertical to the horizontal correlation is above 1 where the grain is
+// correlated further vertically, and then exceeds 127 at log2 scale factor 7 (gangster_chase: 128-147 in 48 of 712 SEIs).
+static constexpr int MIN_AR_COEFFICIENT = -128;
+static constexpr int MAX_AR_COEFFICIENT = 127;
+
+// Sets the parameters of the auto-regressive model for one log2 scale factor. Returns whether all scaling factors stay
+// at MAX_SCALING_FACTOR or below (they are limited to it); usable: whether every component's quantized filter is stable,
+// with its upper taps computed as vvdec computes them (ArTaps), and has all coefficients in [MIN_AR_COEFFICIENT,
+// MAX_AR_COEFFICIENT].
+bool FGAnalyzer::arParametersAt( double strength, int log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ], bool& usable ) const
+{
+  const int one = 1 << log2ScaleFactor;
+  bool fits = true;
+  usable = true;
+  for( int c = 0; c < MAX_NUM_COMP; c++ )
+  {
+    SeiFgc::CompModel& cm = compModel[ c ];
+    cm = m_compModel[ c ];
+    const ArFilter& f = m_arFilter[ c ];
+    if( !cm.presentFlag || strength <= 0.0 || !f.valid )
+    {
+      cm.presentFlag = false;
+      continue;
+    }
+    const int coef[ 6 ] = { 0, (int) std::lround( f.a1 * one ), 0, (int) std::lround( f.a3 * one ), (int) std::lround( f.r * one ),
+                            (int) std::lround( f.a5 * one ) };
+    const ArTaps taps( coef, log2ScaleFactor );
+    const double unit = 1.0 / one;
+    usable = usable && arFilterStable( taps.left * unit, taps.top * unit, taps.diag * unit, taps.leftLeft * unit, taps.topTop * unit, 1.0 );
+    for( int k = 1; k < 6; k++ )
+    {
+      usable = usable && coef[ k ] >= MIN_AR_COEFFICIENT && coef[ k ] <= MAX_AR_COEFFICIENT;
+    }
+    const int bitDepth = m_bitDepths[ toChannelType( ComponentID( c ) ) ];
+    const double patternStddev = AR_PATTERN_STDDEV[ c == COMP_Y ? 0 : 1 ] * std::sqrt( arEnergy( coef, log2ScaleFactor ) );
+    bool anyGrain = false;
+    cm.numModelValues = 6;
+    for( int i = 0; i < cm.numIntensityIntervals; i++ )
+    {
+      std::vector<int>& v = cm.intensityValues[ i ].compModelValue;
+      const double stddev = v[ 0 ] / ( 2.0 * m_strengthScale ) * std::sqrt( f.powerScale / f.nonDcShare );
+      const double scale  = std::ldexp( stddev * strength, log2ScaleFactor + 10 - bitDepth ) / patternStddev;
+      fits     = fits && scale <= MAX_SCALING_FACTOR + 0.5;
+      v.assign( 6, 0 );
+      v[ 0 ]   = std::min( MAX_SCALING_FACTOR, (int) ( scale + 0.5 ) );
+      std::copy( coef + 1, coef + 6, v.begin() + 1 );
+      anyGrain = anyGrain || v[ 0 ] > 0;
+    }
+    cm.presentFlag = anyGrain;
+  }
+  return fits;
 }
 
 // The scaling factors are calibrated, because the standard deviation of the synthesized grain depends on the cut-off
@@ -2534,13 +2628,98 @@ void FGAnalyzer::fitCutoffPair( const std::vector<double>& meanSq, bool chroma42
   }
 }
 
-// Fits the AR filter of a component to the spectrum of its grain, accumulated over all intensities: the Nelder-Mead
-// minimum of the L1 distance between the normalized spectra, starting from the previous filter, or from a mild
-// low-pass one for the first fit. Filters that are not stable (sum of the absolute tap weights 0.98 or more) are
-// excluded. For chroma the model spectrum is the one vvdec synthesizes, the analytic spectrum times
-// AR_SYNTHESIS_RATIO_CHROMA, renormalized: the fitted filters then give 0.02-0.06 lower chroma spectrum errors on
-// Beekeeper. Luma is fitted to the analytic spectrum: the same correction for luma brought no gain (there the fixed
-// pattern of the synthesis is the limit) and made one 4K clip worse.
+static int    lostGrainGroup( int k );             // the u + v group of a coefficient, defined with the lost-grain fit
+static double lostGrainHorizontalShare( int k );   // its share in the direction "horizontal frequency higher"
+
+// The power of a 16x16 grain spectrum ([ vertical * 16 + horizontal ], sum in total) per u + v group of the lost-grain
+// fit (1-2, 3-5, 6-8, 9-12, 13-30) and direction (0: the horizontal frequency is the higher one, 1: the vertical one;
+// the diagonal counts half in each), as shares of the total.
+struct ArBandPower
+{
+  double p[ FGAnalyzer::LostGrainPower::GROUPS ][ FGAnalyzer::LostGrainPower::DIRECTIONS ] = {};
+};
+
+static ArBandPower arBandPower( const double* spectrum, double total )
+{
+  constexpr int N = 16;
+  ArBandPower bands;
+  for( int v = 0; v < N; v++ )
+  {
+    for( int h = v ? 0 : 1; h < N; h++ )
+    {
+      const int    k     = h * N + v;   // the lost-grain fit's index: horizontal * 16 + vertical
+      const double share = lostGrainHorizontalShare( k );
+      bands.p[ lostGrainGroup( k ) ][ 0 ] += share * spectrum[ v * N + h ] / total;
+      bands.p[ lostGrainGroup( k ) ][ 1 ] += ( 1.0 - share ) * spectrum[ v * N + h ] / total;
+    }
+  }
+  return bands;
+}
+
+// How well grain with the band powers model, at the best share of the measured grain's power (returned in powerScale,
+// AR_MIN_POWER_SCALE to 1: never more grain power than measured), matches the measured band powers: the sum of the
+// squared log ratios over the bands from u + v = 3, overshoot weighted (AR_OVERSHOOT_WEIGHT); the lowest band
+// (u + v = 1, 2) counts only where the model exceeds it, as in the lost-grain fit (it holds what is left of the picture
+// in the flat blocks as well as grain). The sum is convex in the logarithm of the share, so a ternary search finds it.
+static double arBandCost( const ArBandPower& measured, const ArBandPower& model, double& powerScale )
+{
+  constexpr int GROUPS = FGAnalyzer::LostGrainPower::GROUPS, DIRECTIONS = FGAnalyzer::LostGrainPower::DIRECTIONS;
+  double logRatio[ GROUPS * DIRECTIONS ];   // log( model / measured ) of the bands that count
+  bool   lowest  [ GROUPS * DIRECTIONS ];
+  int    bands = 0;
+  for( int g = 0; g < GROUPS; g++ )
+  {
+    for( int d = 0; d < DIRECTIONS; d++ )
+    {
+      if( measured.p[ g ][ d ] > 0.0 && model.p[ g ][ d ] > 0.0 )
+      {
+        logRatio[ bands ] = std::log( model.p[ g ][ d ] / measured.p[ g ][ d ] );
+        lowest[ bands++ ] = g == 0;
+      }
+    }
+  }
+  auto mismatch = [ & ]( double logScale )
+  {
+    double sum = 0.0;
+    for( int i = 0; i < bands; i++ )
+    {
+      const double r = logScale + logRatio[ i ];
+      sum += r > 0.0 ? AR_OVERSHOOT_WEIGHT * r * r : lowest[ i ] ? 0.0 : r * r;
+    }
+    return sum;
+  };
+  double low = std::log( AR_MIN_POWER_SCALE ), high = 0.0;
+  for( int i = 0; i < 40; i++ )
+  {
+    const double a = low + ( high - low ) / 3.0, b = high - ( high - low ) / 3.0;
+    if( mismatch( a ) <= mismatch( b ) )
+    {
+      high = b;
+    }
+    else
+    {
+      low = a;
+    }
+  }
+  powerScale = std::exp( ( low + high ) / 2.0 );
+  return mismatch( ( low + high ) / 2.0 );
+}
+
+// Fits the AR filter of a component to the spectrum of its grain, accumulated over all intensities, by Nelder-Mead from
+// the previous filter, or for the first fit from two starts. The filter and the share of the measured grain power it is
+// given (ArFilter::powerScale) are those whose grain best matches the measured power per frequency band and direction
+// (arBandCost), the yardstick of the fit to the grain the coding lost. The L1 distance between the normalized spectra,
+// used before, is decided by the few large coefficients at the lowest frequencies and left the finest band too strong:
+// on the measured spectrum of nocturne_grain its best filter has 1.51 times the measured power at u + v 13-30 and
+// 0.83-0.97 times in the bands below, the band fit 0.98 and 0.92-1.03 (gangster_chase: 1.08 and 0.88-1.07 against
+// 0.98-1.02). Where no filter of the model has the grain's shape (Top Gun's coarse grain: the L1 fit gives 0.71, 1.58,
+// 2.63 and 1.46 times the measured power in the four bands), the band fit lowers the power instead of exceeding it
+// (0.37, 0.82, 1.43 and 0.81 at 0.55 of the measured power). Encoded, nocturne_grain's synthesized grain went from
+// 1.54-2.18 times the power the coding lost at u + v 13-30 to 0.83-1.19 (0.56-0.90 to 0.64-0.97 in the bands below), and
+// the finest band of the decoded picture with grain from 1.24-1.48 of the source's to 0.91-1.09.
+// Filters that are not stable (arFilterStable) or whose variance gain exceeds AR_MAX_GAIN are excluded. For chroma the
+// model spectrum is the one vvdec synthesizes, the analytic spectrum times AR_SYNTHESIS_RATIO_CHROMA, renormalized (the
+// fixed pattern of the luma synthesis follows the analytic spectrum).
 void FGAnalyzer::fitArFilter( ComponentID compId )
 {
   constexpr int N = BLOCK_SIZE;
@@ -2574,6 +2753,8 @@ void FGAnalyzer::fitArFilter( ComponentID compId )
     v /= total;
   }
 
+  const ArBandPower measuredBands = arBandPower( measured, 1.0 );
+  double powerScale = 1.0;   // of the filter the fit evaluated last
   static const ArSpectrum arSpectrum;
   const float* ratio = compId == COMP_Y ? nullptr : &AR_SYNTHESIS_RATIO_CHROMA[ 0 ][ 0 ];   // [ vertical * N + horizontal ]
   double model[ N * N ];
@@ -2581,11 +2762,16 @@ void FGAnalyzer::fitArFilter( ComponentID compId )
   auto error = [ & ]( const double p[ 4 ] )
   {
     const double a1 = p[ 0 ], a3 = p[ 1 ], a5 = p[ 2 ], r = p[ 3 ];
-    if( r < 0.0 || std::fabs( a1 ) * ( 1 + r ) + 2 * std::fabs( a3 * r ) + std::fabs( a5 ) * ( 1 + r * r ) >= 0.98 )
+    if( r < 0.0 || !arFilterStable( a1, a1 * r, a3 * r, a5, a5 * r * r, AR_STABILITY_MARGIN ) )
     {
       return std::numeric_limits<double>::max();
     }
-    arSpectrum.compute( a1, a3, a5, r, model, scratch );
+    double gain = 0.0;
+    arSpectrum.compute( a1, a3, a5, r, model, scratch, &gain );
+    if( gain > AR_MAX_GAIN )
+    {
+      return std::numeric_limits<double>::max();
+    }
     double sum = 1.0;   // the analytic spectrum is normalized; the one weighted by the ratio is renormalized
     if( ratio )
     {
@@ -2596,28 +2782,36 @@ void FGAnalyzer::fitArFilter( ComponentID compId )
         sum        += model[ i ];
       }
     }
-    double e = 0.0;
-    for( int i = 0; i < N * N; i++ )
-    {
-      e += std::fabs( model[ i ] / sum - measured[ i ] );
-    }
-    return e;
+    return arBandCost( measuredBands, arBandPower( model, sum ), powerScale );
   };
 
   ArFilter& f = m_arFilter[ compId ];
-  const double starts[ 2 ][ 4 ] = { { f.a1, f.a3, f.a5, f.r }, { 0.3, 0.0, 0.0, 1.0 } };
+  // the starts: the previous filter, or for the first fit a mild low-pass and one whose spectrum falls off toward the
+  // finest frequencies (the fit can have more than one minimum)
+  const double starts[ 3 ][ 4 ] = { { f.a1, f.a3, f.a5, f.r }, { 0.3, 0.0, 0.0, 1.0 }, { 0.7, -0.1, -0.25, 0.9 } };
   double best[ 4 ] = { 0 }, bestError = std::numeric_limits<double>::max();
-  for( int s = f.valid ? 0 : 1; s < ( f.valid ? 1 : 2 ); s++ )
+  for( int s = f.valid ? 0 : 1; s < ( f.valid ? 1 : 3 ); s++ )
   {
-    // Nelder-Mead on the four parameters
+    // Nelder-Mead on the four parameters. The simplex is the start and, per parameter, the start moved by the first of
+    // these steps that gives a valid filter: a start at the edge of the valid filters (the previous picture's fit often
+    // is) may have no valid neighbour at the first step, and the search then never left it (Top Gun: the same filter in
+    // all seven analysed pictures).
+    static constexpr double FIRST_STEPS[] = { 0.15, -0.15, 0.075, -0.075, 0.0375, -0.0375 };
     double pts[ 5 ][ 4 ], vals[ 5 ];
-    for( int i = 0; i < 5; i++ )
+    std::copy( starts[ s ], starts[ s ] + 4, pts[ 0 ] );
+    vals[ 0 ] = error( pts[ 0 ] );
+    for( int j = 0; j < 4; j++ )
     {
-      for( int j = 0; j < 4; j++ )
+      for( double step : FIRST_STEPS )
       {
-        pts[ i ][ j ] = starts[ s ][ j ] + ( i == j + 1 ? 0.15 : 0.0 );
+        std::copy( starts[ s ], starts[ s ] + 4, pts[ j + 1 ] );
+        pts[ j + 1 ][ j ] += step;
+        vals[ j + 1 ] = error( pts[ j + 1 ] );
+        if( vals[ j + 1 ] < std::numeric_limits<double>::max() )
+        {
+          break;
+        }
       }
-      vals[ i ] = error( pts[ i ] );
     }
     for( int it = 0; it < AR_FIT_ITERATIONS; it++ )
     {
@@ -2702,6 +2896,8 @@ void FGAnalyzer::fitArFilter( ComponentID compId )
   f.a3 = best[ 1 ];
   f.a5 = best[ 2 ];
   f.r  = best[ 3 ];
+  error( best );   // sets powerScale to the best filter's
+  f.powerScale = powerScale;
   f.nonDcShare = arSpectrum.compute( f.a1, f.a3, f.a5, f.r, model, scratch );
   f.valid = true;
 }
