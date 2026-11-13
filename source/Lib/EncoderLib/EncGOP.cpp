@@ -324,6 +324,27 @@ bool EncGOP::waitForFreeEncoders()
   return true;
 }
 
+bool EncGOP::hasEnoughPictures( const PicList& picList ) const
+{
+  if( EncStage::hasEnoughPictures( picList ) )
+  {
+    return true;
+  }
+
+  // GOPSize + 1 pictures ensure that the GOP of the next picture to initialize is complete (the GOP QP cascade reads all
+  // of it). Pictures arrive in POC order and a GOP covers consecutive POCs, so that GOP is also complete once any picture
+  // of a later GOP has arrived; the list is in coding order, so its last picture has the highest GOP number. A GOP shorter
+  // than GOPSize (the first one, when the intra period is not a multiple of the GOP size) then need not wait for
+  // GOPSize + 1 pictures. With look-ahead, the GOP encoder gets its pictures in coding order from the pre-analysis
+  // encoder, so the size test alone decides.
+  if( m_isPreAnalysis || m_pcEncCfg->m_LookAhead )
+  {
+    return false;
+  }
+  const auto nextPic = std::find_if( picList.begin(), picList.end(), []( const Picture* pic ) { return ! pic->isInitDone; } );
+  return nextPic != picList.end() && picList.back()->gopEntry->m_gopNum > ( *nextPic )->gopEntry->m_gopNum;
+}
+
 void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   CHECK( picList.empty(), "empty input picture list given" );
