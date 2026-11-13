@@ -225,6 +225,17 @@ constexpr int    NUM_REPEATED_GRAIN_BINS   = 1 << REPEATED_GRAIN_BIN_BITS;
 constexpr int    MIN_REPEATED_GRAIN_BIN_BLOCKS = 32;   // a bin with fewer blocks takes the picture's ratio
 constexpr double MAX_REPEATED_GRAIN_RATIO  = 16.0;  // largest variance scale (4x in standard deviation)
 
+// Levels without flat blocks: bright picture areas are mostly texture and edges, so the mask leaves few or no flat blocks
+// there (gangster_chase, 8-bit 160-239: 15 of 558 blocks), and above the brightest measured blocks the scaling function
+// only faded out (extendPoints): the synthesis put back 0.69-0.74 of the source's fine grain at 8-bit 145-176 and 0.43-0.56
+// from 177, while the source's grain there is at least as strong as in the mid-tones. The grain of such a level is read
+// from the finest frequencies of its smoothest blocks instead, relative to the same reading at the levels that have flat
+// blocks (FGAnalyzer::addSmoothBlockPoints). Luma only.
+constexpr int    SMOOTH_BIN_BITS           = 4;     // log2 of the intensity bins
+constexpr int    NUM_SMOOTH_BINS           = 1 << SMOOTH_BIN_BITS;
+constexpr int    MIN_SMOOTH_BIN_BLOCKS     = 32;    // flat blocks of a measured bin; blocks of a bin that is read this way
+constexpr int    SMOOTH_BLOCK_PERCENTILE   = 15;    // the bin's typical smooth block: the median of its smoothest 30 %
+
 constexpr double LOW_THRESHOLD_RATIO       = 0.1;   // Canny: low threshold relative to the strongest gradient
 constexpr int    HIGH_THRESHOLD_RATIO      = 3;     // Canny: high threshold relative to the low threshold
 constexpr double LOW_INTENSITY_RATIO       = 0.1;   // VTM: samples below this share of the range are not analysed
@@ -1229,9 +1240,14 @@ void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUni
         // statistics only when its grain differs by more than GRAIN_CHANGE_RATIO (else old and new data mix).
         return;
       }
+      // both need this component's spatial estimate, which the next component overwrites
+      if( m_improved && ( residual || isLuma( compId ) ) )
+      {
+        measureFineDetail( compId, residual ? spatial : m_grain[ c ] );
+      }
       if( residual )
       {
-        measureRepeatedGrain( compId );   // needs this component's spatial estimate, which the next one overwrites
+        measureRepeatedGrain( compId );
       }
     }
   }
@@ -1283,6 +1299,157 @@ bool FGAnalyzer::markMotionFailures( ComponentID compId )
   return isLuma( compId ) && numFlat >= GRAIN_CHANGE_MIN_BLOCKS && numFailed > MAX_MOTION_FAILURE_SHARE * numFlat;
 }
 
+// The energy of the finest frequencies (highFrequencyEnergy) of the original's 16x16 blocks, in m_fineEnergy: of every
+// block of luma (addSmoothBlockPoints), of the flat blocks only of chroma (measureRepeatedGrain reads no others; the
+// rest stay 0). spatialGrain: the denoised picture minus the original.
+void FGAnalyzer::measureFineDetail( ComponentID compId, const Plane& spatialGrain )
+{
+  const int    bitDepth    = m_bitDepths[ toChannelType( compId ) ];
+  const int    maxStrength = MAX_REAL_SCALE << ( bitDepth - BIT_DEPTH_8 );
+  const Plane& denoised    = m_denoised[ compId ];
+  const int    blocksX     = denoised.width / BLOCK_SIZE;
+  std::vector<double>& energy = m_fineEnergy[ compId ];
+  energy.assign( (size_t) blocksX * ( denoised.height / BLOCK_SIZE ), 0.0 );
+  for( int y = 0; y + BLOCK_SIZE <= denoised.height; y += BLOCK_SIZE )
+  {
+    for( int x = 0; x + BLOCK_SIZE <= denoised.width; x += BLOCK_SIZE )
+    {
+      BlockStats picStats;
+      if( !isLuma( compId ) && !isFlatBlock( m_kernels, m_mask[ compId ], denoised, x, y, maxStrength, picStats ) )
+      {
+        continue;
+      }
+      Pel original[ BLOCK_SIZE * BLOCK_SIZE ];
+      for( int j = 0; j < BLOCK_SIZE; j++ )
+      {
+        const Pel* rd = denoised.row( y + j ) + x;
+        const Pel* rs = spatialGrain.row( y + j ) + x;
+        for( int i = 0; i < BLOCK_SIZE; i++ )
+        {
+          original[ j * BLOCK_SIZE + i ] = (Pel) ( rd[ i ] - rs[ i ] );
+        }
+      }
+      energy[ ( y / BLOCK_SIZE ) * blocksX + x / BLOCK_SIZE ] = highFrequencyEnergy( m_kernels, original, BLOCK_SIZE, bitDepth );
+    }
+  }
+}
+
+// The fine energy of a bin's typical smooth block: SMOOTH_BLOCK_PERCENTILE of its blocks' energies (reorders them).
+static double typicalSmoothEnergy( std::vector<double>& energies )
+{
+  const size_t typical = energies.size() * SMOOTH_BLOCK_PERCENTILE / 100;
+  std::nth_element( energies.begin(), energies.begin() + typical, energies.end() );
+  return energies[ typical ];
+}
+
+// Adds scaling function points for the levels above the darkest measured one that have no flat blocks to measure the grain
+// on. Per intensity bin, the fine energy of its typical smooth block (typicalSmoothEnergy of all its blocks' m_fineEnergy)
+// is mostly grain: texture has little energy at the finest frequencies, and the smoothest blocks have the least of it. In
+// the measured bins (MIN_SMOOTH_BIN_BLOCKS flat blocks) the grain strength per square root of that energy is known; their
+// median is applied to every other bin, whose blocks each add a point at their own mean. The same reading on both sides
+// lets its bias (the selection, the share of the grain at the finest frequencies) cancel: applied to the measured bins
+// themselves it gives 0.67-1.29 times the flat blocks' strength on gangster_chase, nocturne and crowd_run (up to 2x on
+// Top Gun's darkest bins). A clean highlight has no fine energy and gets next to no grain.
+// Texture that is fine even in a bin's smoothest blocks reads as grain (the letters of Top Gun's credits read 5.0-5.4
+// against 1.3-1.5 on the sky beside them), so the reading is limited to the grain of the nearest measured bin on either
+// side.
+// On gangster_chase the synthesis then puts back, of the source's fine grain from 8-bit 177 up, 0.56-1.00 (was 0.43-0.56)
+// with --fga 2 and 0.61-1.11 (was 0.42-0.50) with --fga 3; a limit at the strongest measured bin gave 0.86-1.34 with
+// --fga 3 (too much) and no more than this one with --fga 2.
+// The levels below the darkest measured bin keep its strength (holdDarkStrength). means, strengths: the points of the flat
+// blocks (strengths in the analysis's units), to which the new points are added.
+void FGAnalyzer::addSmoothBlockPoints( ComponentID compId, std::vector<int>& means, std::vector<int>& strengths ) const
+{
+  const int    bitDepth = m_bitDepths[ toChannelType( compId ) ];
+  const int    binShift = bitDepth - SMOOTH_BIN_BITS;
+  const Plane& denoised = m_denoised[ compId ];
+  const int    blocksX  = denoised.width / BLOCK_SIZE;
+
+  // the flat blocks' mean strength per bin, and the bins they measure
+  double flatStrength[ NUM_SMOOTH_BINS ] = {};
+  int    flatBlocks  [ NUM_SMOOTH_BINS ] = {};
+  for( size_t i = 0; i < means.size(); i++ )
+  {
+    flatStrength[ means[ i ] >> binShift ] += strengths[ i ];
+    flatBlocks  [ means[ i ] >> binShift ]++;
+  }
+  auto measured = [ &flatBlocks ]( int bin ) { return flatBlocks[ bin ] >= MIN_SMOOTH_BIN_BLOCKS; };
+  int darkestMeasured = NUM_SMOOTH_BINS;
+  for( int bin = NUM_SMOOTH_BINS - 1; bin >= 0; bin-- )
+  {
+    if( measured( bin ) )
+    {
+      flatStrength[ bin ] /= flatBlocks[ bin ];
+      darkestMeasured      = bin;
+    }
+  }
+
+  // every block's mean and fine energy per bin, then the bin's typical smooth block
+  std::vector<int>    blockMeans   [ NUM_SMOOTH_BINS ];
+  std::vector<double> blockEnergies[ NUM_SMOOTH_BINS ];
+  for( int y = 0; y + BLOCK_SIZE <= denoised.height; y += BLOCK_SIZE )
+  {
+    for( int x = 0; x + BLOCK_SIZE <= denoised.width; x += BLOCK_SIZE )
+    {
+      const int mean = meanStdDev( m_kernels, denoised, x, y ).mean;
+      blockMeans   [ mean >> binShift ].push_back( mean );
+      blockEnergies[ mean >> binShift ].push_back( m_fineEnergy[ compId ][ ( y / BLOCK_SIZE ) * blocksX + x / BLOCK_SIZE ] );
+    }
+  }
+  double smoothEnergy[ NUM_SMOOTH_BINS ] = {};
+  for( int bin = 0; bin < NUM_SMOOTH_BINS; bin++ )
+  {
+    if( (int) blockEnergies[ bin ].size() >= MIN_SMOOTH_BIN_BLOCKS )
+    {
+      smoothEnergy[ bin ] = typicalSmoothEnergy( blockEnergies[ bin ] );
+    }
+  }
+
+  // the measured bins: strength per square root of the smooth block's fine energy
+  std::vector<double> strengthPerDetail;
+  for( int bin = darkestMeasured; bin < NUM_SMOOTH_BINS; bin++ )
+  {
+    if( measured( bin ) && smoothEnergy[ bin ] > 0.0 )
+    {
+      strengthPerDetail.push_back( flatStrength[ bin ] / std::sqrt( smoothEnergy[ bin ] ) );
+    }
+  }
+  if( strengthPerDetail.empty() )
+  {
+    return;   // nothing measured to compare with
+  }
+  const double scale = median( strengthPerDetail );
+
+  double darkerStrength = 0.0;   // of the nearest measured bin below
+  for( int bin = darkestMeasured; bin < NUM_SMOOTH_BINS; bin++ )
+  {
+    if( measured( bin ) )
+    {
+      darkerStrength = flatStrength[ bin ];
+      continue;
+    }
+    if( (int) blockMeans[ bin ].size() < MIN_SMOOTH_BIN_BLOCKS )
+    {
+      continue;   // too few blocks for the typical smooth one: the fit and its fade-out bridge the bin
+    }
+    double limit = darkerStrength;   // the stronger grain of the nearest measured bins below and above
+    for( int brighter = bin + 1; brighter < NUM_SMOOTH_BINS; brighter++ )
+    {
+      if( measured( brighter ) )
+      {
+        limit = std::max( limit, flatStrength[ brighter ] );
+        break;
+      }
+    }
+    const int strength = (int) ( std::min( limit, scale * std::sqrt( smoothEnergy[ bin ] ) ) + 0.5 );
+    for( int mean : blockMeans[ bin ] )
+    {
+      means.push_back( mean );
+      strengths.push_back( strength );
+    }
+  }
+}
+
 // The share of the grain that repeats from picture to picture, which the temporal residual does not see: per flat block
 // that markMotionFailures kept, the high-frequency energy of the original over that of the residual per grain variance.
 // m_repeatedGrainRatio gets, per intensity bin, the median of its blocks (the picture's median for a bin with fewer than
@@ -1314,20 +1481,11 @@ void FGAnalyzer::measureRepeatedGrain( ComponentID compId )
       {
         continue;
       }
-      Pel original[ BLOCK_SIZE * BLOCK_SIZE ];   // denoised minus the spatial estimate (denoised - original)
-      for( int j = 0; j < BLOCK_SIZE; j++ )
-      {
-        const Pel* rd = denoised.row( y + j ) + x;
-        const Pel* rs = m_scratch.spatial.row( y + j ) + x;
-        for( int i = 0; i < BLOCK_SIZE; i++ )
-        {
-          original[ j * BLOCK_SIZE + i ] = (Pel) ( rd[ i ] - rs[ i ] );
-        }
-      }
       const double residualEnergy = highFrequencyEnergy( m_kernels, residual.row( y ) + x, residual.width, bitDepth );
       if( residualEnergy > 0.0 )
       {
-        const double ratio = highFrequencyEnergy( m_kernels, original, BLOCK_SIZE, bitDepth ) * m_grainWeight / residualEnergy;
+        const double originalEnergy = m_fineEnergy[ compId ][ ( y / BLOCK_SIZE ) * blocksX + x / BLOCK_SIZE ];
+        const double ratio          = originalEnergy * m_grainWeight / residualEnergy;
         ratios.push_back( ratio );
         binRatios[ picStats.mean >> binShift ].push_back( ratio );
       }
@@ -1522,6 +1680,10 @@ void FGAnalyzer::estimateComponent( ComponentID compId )
     m_numDctBlocks[ compId ][ b.mean ]++;
   }
 
+  if( m_improved && isLuma( compId ) )
+  {
+    addSmoothBlockPoints( compId, vecMean, vecStrength );   // after the spectra: these points have no grain to add to them
+  }
   estimateScalingFactors( vecMean, vecStrength, bitDepth, compId );
   if( m_arModel )
   {

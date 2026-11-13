@@ -250,6 +250,7 @@ private:
   int               m_grainWeight = 1;            // variance of m_grain relative to the grain variance
   Plane             m_mask    [ MAX_NUM_COMP ];   // non-zero where the picture is not flat
   std::vector<uint8_t> m_motionFailed[ MAX_NUM_COMP ];   // per 16x16 block: the temporal residual's compensation failed
+  std::vector<double> m_fineEnergy[ MAX_NUM_COMP ];   // per 16x16 block: the original's energy at the finest frequencies
   std::vector<double> m_repeatedGrainRatio[ MAX_NUM_COMP ];   // per intensity bin: grain variance per variance the residual sees
   std::vector<int>  m_plateaus;   // luma values of the picture's grain-free plateaus (findPlateaus), most blocks first
 
@@ -270,7 +271,9 @@ private:
   void findMask              ( ComponentID compId );
   void maskForScale          ( const Plane& picture, Plane& mask, int bitDepth, int numDilations );
   bool markMotionFailures    ( ComponentID compId );
+  void measureFineDetail     ( ComponentID compId, const Plane& spatialGrain );
   void measureRepeatedGrain  ( ComponentID compId );
+  void addSmoothBlockPoints  ( ComponentID compId, std::vector<int>& means, std::vector<int>& strengths ) const;
 
   // parameter estimation
   void estimateComponent     ( ComponentID compId );
