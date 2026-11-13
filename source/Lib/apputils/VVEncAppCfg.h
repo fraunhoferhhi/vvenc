@@ -908,7 +908,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SliceCrQpOffsetIntraOrPeriodic",                  c->m_sliceChromaQpOffsetIntraOrPeriodic[1],          "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
     ("LumaLevelToDeltaQPMode",                          toLumaLevelToDeltaQP,                                "Luma based Delta QP 0(default): not used. 1: Based on CTU average. -1: auto - enable for HDR PQ")
-    ("GOPQPA",                                          toGOPQPA,                                            "Enable GOP QP-cascade (0: off, 1: on, -1: auto - enable when QPA is disabled)")
+    ("GOPQPA",                                          toGOPQPA,                                            "Enable GOP QP-cascade (0: off, 1: on, -1: auto - enable when QPA is disabled); acts only with MCTF on, whose analysis gives the noise levels it reads")
     ; 
 
     opts.setSubSection("Misc. options");
@@ -1202,7 +1202,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.setSubSection("Film grain analysis");
     opts.addOptions()
     ("fga",                           toFga,                     "Experimental: Film grain analysis generating the FGC SEI message (0: off, 1: the analysis of VTM, 2: (1) + grain measured from the temporal residual, calibrated scaling factors, 3: (2) + auto-regressive grain model)")
-    ("fgastrength",                   toFgaStrength,             "Experimental: Film grain strength in percent of the analysed strength [0...4.0), 0 disables the grain")
+    ("fgastrength",                   toFgaStrength,             "Experimental: Film grain strength as a factor of the analysed strength [0...4.0), 1.0 keeps it, 0 disables the grain")
     ;
   }
 

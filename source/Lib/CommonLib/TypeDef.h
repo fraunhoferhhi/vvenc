@@ -678,12 +678,12 @@ public:
   static_vector( It _it1, It _it2 )                { while( _it1 < _it2 ) _arr[ _size++ ] = *_it1++; }
   static_vector( std::initializer_list<T> _il )
   {
+    CHECKD( _il.size() > N, "capacity exceeded" );
+
     auto _src1 = _il.begin();
     auto _src2 = _il.end();
 
     while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
-
-    CHECKD( _size > N, "capacity exceeded" );
   }
   static_vector( const static_vector<T, N>& other ) : _size( other._size )
   {
@@ -693,6 +693,8 @@ public:
   }
   static_vector& operator=( std::initializer_list<T> _il )
   {
+    CHECKD( _il.size() > N, "capacity exceeded" );
+
     _size = 0;
 
     auto _src1 = _il.begin();
@@ -700,7 +702,7 @@ public:
 
     while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
 
-    CHECKD( _size > N, "capacity exceeded" );
+    return *this;
   }
   
   void resize_noinit( size_t N_ )               { CHECKD( N_ > N, "capacity exceeded" ); _size = N_; }
