@@ -1202,7 +1202,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.setSubSection("Film grain analysis");
     opts.addOptions()
     ("fga",                           toFga,                     "Experimental: Film grain analysis generating the FGC SEI message (0: off, 1: the analysis of VTM, 2: (1) + grain measured from the temporal residual, calibrated scaling factors, 3: (2) + auto-regressive grain model)")
-    ("fgastrength",                   toFgaStrength,             "Experimental: Film grain strength in percent of the analysed strength [0...4.0), 0 disables the grain")
+    ("fgastrength",                   toFgaStrength,             "Experimental: Film grain strength as a factor of the analysed strength [0...4.0), 1.0 keeps it, 0 disables the grain")
     ;
   }
 
