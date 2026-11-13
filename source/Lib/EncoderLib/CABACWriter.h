@@ -60,7 +60,8 @@ class EncCu;
 // coding unit can replay it: InterSearch keeps the final in-order pass of xEstimateInterResidualQT for the CU's final
 // recount, which codes the same transform units again. The replay is exact: the same transform unit coded with the same
 // residual contexts on entry gives the same bits, the same contexts after and the same CUCtx flags. A unit whose
-// contexts on entry differ (another coding order) is coded again.
+// contexts on entry differ (another coding order) is coded again. The static helpers also serve xEstimateInterResidualQT's
+// own replay of the best luma trial in its in-order pass.
 class ResidualCodingCache
 {
 public:
@@ -74,6 +75,11 @@ public:
   // Replays the unit's residual_coding calls if it was kept with these contexts on entry: sets the contexts after,
   // adds the flags to cuCtx and the bits to replayedBits.
   bool      replay      ( const TransformUnit& tu, Ctx& ctx, CUCtx& cuCtx );
+
+  // residual_coding reads and updates these contexts and no others: copy and compare them, add the CUCtx flags it sets
+  static void copyContexts( Ctx& dst, const Ctx& src );
+  static bool sameContexts( const Ctx& a, const Ctx& b );
+  static void mergeFlags  ( CUCtx& dst, const CUCtx& src );
 
 private:
   static const int MAX_TUS = 16;   // a 128x128 coding unit with 32x32 transform units (Log2MaxTbSize 5); 4 with 64x64
@@ -113,6 +119,8 @@ public:
   void        start                     ()                                                    { m_BinEncoder.start(); }
   void        resetBits                 ()                                                    { m_BinEncoder.resetBits(); }
   uint64_t    getEstFracBits            ()                                            const   { return m_BinEncoder.getEstFracBits(); }
+  // bits counted without coding them (a replay of coding kept earlier); estimators only
+  void        addEstFracBits            ( uint64_t fracBits )                                 { CHECKD( isEncoding(), "bits added to an encoder" ); static_cast<BitEstimatorBase&>( m_BinEncoder ).addEstFracBits( fracBits ); }
   uint32_t    getNumBins                ()                                                    { return m_BinEncoder.getNumBins(); }
   bool        isEncoding                ()                                                    { return m_BinEncoder.isEncoding(); }
 

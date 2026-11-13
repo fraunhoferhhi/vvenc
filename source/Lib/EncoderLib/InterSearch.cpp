@@ -3690,6 +3690,30 @@ uint8_t InterSearch::skipSbtByRDCost( int width, int height, int mtDepth, uint8_
   return MAX_UCHAR;
 }
 
+// In place of residual_coding( tu, COMP_Y, cuCtx ) when a trial of xEstimateInterResidualQT coded the same luma residual from
+// the same residual contexts: adds the bits it counted, sets the residual contexts it left and adds the CUCtx flags it set.
+void InterSearch::xReplayLumaResidual( const TransformUnit& tu, CUCtx* cuCtx, uint64_t bits, const CUCtx& flags, const Ctx& ctxAfter )
+{
+#if defined( _DEBUG )
+  // the replay must give what coding it again gives: code it (which counts the bits and sets the contexts) and compare
+  const uint64_t bitsBefore = m_CABACEstimator->getEstFracBits();
+  CUCtx          coded;
+  m_CABACEstimator->residual_coding( tu, COMP_Y, &coded );
+  CHECKD( m_CABACEstimator->getEstFracBits() - bitsBefore != bits || !ResidualCodingCache::sameContexts( m_CABACEstimator->getCtx(), ctxAfter )
+          || coded.violatesLfnstConstrained[CH_L] != flags.violatesLfnstConstrained[CH_L] || coded.violatesMtsCoeffConstraint != flags.violatesMtsCoeffConstraint
+          || coded.mtsLastScanPos != flags.mtsLastScanPos || coded.lfnstLastScanPos != flags.lfnstLastScanPos,
+          "the kept luma residual coding differs from coding it again" );
+#else
+  (void)tu;   // read only by the check above
+  ResidualCodingCache::copyContexts( m_CABACEstimator->getCtx(), ctxAfter );
+  m_CABACEstimator->addEstFracBits( bits );
+#endif
+  if( cuCtx )
+  {
+    ResidualCodingCache::mergeFlags( *cuCtx, flags );
+  }
+}
+
 void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist /*= NULL*/)
 {
   const UnitArea& currArea = partitioner.currArea();
@@ -3724,7 +3748,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   Distortion uiSingleDistComp [3] = { 0, 0, 0 };
 
   const TempCtx ctxStart  ( m_CtxCache, m_CABACEstimator->getCtx() );
-  TempCtx       ctxBest   ( m_CtxCache );
 
   if (bCheckFull)
   {
@@ -3756,6 +3779,17 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     bestTU.UnitArea::operator=( currArea );
 
     bool ctxIsStart = true;   // nothing coded since ctxStart was saved: the first restore below can be skipped
+
+    // The in-order pass below codes the best luma trial's residual again, from the same residual contexts (ctxStart's in
+    // both: before luma only cbf contexts are coded). Its coding is kept here, from the trial that last became the best,
+    // and replayed there: the bits of the residual_coding call, the residual contexts after it, the CUCtx flags it set.
+    bool          lumaKept      = false;   // false also for a forced null luma (cbf 0: nothing to replay)
+    uint64_t      lumaKeptBits  = 0;
+    CUCtx         lumaKeptFlags;
+    TempCtx       lumaKeptCtx   ( m_CtxCache );
+    uint64_t      lumaTrialBits = 0;       // the current trial's, for the keeping
+    CUCtx         lumaTrialFlags;
+
     for( uint32_t c = 0; c < numTBlocks; c++ )
     {
       const ComponentID compID    = ComponentID(c);
@@ -3886,7 +3920,13 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           CUCtx cuCtx;
           cuCtx.isDQPCoded = true;
           cuCtx.isChromaQpAdjCoded = true;
+          const uint64_t bitsBeforeResi = m_CABACEstimator->getEstFracBits();
           m_CABACEstimator->residual_coding(tu, compID, &cuCtx);
+          if( compID == COMP_Y )
+          {
+            lumaTrialBits  = m_CABACEstimator->getEstFracBits() - bitsBeforeResi;
+            lumaTrialFlags = cuCtx;   // fresh before the call: the flags residual_coding set
+          }
           m_CABACEstimator->mts_idx(cu, &cuCtx);
 
           currCompFracBits = m_CABACEstimator->getEstFracBits();
@@ -3927,6 +3967,18 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
           uiSingleDistComp[compID] = currCompDist;
           minCost[compID]          = currCompCost;
+          if( compID == COMP_Y )
+          {
+            // keep this trial's residual coding (the residual contexts are still as residual_coding left them: since then
+            // only mts_idx coded, with its own contexts)
+            lumaKept = currAbsSum > 0;
+            if( lumaKept )
+            {
+              lumaKeptBits  = lumaTrialBits;
+              lumaKeptFlags = lumaTrialFlags;
+              ResidualCodingCache::copyContexts( lumaKeptCtx, m_CABACEstimator->getCtx() );
+            }
+          }
           if (transformMode != (nNumTransformCands - 1))
           {
             bestTU.copyComponentFrom(tu, compID);
@@ -4180,7 +4232,14 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
             resiStarted = true;
           }
           const uint64_t bitsBefore = m_CABACEstimator->getEstFracBits();
-          m_CABACEstimator->residual_coding( tu, compID, resiFlags );
+          if( compID == COMP_Y && lumaKept )
+          {
+            xReplayLumaResidual( tu, resiFlags, lumaKeptBits, lumaKeptFlags, lumaKeptCtx );
+          }
+          else
+          {
+            m_CABACEstimator->residual_coding( tu, compID, resiFlags );
+          }
           resiBits += m_CABACEstimator->getEstFracBits() - bitsBefore;
         }
         uiSingleDist += uiSingleDistComp[compID];

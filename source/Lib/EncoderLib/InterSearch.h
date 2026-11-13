@@ -716,6 +716,7 @@ private:
 
   void xEncodeInterResidualQT         ( CodingStructure &cs, Partitioner &partitioner, const ComponentID compID );
   void xEstimateInterResidualQT       ( CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist = NULL );
+  void xReplayLumaResidual            ( const TransformUnit& tu, CUCtx* cuCtx, uint64_t bits, const CUCtx& flags, const Ctx& ctxAfter );
   uint64_t xGetSymbolFracBitsInter    ( CodingStructure &cs, Partitioner &partitioner );
   void  xSetIntraSearchRangeIBC       ( CodingUnit& pu, int iRoiWidth, int iRoiHeight, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB);
   void  xIBCEstimation                ( CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPred, Mv& rcMv, Distortion& ruiCost );

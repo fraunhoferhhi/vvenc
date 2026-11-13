@@ -60,17 +60,25 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-// residual_coding reads and updates these contexts and no others
-static void copyResidualCodingCtx( Ctx& dst, const Ctx& src )
+void ResidualCodingCache::copyContexts( Ctx& dst, const Ctx& src )
 {
   dst = SubCtx( Ctx::ResidualCoding,    src );
   dst = SubCtx( Ctx::TransformSkipFlag, src );
   dst = SubCtx( Ctx::TsResidualCoding,  src );
 }
 
-static bool sameResidualCodingCtx( const Ctx& a, const Ctx& b )
+bool ResidualCodingCache::sameContexts( const Ctx& a, const Ctx& b )
 {
   return a.sameStates( b, Ctx::ResidualCoding ) && a.sameStates( b, Ctx::TransformSkipFlag ) && a.sameStates( b, Ctx::TsResidualCoding );
+}
+
+void ResidualCodingCache::mergeFlags( CUCtx& dst, const CUCtx& src )
+{
+  dst.violatesLfnstConstrained[CH_L] |= src.violatesLfnstConstrained[CH_L];
+  dst.violatesLfnstConstrained[CH_C] |= src.violatesLfnstConstrained[CH_C];
+  dst.violatesMtsCoeffConstraint     |= src.violatesMtsCoeffConstraint;
+  dst.mtsLastScanPos                 |= src.mtsLastScanPos;
+  dst.lfnstLastScanPos               |= src.lfnstLastScanPos;
 }
 
 CUCtx* ResidualCodingCache::startTU( const TransformUnit& tu, const Ctx& ctx )
@@ -89,7 +97,7 @@ CUCtx* ResidualCodingCache::startTU( const TransformUnit& tu, const Ctx& ctx )
   m_open      = &m_entries[i];
   m_open->tu  = &tu;
   m_open->flags = CUCtx();
-  copyResidualCodingCtx( m_open->ctxIn, ctx );
+  copyContexts( m_open->ctxIn, ctx );
   return &m_open->flags;
 }
 
@@ -97,7 +105,7 @@ void ResidualCodingCache::endTU( const Ctx& ctx, uint64_t bits )
 {
   CHECKD( !m_open, "no transform unit started" );
   m_open->bits = bits;
-  copyResidualCodingCtx( m_open->ctxOut, ctx );
+  copyContexts( m_open->ctxOut, ctx );
   m_open = nullptr;
 }
 
@@ -108,16 +116,12 @@ bool ResidualCodingCache::replay( const TransformUnit& tu, Ctx& ctx, CUCtx& cuCt
     const Entry& e = m_entries[i];
     if( e.tu == &tu )
     {
-      if( !sameResidualCodingCtx( e.ctxIn, ctx ) )
+      if( !sameContexts( e.ctxIn, ctx ) )
       {
         return false;
       }
-      copyResidualCodingCtx( ctx, e.ctxOut );
-      cuCtx.violatesLfnstConstrained[CH_L] |= e.flags.violatesLfnstConstrained[CH_L];
-      cuCtx.violatesLfnstConstrained[CH_C] |= e.flags.violatesLfnstConstrained[CH_C];
-      cuCtx.violatesMtsCoeffConstraint     |= e.flags.violatesMtsCoeffConstraint;
-      cuCtx.mtsLastScanPos                 |= e.flags.mtsLastScanPos;
-      cuCtx.lfnstLastScanPos               |= e.flags.lfnstLastScanPos;
+      copyContexts( ctx, e.ctxOut );
+      mergeFlags( cuCtx, e.flags );
       m_replayedBits += e.bits;
       return true;
     }
