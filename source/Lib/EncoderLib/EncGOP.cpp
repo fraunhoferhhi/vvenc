@@ -1845,9 +1845,11 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
         m_gopEncListInput.clear();
       }
     }
-    if( m_pcEncCfg->m_RCTargetBitrate > 0 || m_pcEncCfg->m_rateCap || m_pcEncCfg->m_ifpLines )
+    if( m_pcEncCfg->m_RCTargetBitrate > 0 || m_pcEncCfg->m_rateCap )
     {
-      // update-list is used for RC, RateCapping or IFP: it takes the newly added pictures
+      // update-list is read only by RC and RateCapping here; with IFP alone its entries, taken in processing order but
+      // released in output order, stop being removed after the first pictures and the list grows for the whole encode.
+      // It takes the newly added pictures.
       std::copy( std::next( procList.begin(), static_cast<std::ptrdiff_t>( numBefore ) ), procList.end(), std::back_inserter( rcUpdateList ) );
     }
   }
