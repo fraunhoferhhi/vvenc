@@ -332,6 +332,24 @@ if( VVENC_ENABLE_X86_SIMD )
     set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
   endif()
+
+  if( MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+    # GCC bug 54412: on Windows GCC keeps the stack only 16-byte aligned, yet stores 32-byte AVX values to it with
+    # aligned moves (vmovdqa, vmovaps), which fault when the slot is not 32-byte aligned: at once in Debug builds, where
+    # every value goes through the stack. GNU as (binutils 2.38 or newer) can write these moves as their unaligned forms,
+    # which are as fast on aligned data. With link-time optimization the code is assembled at link time, so the option
+    # goes to both steps. The check runs the assembler, which rejects the option before 2.38.
+    include( CheckCXXSourceCompiles )
+    set( CMAKE_REQUIRED_FLAGS "-Wa,-muse-unaligned-vector-move" )
+    check_cxx_source_compiles( "int main() { return 0; }" VVENC_GNU_AS_UNALIGNED_VECTOR_MOVE )
+    unset( CMAKE_REQUIRED_FLAGS )
+    if( VVENC_GNU_AS_UNALIGNED_VECTOR_MOVE )
+      add_compile_options( "-Wa,-muse-unaligned-vector-move" )
+      add_link_options( "-Wa,-muse-unaligned-vector-move" )
+    else()
+      message( STATUS "GNU as before 2.38: AVX code may crash with misaligned stack stores (GCC bug 54412)" )
+    endif()
+  endif()
 endif()
 
 if( VVENC_ENABLE_LINK_TIME_OPT )
