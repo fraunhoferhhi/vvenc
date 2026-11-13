@@ -687,6 +687,17 @@ namespace DQIntern
     }
   }
 
+  // The coefficient rows dequantBlock and DepQuant::xQuantDQ clear. A block of 64 rows has coefficients only in its first
+  // 32 (JVET-C0024 zero-out), and nothing reads the rows past them. For the dequantized buffer: neither the inverse
+  // transform (TrQuant::xIT) nor the encoder's next forward transform and quantization of the buffer. For the quantized
+  // levels: the dequantization and the residual coding read only scan positions, which lie in the first 32 rows. The LFNST
+  // cut (xIT reads 4 or 8 rows) can't be used the same way: the encoder reuses the dequantized buffer in its next forward
+  // LFNST pass, and the streams change without the full clear there.
+  static int rowsToClear( const int height )
+  {
+    return std::min( height, JVET_C0024_ZERO_OUT_TH );
+  }
+
   void Quantizer::initQuantBlock(const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, int gValue)
   {
     CHECKD( lambda <= 0.0, "Lambda must be greater than 0" );
@@ -726,17 +737,6 @@ namespace DQIntern
     m_DistAdd                   = (int64_t(1) << m_DistShift) >> 1;
     m_DistStepAdd               = ((m_DistShift+m_QShift)>=64 ? (int64_t)( nomDistFactor * pow(2,m_DistShift+m_QShift) + .5 ) : (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+m_QShift)) + .5 ));
     m_DistOrgFact               = (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+1       )) + .5 );
-  }
-
-  // The coefficient rows dequantBlock and DepQuant::xQuantDQ clear. A block of 64 rows has coefficients only in its first
-  // 32 (JVET-C0024 zero-out), and nothing reads the rows past them. For the dequantized buffer: neither the inverse
-  // transform (TrQuant::xIT) nor the encoder's next forward transform and quantization of the buffer. For the quantized
-  // levels: the dequantization and the residual coding read only scan positions, which lie in the first 32 rows. The LFNST
-  // cut (xIT reads 4 or 8 rows) can't be used the same way: the encoder reuses the dequantized buffer in its next forward
-  // LFNST pass, and the streams change without the full clear there.
-  static int rowsToClear( const int height )
-  {
-    return std::min( height, JVET_C0024_ZERO_OUT_TH );
   }
 
   void Quantizer::initQuantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, QuantBlockMemo& memo )
