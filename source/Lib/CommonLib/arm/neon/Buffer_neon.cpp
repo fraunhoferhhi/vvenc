@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 #include "CommonLib/Buffer.h"
 #include "sum_neon.h"
+#include "transpose_neon.h"
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_BUFFER
 
@@ -276,6 +277,66 @@ void addAvg_strided_neon<4>( const Pel* src0, int src0Stride, const Pel* src1, i
   } while( --height != 0 );
 }
 
+// GPM's split SADs of all merge candidates (EncCu.cpp, geoPrefixSums then geoRunSads per split direction), the NEON
+// version of geoPrefixSums_AVX2 / geoRunSads_AVX2 (BufferX86.h) with their layout: per row the positions 0..width, and
+// at each position the running sums of the 8 lanes (candidates) side by side, so that geoRunSads takes one 8-lane load
+// per run end. The two only work as a pair (the C pair keeps one lane after the other). All lanes are computed: the
+// caller points unused lanes at the original and ignores their sums.
+
+// Per group of 8 columns: each lane's 8 absolute differences, transposed to per column the differences of all lanes,
+// added to the running sums of lanes 0-3 and 4-7 and stored as one position. |org - pred| <= 1023 (both are samples),
+// so a row's sums stay far below 2^32.
+static void geoPrefixSums_neon( const Pel* org, int orgStride, const Pel* const* pred, int predStride, int width, int height, const bool* /*all lanes are computed*/, uint32_t* prefix )
+{
+  CHECKD( width % 8 != 0, "GEO widths are multiples of 8" );
+  static_assert( GEO_PREFIX_LANES == 8, "two vectors of 32-bit sums" );
+
+  for( int y = 0; y < height; y++ )
+  {
+    uint32x4_t sumLow  = vdupq_n_u32( 0 );   // lanes 0..3
+    uint32x4_t sumHigh = vdupq_n_u32( 0 );   // lanes 4..7
+    vst1q_u32( prefix, sumLow );
+    vst1q_u32( prefix + 4, sumHigh );
+    prefix += GEO_PREFIX_LANES;
+
+    for( int x = 0; x < width; x += 8 )
+    {
+      const int16x8_t orgs = vld1q_s16( org + x );
+      uint16x8_t diffs[GEO_PREFIX_LANES];
+      for( int lane = 0; lane < GEO_PREFIX_LANES; lane++ )
+      {
+        diffs[lane] = vreinterpretq_u16_s16( vabdq_s16( orgs, vld1q_s16( pred[lane] + y * predStride + x ) ) );
+      }
+      uint16x8_t columns[8];
+      transpose_8x8_u16( diffs, columns );
+      for( int k = 0; k < 8; k++ )
+      {
+        sumLow  = vaddw_u16( sumLow, vget_low_u16( columns[k] ) );
+        sumHigh = vaddw_u16( sumHigh, vget_high_u16( columns[k] ) );
+        vst1q_u32( prefix, sumLow );
+        vst1q_u32( prefix + 4, sumHigh );
+        prefix += GEO_PREFIX_LANES;
+      }
+    }
+    org += orgStride;
+  }
+}
+
+static void geoRunSads_neon( const uint32_t* prefix, const uint8_t* runStart, const uint8_t* runEnd, int width, int height, const bool* /*all lanes are computed*/, uint32_t* sad )
+{
+  uint32x4_t sumLow  = vdupq_n_u32( 0 );
+  uint32x4_t sumHigh = vdupq_n_u32( 0 );
+  for( int y = 0; y < height; y++, prefix += ( width + 1 ) * GEO_PREFIX_LANES )
+  {
+    const uint32_t* atEnd   = prefix + runEnd[y] * GEO_PREFIX_LANES;
+    const uint32_t* atStart = prefix + runStart[y] * GEO_PREFIX_LANES;
+    sumLow  = vaddq_u32( sumLow, vsubq_u32( vld1q_u32( atEnd ), vld1q_u32( atStart ) ) );
+    sumHigh = vaddq_u32( sumHigh, vsubq_u32( vld1q_u32( atEnd + 4 ), vld1q_u32( atStart + 4 ) ) );
+  }
+  vst1q_u32( sad, sumLow );
+  vst1q_u32( sad + 4, sumHigh );
+}
+
 template<>
 void PelBufferOps::_initPelBufOpsARM<NEON>()
 {
@@ -284,6 +345,10 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   addAvg4  = addAvg_strided_neon<4>;
   addAvg8  = addAvg_strided_neon<8>;
   addAvg16 = addAvg_strided_neon<16>;
+
+  // a pair: geoRunSads_neon reads geoPrefixSums_neon's layout
+  geoPrefixSums = geoPrefixSums_neon;
+  geoRunSads    = geoRunSads_neon;
 }
 
 } // namespace vvenc

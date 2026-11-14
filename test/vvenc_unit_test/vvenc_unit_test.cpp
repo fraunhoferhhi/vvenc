@@ -5317,6 +5317,93 @@ static bool test_InterpolationFilter()
 #define MAX_NUM_ALF_TRANSPOSE_ID 4
 
 template<typename G>
+static bool check_one_deriveClassificationBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, int w, int h,
+                                               int bitDepth, int vbCTUHeight, int vbPos, int dstY, G input_generator )
+{
+  std::ostringstream sstm;
+  sstm << "deriveClassificationBlk w=" << w << " h=" << h << " bitDepth=" << bitDepth << " vbCTUHeight=" << vbCTUHeight
+       << " vbPos=" << vbPos << " dstY=" << dstY;
+
+  // The classification reads 3 samples around the block, its SIMD kernels whole vectors.
+  constexpr int margin    = 16;
+  const int     picWidth  = w + 2 * margin;
+  const int     picHeight = h + 2 * margin;
+  std::vector<Pel> picture( picWidth * picHeight );
+  std::generate( picture.begin(), picture.end(), input_generator );
+  const CPelBuf srcLuma( picture.data(), picWidth, Size( picWidth, picHeight ) );
+
+  // Every 4x4 unit of the largest block, so that writes outside the block show too.
+  constexpr int              numUnits = ( MAX_CU_SIZE / 4 ) * ( MAX_CU_SIZE / 4 );
+  std::vector<AlfClassifier> classRef( numUnits, AlfClassifier( 0, 0 ) );
+  std::vector<AlfClassifier> classOpt( numUnits, AlfClassifier( 0, 0 ) );
+
+  const Area blkDst( 0, dstY, w, h );
+  const Area blk( margin, margin, w, h );
+  ref->m_deriveClassificationBlk( classRef.data(), srcLuma, blkDst, blk, bitDepth + 4, vbCTUHeight, vbPos );
+  opt->m_deriveClassificationBlk( classOpt.data(), srcLuma, blkDst, blk, bitDepth + 4, vbCTUHeight, vbPos );
+
+  for( int i = 0; i < numUnits; i++ )
+  {
+    if( classRef[i].classIdx != classOpt[i].classIdx || classRef[i].transposeIdx != classOpt[i].transposeIdx )
+    {
+      std::cout << "failed: " << sstm.str() << "\n  mismatch at unit " << i << ": ref=" << +classRef[i].classIdx << "/"
+                << +classRef[i].transposeIdx << " opt=" << +classOpt[i].classIdx << "/" << +classOpt[i].transposeIdx
+                << "\n";
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool check_deriveClassificationBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt )
+{
+  printf( "Testing AdaptiveLoopFilter::deriveClassificationBlk\n" );
+
+  struct VirtualBoundaryCase
+  {
+    int ctuHeight;
+    int vbPos;
+    int dstY;
+  };
+  std::vector<VirtualBoundaryCase> vbCases;
+  for( int ctuHeight : { 64, 128 } )
+  {
+    // ALF's luma virtual boundary lies 4 rows above the CTU's bottom; blocks starting at the picture top, below it
+    // and at the rows the classification treats differently next to the boundary.
+    const int vbPos = ctuHeight - 4;
+    for( int dstY : { 0, 8, vbPos - 8, vbPos - 4, vbPos } )
+    {
+      vbCases.push_back( { ctuHeight, vbPos, dstY } );
+    }
+  }
+  vbCases.push_back( { 128, 2 * 128, 64 } );   // a virtual boundary no row meets
+
+  DimensionGenerator rng;
+  for( int bitDepth : { 8, 10, 12 } )
+  {
+    InputGenerator<Pel>  randomSamples{ static_cast<unsigned>( bitDepth ), /*is_signed=*/false };
+    MinMaxGenerator<Pel> extremeSamples{ static_cast<unsigned>( bitDepth ), /*is_signed=*/false };
+    for( const VirtualBoundaryCase& vb : vbCases )
+    {
+      // the largest block and three random ones, all multiples of 8 as the encoder's
+      for( int size = 0; size < 4; size++ )
+      {
+        const int w = size == 0 ? 128 : rng.get( 8, 128, 8 );
+        const int h = size == 0 ? 128 : rng.get( 8, 128, 8 );
+        if( !check_one_deriveClassificationBlk( ref, opt, w, h, bitDepth, vb.ctuHeight, vb.vbPos, vb.dstY,
+                                                randomSamples ) ||
+            !check_one_deriveClassificationBlk( ref, opt, w, h, bitDepth, vb.ctuHeight, vb.vbPos, vb.dstY,
+                                                extremeSamples ) )
+        {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+template<typename G>
 static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, int srcStride, int dstStride,
                                  unsigned int w, unsigned int h, G input_generator, unsigned int linearIndex )
 {
@@ -5780,6 +5867,7 @@ static bool test_AdaptiveLoopFilter()
 
   passed = test_AlfCovariance( num_cases ) && passed;
   passed = test_EncAdaptiveLoopFilter( num_cases ) && passed;
+  passed = check_deriveClassificationBlk( &ref, &opt ) && passed;
 
   for( unsigned w : { 8, 16, 32, 48, 64, 128 } )
   {
