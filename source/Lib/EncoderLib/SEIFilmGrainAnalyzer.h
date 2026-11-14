@@ -114,6 +114,8 @@ void fgaBlockSumsCore   ( const Pel* src, int stride, int64_t& sum, int64_t& sum
 void fgaSquaredDct16Core( const Pel* src, int stride, int maxRange, double* sum );
 void fgaResidualRowCore ( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst );
 
+struct LostGrainSpectrum;   // CommonLib/Picture.h
+
 class FGAnalyzer
 {
 public:
@@ -136,6 +138,39 @@ public:
   // The parameters to signal in the FGC SEI, with the grain strength set to strength percent of the analysed grain:
   // the log2 scale factor and the component models, with scaling factors calibrated against the synthesis.
   void getSignalledParameters( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
+
+  // The film grain SEI fitted to the grain the coding lost. lostGrainSpectra: for one component of a coded picture, the
+  // summed 16x16 DCT power of the original's smoothest blocks (the 30 % with the least low-frequency power per band of
+  // block means) and of the same blocks of the reconstruction, per 8-bit block mean, in ascending order (read by several
+  // threads at once: it changes no state).
+  void lostGrainSpectra( const CPelBuf& org, const CPelBuf& rec, int bitDepth, std::vector<LostGrainSpectrum>& spectra ) const;
+  // An intensity interval's summed spectra reduced to the mean power per block in each u + v frequency group of the fit,
+  // split by direction (once per interval: it does not depend on the cut-offs tried).
+  struct LostGrainPower
+  {
+    static constexpr int GROUPS     = 5;
+    static constexpr int DIRECTIONS = 2;   // 0: horizontal frequency dominates (u > v), 1: vertical (v > u)
+    double orig[ GROUPS ][ DIRECTIONS ] = {};
+    double reco[ GROUPS ][ DIRECTIONS ] = {};
+    int    blocks                       = 0;
+  };
+  static LostGrainPower lostGrainPower( const double orig[ 256 ], const double reco[ 256 ], int blocks );
+  // The scaling factor (0 .. MAX_STANDARD_DEVIATION) at cut-offs (h, w) whose synthesized grain, added to the
+  // reconstruction, best matches the original's power per u + v frequency group and direction (least squares of the log
+  // ratio, overshoot weighted); the synthesized power is capped at LOST_GRAIN_CAP_POWER times that of the analyzer's scale s0
+  // at its cut-offs (h0, w0). Returns the cost, -1: nothing to fit.
+  static double lostGrainFit( const LostGrainPower& power, int bitDepth, bool chroma420, int log2ScaleFactor, int s0, int h0,
+                              int w0, int h, int w, int& scale );
+  // The scaling factor at cut-offs (h, w) whose synthesized in-block power equals that of scale s at (h0, w0).
+  static int equalPowerScale( int s, bool chroma420, int h0, int w0, int h, int w );
+  // The lost-grain fit may put back up to this many times the analyzer's grain power: the coding can lose more than that
+  // (the analyzer's scale falls toward bright areas while the lost grain does not). At 2x Top Gun's mid-bright band
+  // (8-bit 97-128) got back 0.68-0.76 of its lost fine grain and 0.52-0.56 of its medium grain, at 4x 0.93-0.94 and
+  // 0.71-0.72; the overshoot-weighted cost still holds the fit where it is not bound.
+  static constexpr double LOST_GRAIN_CAP_POWER = 4.0;
+  // The largest scaling factor the fit may give at cut-offs (h, w): LOST_GRAIN_CAP_POWER times the power of the analyzer's
+  // scale s0 at (h0, w0).
+  static int lostGrainCapScale( int s0, bool chroma420, int h0, int w0, int h, int w );
 
   // A plane of samples with its own storage; the analysis works on whole planes.
   struct Plane
@@ -216,6 +251,7 @@ private:
   Plane             m_mask    [ MAX_NUM_COMP ];   // non-zero where the picture is not flat
   std::vector<uint8_t> m_motionFailed[ MAX_NUM_COMP ];   // per 16x16 block: the temporal residual's compensation failed
   std::vector<double> m_repeatedGrainRatio[ MAX_NUM_COMP ];   // per intensity bin: grain variance per variance the residual sees
+  std::vector<int>  m_plateaus;   // luma values of the picture's grain-free plateaus (findPlateaus), most blocks first
 
   // Scratch planes and lists of the mask search, kept to avoid allocating and clearing them for every picture.
   struct Scratch
@@ -246,6 +282,7 @@ private:
   void setEstimatedParameters( std::vector<int>& quantizedVec, int bitDepth, ComponentID compId );
   void holdDarkStrength      ( std::vector<int>& quantizedVec, int bitDepth ) const;
   void mergeIntervals        ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
+  void cutPlateauHoles       ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
   void scaleDown             ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
 
   void getVtmParameters      ( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;

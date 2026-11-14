@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "SEIFilmGrainAnalyzer.h"
 #include "SEIFilmGrainSpectra.h"
 
+#include "CommonLib/Picture.h"
 #include "CommonLib/Rom.h"
 
 #include <algorithm>
@@ -82,6 +83,23 @@ constexpr int    MAX_ALLOWED_MODEL_VALUES  = 3;
 constexpr int    MAX_NUM_INTENSITIES       = 256;
 constexpr int    MAX_CUTOFF_PAIRS          = 10;    // different cut-off pairs the synthesis supports per picture
 constexpr double MIN_BLOCK_WEIGHT          = 1.0;   // accumulated block weight an interval needs for cut-off estimation
+// A luma value is a grain-free plateau (a clipped highlight, a blown-out sky) when the original has constant 16x16
+// blocks of it (grain never leaves a block constant) and
+// - they form an area: at least PLATEAU_MIN_BLOCKS of them, and at least PLATEAU_JOINED_NUM / PLATEAU_JOINED_DEN of all
+//   of them, have a constant block of the same value beside, above or below, and
+// - the value is the picture's ceiling: at most one block in PLATEAU_CEILING_BLOCKS is brighter than the plateau's hole.
+// A lossy source also has constant blocks where its own coding flattened single blocks of a grainy area, at any level
+// and scattered; they are no plateau, and a hole there would take the grain of the grainy blocks around them
+// (gangster_chase, H.264: 19 and 20 such blocks among 1400 grainy ones at their levels, 9 to 24 % of the picture
+// brighter, 4 and 9 of them joined; bk_1191's clipped highlight and Top Gun's sky: none brighter, 93 to 100 % joined). The
+// MAX_PLATEAUS values with the most constant blocks get a hole. A highlight too small to hold two 16x16 blocks side by
+// side is not found.
+constexpr int    PLATEAU_MIN_BLOCKS        = 8;
+constexpr int    PLATEAU_JOINED_NUM        = 3;
+constexpr int    PLATEAU_JOINED_DEN        = 4;
+constexpr int    PLATEAU_CEILING_BLOCKS    = 200;
+constexpr int    MAX_PLATEAUS              = 2;
+constexpr int    PLATEAU_MIN_INTENSITY     = 18;    // at 8 bits: the hole v8 - 1 .. v8 + 1 stays above digital black (16)
 
 // Calibration of the scaling factors, per component type (luma, 4:2:0 chroma) and cut-off pair, measured with the
 // vvdec film grain synthesis on flat grey 1920x1080 10-bit pictures:
@@ -209,7 +227,8 @@ constexpr double MAX_REPEATED_GRAIN_RATIO  = 16.0;  // largest variance scale (4
 
 constexpr double LOW_THRESHOLD_RATIO       = 0.1;   // Canny: low threshold relative to the strongest gradient
 constexpr int    HIGH_THRESHOLD_RATIO      = 3;     // Canny: high threshold relative to the low threshold
-constexpr double LOW_INTENSITY_RATIO       = 0.1;   // samples below this share of the range are not analysed
+constexpr double LOW_INTENSITY_RATIO       = 0.1;   // VTM: samples below this share of the range are not analysed
+constexpr int    LOW_INTENSITY_8BIT        = 18;    // improved analysis: samples below this (8-bit; black is 16) are not analysed
 
 constexpr double TAP_FILTER[ 3 ]           = { 1, 2, 1 };
 constexpr double NORM_TAP                  = 4.0;
@@ -316,11 +335,17 @@ void edgeTracking( const FgaRowKernels& k, Plane& edges, int bitDepth, ScratchT&
   }
 }
 
-// Sets the binary mask to "edge" where the picture is too dark to be analysed.
-void suppressLowIntensity( const Plane& p, Plane& mask, int bitDepth )
+// Sets the binary mask to "edge" where the picture is too dark to be analysed. VTM leaves out the darkest 10 % of the
+// range; with the dilations of every scale that hides intensities up to about 10-bit 135, the first 70 code values
+// above limited-range black (64), where PQ films keep much of their picture and their grain. With nothing measured
+// there, the improved analysis held the darkest measured strength down to black: 1.66x the grain the coding lost on
+// Beekeeper's 8-bit 17-32. The improved analysis leaves out only black and the code values just above it (letterbox
+// bars, crushed shadows), which carry no grain to measure.
+void suppressLowIntensity( const Plane& p, Plane& mask, int bitDepth, bool improved )
 {
   const Pel maxIntensity = (Pel) ( ( 1 << bitDepth ) - 1 );
-  const Pel threshold    = (Pel) ( LOW_INTENSITY_RATIO * maxIntensity );
+  const Pel threshold    = improved ? (Pel) ( LOW_INTENSITY_8BIT << ( bitDepth - BIT_DEPTH_8 ) )
+                                    : (Pel) ( LOW_INTENSITY_RATIO * maxIntensity );
   const size_t n = (size_t) mask.width * mask.height;
   const Pel* src = p.samples.data();
   Pel* dst = mask.samples.data();
@@ -404,6 +429,86 @@ static bool isFlatBlock( const FgaRowKernels& k, const Plane& mask, const Plane&
   }
   stats = meanStdDev( k, denoised, x, y );
   return 2 * stats.stddev < ( maxStrength >> 1 );
+}
+
+// The 16x16 blocks of a luma picture (whole blocks only, raster order, `columns` per row): per block its value when its
+// 256 samples are equal (256 * sumSq == sum^2), else -1; per 8-bit mean the number of blocks.
+static std::vector<int> constantBlockValues( const FgaRowKernels& k, const CPelBuf& luma, int bitDepth, int& columns,
+                                             std::vector<int>& blocksAtLevel )
+{
+  constexpr int N = 16;
+  columns = (int) luma.width / N;
+  blocksAtLevel.assign( MAX_NUM_INTENSITIES, 0 );
+  std::vector<int> values;
+  values.reserve( size_t( columns ) * ( luma.height / N ) );
+  for( int y = 0; y + N <= (int) luma.height; y += N )
+  {
+    for( int x = 0; x + N <= (int) luma.width; x += N )
+    {
+      int64_t sum = 0, sumSq = 0;
+      k.blockSums( luma.bufAt( x, y ), luma.stride, sum, sumSq );
+      const int mean = (int) ( sum / ( N * N ) );
+      blocksAtLevel[ mean >> ( bitDepth - BIT_DEPTH_8 ) ]++;
+      values.push_back( N * N * sumSq == sum * sum ? mean : -1 );
+    }
+  }
+  return values;
+}
+
+// The grain-free plateaus of a luma picture (see PLATEAU_MIN_BLOCKS): the qualifying values, at most MAX_PLATEAUS, most
+// constant blocks first (ties: the lower value).
+static std::vector<int> findPlateaus( const FgaRowKernels& k, const CPelBuf& luma, int bitDepth )
+{
+  int columns = 0;
+  std::vector<int> blocksAtLevel;
+  const std::vector<int> values = constantBlockValues( k, luma, bitDepth, columns, blocksAtLevel );
+  const int numBlocks = (int) values.size(), shift = bitDepth - BIT_DEPTH_8;
+
+  // per value: its constant blocks, and those of them with a constant block of the same value beside, above or below
+  std::vector<int> constantBlocks( size_t( 1 ) << bitDepth, 0 ), joinedBlocks( size_t( 1 ) << bitDepth, 0 );
+  for( int i = 0; i < numBlocks; i++ )
+  {
+    const int value = values[ i ];
+    if( value < ( PLATEAU_MIN_INTENSITY << shift ) )
+    {
+      continue;   // not constant (-1), or too dark
+    }
+    const int  column = i % columns;
+    const bool joined = ( column > 0 && values[ i - 1 ] == value ) || ( column + 1 < columns && values[ i + 1 ] == value )
+                     || ( i >= columns && values[ i - columns ] == value )
+                     || ( i + columns < numBlocks && values[ i + columns ] == value );
+    constantBlocks[ value ]++;
+    joinedBlocks  [ value ] += joined;
+  }
+
+  const auto isPlateau = [ & ]( int value, int numConstant )
+  {
+    int brighter = 0;   // blocks above the hole, which is ( value >> shift ) - 1 .. + 1 (cutPlateauHoles)
+    for( int level = ( value >> shift ) + 2; level < MAX_NUM_INTENSITIES; level++ )
+    {
+      brighter += blocksAtLevel[ level ];
+    }
+    return joinedBlocks[ value ] >= PLATEAU_MIN_BLOCKS
+        && joinedBlocks[ value ] * PLATEAU_JOINED_DEN >= numConstant * PLATEAU_JOINED_NUM
+        && brighter * PLATEAU_CEILING_BLOCKS <= numBlocks;
+  };
+
+  std::vector<int> plateaus;
+  while( (int) plateaus.size() < MAX_PLATEAUS )
+  {
+    const auto most = std::max_element( constantBlocks.begin(), constantBlocks.end() );
+    if( *most < PLATEAU_MIN_BLOCKS )
+    {
+      break;
+    }
+    const int value = (int) ( most - constantBlocks.begin() );
+    if( isPlateau( value, *most ) )
+    {
+      plateaus.push_back( value );
+    }
+    *most = 0;
+  }
+  return plateaus;
 }
 
 // Energy of the high frequencies (REPEATED_GRAIN_MIN_FREQ) of the 16x16 DCT of a block.
@@ -1078,6 +1183,11 @@ void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUni
 {
   const int numComp = getNumberValidComponents( m_chromaFormat );
   m_grainWeight = residual ? residualWeight : 1;
+  m_plateaus.clear();
+  if( m_improved && m_doAnalysis[ COMP_Y ] )   // --fga 1 stays the VTM analysis
+  {
+    m_plateaus = findPlateaus( m_kernels, orig.get( COMP_Y ), m_bitDepths[ CH_L ] );
+  }
   for( int c = 0; c < numComp; c++ )
   {
     const ComponentID compId = ComponentID( c );
@@ -1264,7 +1374,7 @@ void FGAnalyzer::maskForScale( const Plane& picture, Plane& mask, int bitDepth, 
   gradientWithNonMaxSuppression( m_kernels, picture, mask, bitDepth, s.magnitude, s.direction );
   doubleThreshold( m_kernels, mask, bitDepth );
   edgeTracking( m_kernels, mask, bitDepth, s );
-  suppressLowIntensity( picture, mask, bitDepth );
+  suppressLowIntensity( picture, mask, bitDepth, m_improved );
   for( int i = 0; i < numDilations; i++ )
   {
     morphStep( m_kernels, mask, s.morph, true );
@@ -2017,6 +2127,10 @@ void FGAnalyzer::setEstimatedParameters( std::vector<int>& quantizedVec, int bit
   parameters[ 1 ].push_back( ( 1 << bitDepth ) - 1 );
 
   mergeIntervals( parameters, bitDepth );
+  if( isLuma( compId ) )
+  {
+    cutPlateauHoles( parameters, bitDepth );   // after the merging, which could fill a hole again
+  }
   scaleDown( parameters, bitDepth );
 
   // the scaling to 8 bits can make intervals overlap: make the bounds strictly increasing
@@ -2131,6 +2245,50 @@ void FGAnalyzer::mergeIntervals( std::vector<std::vector<int>>& parameters, int 
       }
     }
     i--;
+  }
+}
+
+// The synthesis chooses the grain by the intensity of each 8x8 block alone, so a grain-free plateau (a clipped highlight:
+// on bk_1191 constant blocks at 10-bit 657, a fifth to two fifths of the blocks at 8-bit 163-165) gets the grain of the
+// grainy blocks at its intensities. The 8-bit values v8 - 1 .. v8 + 1 around every plateau (findPlateaus) get no grain:
+// intervals inside are cleared, intervals reaching in are cut back, an interval spanning it is split. Three values, so
+// that the decoded plateau's 8x8 averages stay inside despite the coding error. The grainy blocks at those intensities
+// lose their grain too: grain put back short beats grain drawn on a clean highlight.
+void FGAnalyzer::cutPlateauHoles( std::vector<std::vector<int>>& parameters, int bitDepth ) const
+{
+  const int shift = bitDepth - BIT_DEPTH_8;
+  for( int plateau : m_plateaus )
+  {
+    const int v8 = plateau >> shift;
+    const int holeLow = ( v8 - 1 ) << shift, holeHigh = ( ( v8 + 2 ) << shift ) - 1;
+    for( size_t i = 0; i < parameters[ 2 ].size(); i++ )
+    {
+      const int lower = parameters[ 0 ][ i ], upper = parameters[ 1 ][ i ], scale = parameters[ 2 ][ i ];
+      if( scale == 0 || upper < holeLow || lower > holeHigh )
+      {
+        continue;
+      }
+      if( lower >= holeLow && upper <= holeHigh )
+      {
+        parameters[ 2 ][ i ] = 0;
+      }
+      else if( lower < holeLow && upper > holeHigh )
+      {
+        parameters[ 1 ][ i ] = holeLow - 1;
+        parameters[ 0 ].insert( parameters[ 0 ].begin() + i + 1, holeHigh + 1 );
+        parameters[ 1 ].insert( parameters[ 1 ].begin() + i + 1, upper );
+        parameters[ 2 ].insert( parameters[ 2 ].begin() + i + 1, scale );
+        i++;
+      }
+      else if( lower < holeLow )
+      {
+        parameters[ 1 ][ i ] = holeLow - 1;
+      }
+      else
+      {
+        parameters[ 0 ][ i ] = holeHigh + 1;
+      }
+    }
   }
 }
 
@@ -2832,6 +2990,271 @@ int FGAnalyzer::limitCutoffPairs( std::vector<CutoffPair>& pairs, int maxUnique 
     }
   }
   return (int) md.size();
+}
+
+// ====================================================================================================================
+// The film grain SEI scaled to the grain the coding lost
+// ====================================================================================================================
+
+// Units: squaredDct16 is orthonormal, so the AC power of a block is 256 x its sample variance at the coded bit depth.
+// The fit uses the blocks where grain shows: in every band of 8-bit block means (LOST_GRAIN_BAND_EDGES) the 30 % with the
+// least power in the five lowest AC coefficients (u + v = 1, 2), the smoothest areas. The former flat test (u + v = 1, 2
+// power at most 4x the mean of u + v >= 4) kept a noise-dominated minority (gangster_chase: 1-6k blocks per band in 178
+// pictures, against 15-87k smooth ones) that loses 2-3x more fine grain per block, so the fit put back 1.07-1.25x the fine
+// grain the smooth areas lost. Blocks darker than the first edge (digital black) or from the last one (white) are not fitted.
+static constexpr int LOST_GRAIN_BAND_EDGES[] = { 18, 33, 65, 97, 129, 161, 238 };
+static constexpr int LOST_GRAIN_NUM_BANDS    = sizeof( LOST_GRAIN_BAND_EDGES ) / sizeof( LOST_GRAIN_BAND_EDGES[ 0 ] ) - 1;
+
+// The band of an 8-bit block mean, -1: not fitted.
+static int lostGrainBand( int mean8 )
+{
+  if( mean8 < LOST_GRAIN_BAND_EDGES[ 0 ] || mean8 >= LOST_GRAIN_BAND_EDGES[ LOST_GRAIN_NUM_BANDS ] )
+  {
+    return -1;
+  }
+  int band = 0;
+  while( mean8 >= LOST_GRAIN_BAND_EDGES[ band + 1 ] )
+  {
+    band++;
+  }
+  return band;
+}
+
+void FGAnalyzer::lostGrainSpectra( const CPelBuf& org, const CPelBuf& rec, int bitDepth, std::vector<LostGrainSpectrum>& spectra ) const
+{
+  constexpr int N = 16;   // squaredDct16's block size
+  const int maxRange = ( 1 << ( bitDepth + 4 ) ) - 1;
+
+  // pass 1: every block's mean and low-frequency power, listed per band
+  struct Block
+  {
+    int x, y, mean8;
+  };
+  std::vector<Block> blocks;
+  std::vector<std::pair<double, size_t>> bandBlocks[ LOST_GRAIN_NUM_BANDS ];   // (low-frequency power, index in blocks)
+  for( int y = 0; y + N <= (int) org.height; y += N )
+  {
+    for( int x = 0; x + N <= (int) org.width; x += N )
+    {
+      const Pel* o = org.bufAt( x, y );
+      int64_t sum = 0;
+      for( int j = 0; j < N; j++ )
+      {
+        for( int i = 0; i < N; i++ )
+        {
+          sum += o[ j * org.stride + i ];
+        }
+      }
+      const int mean8 = std::min( 255, (int) ( ( sum + N * N / 2 ) / ( N * N ) ) >> ( bitDepth - BIT_DEPTH_8 ) );
+      const int band  = lostGrainBand( mean8 );
+      if( band < 0 )
+      {
+        continue;
+      }
+      double so[ N * N ] = {};
+      m_kernels.squaredDct16( o, org.stride, maxRange, so );
+      const double low = so[ 1 ] + so[ 2 ] + so[ N ] + so[ N + 1 ] + so[ 2 * N ];   // [u][v] with u + v = 1, 2
+      bandBlocks[ band ].push_back( { low, blocks.size() } );
+      blocks.push_back( { x, y, mean8 } );
+    }
+  }
+
+  // the smoothest 30 % of every band (the index breaks ties, so the choice does not depend on the sort)
+  std::vector<uint8_t> selected( blocks.size(), 0 );
+  for( auto& candidates : bandBlocks )
+  {
+    const size_t keep = candidates.size() * 3 / 10;
+    std::nth_element( candidates.begin(), candidates.begin() + keep, candidates.end() );
+    for( size_t k = 0; k < keep; k++ )
+    {
+      selected[ candidates[ k ].second ] = 1;
+    }
+  }
+
+  // pass 2: the spectra of the selected blocks of the original and the reconstruction per 8-bit block mean, summed in
+  // picture order
+  int slot[ 256 ];        // per 8-bit block mean: its entry in spectra, -1: none yet
+  std::fill_n( slot, 256, -1 );
+  spectra.clear();
+  for( size_t i = 0; i < blocks.size(); i++ )
+  {
+    if( !selected[ i ] )
+    {
+      continue;
+    }
+    const Block& b = blocks[ i ];
+    double so[ N * N ] = {}, sr[ N * N ] = {};
+    m_kernels.squaredDct16( org.bufAt( b.x, b.y ), org.stride, maxRange, so );
+    m_kernels.squaredDct16( rec.bufAt( b.x, b.y ), rec.stride, maxRange, sr );
+    if( slot[ b.mean8 ] < 0 )
+    {
+      slot[ b.mean8 ] = (int) spectra.size();
+      spectra.emplace_back();
+      spectra.back().mean8 = b.mean8;
+    }
+    LostGrainSpectrum& s = spectra[ slot[ b.mean8 ] ];
+    for( int k = 1; k < N * N; k++ )
+    {
+      s.orig[ k ] += so[ k ];
+      s.reco[ k ] += sr[ k ];
+    }
+    s.blocks++;
+  }
+  std::sort( spectra.begin(), spectra.end(), []( const LostGrainSpectrum& a, const LostGrainSpectrum& b ) { return a.mean8 < b.mean8; } );
+}
+
+// The synthesized grain of scaling factor s at cut-offs (h, w): standard deviation sigma = s x PATTERN_STDDEV /
+// 2^(l + 14 - bitDepth), of which a 16x16 block keeps BLOCK_VARIANCE_SHARE of the variance, spread over the coefficients
+// like the product of the synthesis's horizontal and vertical marginals (GRAIN_SPECTRUM_MARGINALS: the synthesis
+// band-limits a rectangle, so its spectrum is close to separable).
+int FGAnalyzer::equalPowerScale( int s, bool chroma420, int h0, int w0, int h, int w )
+{
+  const int table = chroma420 ? 1 : 0;
+  h0 = Clip3( 2, 14, h0 ); w0 = Clip3( 2, 14, w0 ); h = Clip3( 2, 14, h ); w = Clip3( 2, 14, w );
+  const double amp0 = PATTERN_STDDEV[ table ][ h0 - 2 ][ w0 - 2 ] * std::sqrt( BLOCK_VARIANCE_SHARE[ table ][ h0 - 2 ][ w0 - 2 ] );
+  const double amp  = PATTERN_STDDEV[ table ][ h - 2 ][ w - 2 ] * std::sqrt( BLOCK_VARIANCE_SHARE[ table ][ h - 2 ][ w - 2 ] );
+  return std::min( MAX_STANDARD_DEVIATION, (int) ( s * amp0 / amp + 0.5 ) );
+}
+
+int FGAnalyzer::lostGrainCapScale( int s0, bool chroma420, int h0, int w0, int h, int w )
+{
+  return std::min( MAX_STANDARD_DEVIATION, (int) ( equalPowerScale( s0, chroma420, h0, w0, h, w ) * std::sqrt( LOST_GRAIN_CAP_POWER ) + 0.5 ) );
+}
+
+// The u + v frequency groups of the fit: 1-2, 3-5, 6-8, 9-12, 13-30 (the group of DCT coefficient k of a 16x16 block).
+static constexpr int LOST_GRAIN_GROUP_END[ FGAnalyzer::LostGrainPower::GROUPS ] = { 2, 5, 8, 12, 30 };
+
+static int lostGrainGroup( int k )
+{
+  const int f = k / 16 + k % 16;
+  int g = 0;
+  while( f > LOST_GRAIN_GROUP_END[ g ] )
+  {
+    g++;
+  }
+  return g;
+}
+
+// The fit also tells the two directions apart: the share of coefficient k (u = k / 16 horizontal, v = k % 16 vertical
+// frequency) in direction 0 (u > v: detail that varies along x); the diagonal (u == v) counts half in each. Grain whose
+// cut-offs (h, w) are swapped has the same power per u + v group, so a fit by u + v alone picks the shift (dh, dw) or its
+// transpose by chance and can synthesize grain stretched across the lost grain's direction (streaks): on the fast preset's
+// q23 film scan bk_1191 the coding lost fine-band grain at x / y 0.47-0.93 and the synthesis put it back at 1.39-1.89.
+static double lostGrainHorizontalShare( int k )
+{
+  const int u = k / 16, v = k % 16;
+  return u > v ? 1.0 : u < v ? 0.0 : 0.5;
+}
+
+FGAnalyzer::LostGrainPower FGAnalyzer::lostGrainPower( const double orig[ 256 ], const double reco[ 256 ], int blocks )
+{
+  LostGrainPower p;
+  p.blocks = blocks;
+  if( blocks <= 0 )
+  {
+    return p;
+  }
+  for( int k = 1; k < 256; k++ )
+  {
+    const int    g  = lostGrainGroup( k );
+    const double wx = lostGrainHorizontalShare( k );
+    p.orig[ g ][ 0 ] += wx * orig[ k ] / blocks;
+    p.orig[ g ][ 1 ] += ( 1.0 - wx ) * orig[ k ] / blocks;
+    p.reco[ g ][ 0 ] += wx * reco[ k ] / blocks;
+    p.reco[ g ][ 1 ] += ( 1.0 - wx ) * reco[ k ] / blocks;
+  }
+  return p;
+}
+
+// The fit compares the reconstruction plus the synthesis with the original per u + v group of the 16x16 DCT. The lowest
+// group (u + v = 1, 2) is not fitted: there the coding ADDS power (blocking, ringing; nocturne_grain at q23 reconstructs more
+// than the original), so a fit including it pulls the scale down while the fine band stays short. It only limits the
+// synthesis: coarse grain lifts it too (on Top Gun's dark intervals the synthesis about doubled its power), which reads as
+// grain the coding never lost.
+static constexpr int LOST_GRAIN_FIRST_FITTED_GROUP = 1;
+// Grain put back beyond what the coding lost counts this many times more than grain missing (the coded picture keeps some
+// grain of its own at high rates, so too much is worse than too little); the same weight applies to lifting the lowest group.
+static constexpr double LOST_GRAIN_OVERSHOOT_WEIGHT = 4.0;
+
+// The fit's cost of synthesized grain of variance var whose power per unit variance per group and direction is
+// synthPower: the lowest group's lift above the larger of the original's and the reconstruction's power, then the squared
+// log ratios of reconstruction plus synthesis to the original over the fitted groups, both directions, overshoot weighted.
+static double lostGrainCost( const FGAnalyzer::LostGrainPower& power, double var,
+                             const double synthPower[][ FGAnalyzer::LostGrainPower::DIRECTIONS ] )
+{
+  double cost = 0.0;
+  for( int d = 0; d < FGAnalyzer::LostGrainPower::DIRECTIONS; d++ )
+  {
+    const double floor0 = std::max( power.orig[ 0 ][ d ], power.reco[ 0 ][ d ] );
+    if( floor0 > 0 )
+    {
+      const double r = std::log( ( power.reco[ 0 ][ d ] + var * synthPower[ 0 ][ d ] + 1e-9 ) / floor0 );
+      cost += r > 0 ? LOST_GRAIN_OVERSHOOT_WEIGHT * r * r : 0.0;
+    }
+  }
+  for( int g = LOST_GRAIN_FIRST_FITTED_GROUP; g < FGAnalyzer::LostGrainPower::GROUPS; g++ )
+  {
+    for( int d = 0; d < FGAnalyzer::LostGrainPower::DIRECTIONS; d++ )
+    {
+      if( power.orig[ g ][ d ] > 0 )
+      {
+        const double r = std::log( ( power.reco[ g ][ d ] + var * synthPower[ g ][ d ] + 1e-9 ) / power.orig[ g ][ d ] );
+        cost += ( r > 0 ? LOST_GRAIN_OVERSHOOT_WEIGHT : 1.0 ) * r * r;
+      }
+    }
+  }
+  return cost;
+}
+
+double FGAnalyzer::lostGrainFit( const LostGrainPower& power, int bitDepth, bool chroma420, int log2ScaleFactor, int s0, int h0,
+                                 int w0, int h, int w, int& scale )
+{
+  constexpr int N = 16;
+  constexpr int GROUPS = LostGrainPower::GROUPS;
+  scale = s0;
+  if( power.blocks <= 0 || s0 <= 0 )
+  {
+    return -1.0;
+  }
+  const int table = chroma420 ? 1 : 0;
+  h0 = Clip3( 2, 14, h0 ); w0 = Clip3( 2, 14, w0 ); h = Clip3( 2, 14, h ); w = Clip3( 2, 14, w );
+  const double unit   = 1.0 / double( 1 << ( log2ScaleFactor + 14 - bitDepth ) );
+  const double sigma0 = s0 * PATTERN_STDDEV[ table ][ h0 - 2 ][ w0 - 2 ] * unit;
+  const double power0 = sigma0 * sigma0 * BLOCK_VARIANCE_SHARE[ table ][ h0 - 2 ][ w0 - 2 ];   // the analyzer's grain
+  const auto&  m      = GRAIN_SPECTRUM_MARGINALS[ table ][ h - 2 ][ w - 2 ];
+  double shapeSum = 0.0;
+  for( int k = 1; k < N * N; k++ )
+  {
+    shapeSum += m[ 0 ][ k / N ] * m[ 1 ][ k % N ];
+  }
+  // per group and direction: the synthesis's power per unit grain variance (the original's and the reconstruction's mean
+  // power: power)
+  double ps[ GROUPS ][ LostGrainPower::DIRECTIONS ] = {};
+  const double share = BLOCK_VARIANCE_SHARE[ table ][ h - 2 ][ w - 2 ];
+  for( int k = 1; k < N * N; k++ )
+  {
+    const double p  = N * N * share * m[ 0 ][ k / N ] * m[ 1 ][ k % N ] / shapeSum;
+    const double wx = lostGrainHorizontalShare( k );
+    ps[ lostGrainGroup( k ) ][ 0 ] += wx * p;
+    ps[ lostGrainGroup( k ) ][ 1 ] += ( 1.0 - wx ) * p;
+  }
+  const double sigmaUnit = PATTERN_STDDEV[ table ][ h - 2 ][ w - 2 ] * unit;
+  double best = -1.0;
+  for( int s = 0; s <= MAX_STANDARD_DEVIATION; s++ )
+  {
+    const double var = ( s * sigmaUnit ) * ( s * sigmaUnit );
+    if( var * share > power0 * LOST_GRAIN_CAP_POWER * ( 1.0 + 1e-9 ) )
+    {
+      break;
+    }
+    const double cost = lostGrainCost( power, var, ps );
+    if( best < 0 || cost < best )
+    {
+      best  = cost;
+      scale = s;
+    }
+  }
+  return best;
 }
 
 } // namespace vvenc

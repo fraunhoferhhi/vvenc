@@ -135,6 +135,17 @@ struct PicApsGlobal{
   PicApsGlobal( int _p, unsigned _t ) : poc(_p), tid(_t), apsMap( MAX_NUM_APS * MAX_NUM_APS_TYPE ) {}
 };
 
+// Film grain analysis: the 16x16 DCT power of a picture component's flat original blocks with one 8-bit block mean, and of
+// the same blocks of the reconstruction, summed over the picture (FGAnalyzer::lostGrainSpectra). The film grain SEI is
+// scaled down to the grain power the coding lost (EncGOP::xScaleToLostGrain).
+struct LostGrainSpectrum
+{
+  int    mean8  = 0;
+  int    blocks = 0;
+  double orig[ 256 ] = {};
+  double reco[ 256 ] = {};
+};
+
 struct Picture : public UnitArea
 {
   uint32_t margin;
@@ -262,6 +273,7 @@ public:
   double                        picQPFraction; // fractional part of the picture QP with a fractional --qp, applied by QPA
   int16_t                       picMemorySTA;
   PicVisAct                     picVA;
+  std::vector<LostGrainSpectrum> lostGrainSpectra[ MAX_NUM_COMP ];   // ascending mean8; from the picture's end to its SEI
   double                        psnr[MAX_NUM_COMP];
   double                        mse [MAX_NUM_COMP];
 
