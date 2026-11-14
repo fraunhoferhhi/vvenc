@@ -94,6 +94,10 @@ typedef void ( *TplPredBlockFn )( const Pel* src, ptrdiff_t srcStride, int fx, i
 template<int N>
 void tplPredBlockCore( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel* dst );
 
+// The squared error between the N x N block at org and its bilinear prediction from src at ( fx, fy ), as
+// TplPredBlockFn predicts it: the fractional motion search's cost without storing the prediction.
+typedef int ( *TplPredErrorFn )( const Pel* src, ptrdiff_t srcStride, int fx, int fy, const Pel* org, ptrdiff_t orgStride );
+
 // One row of 2x2 averages, ( a + b + c + d + 2 ) >> 2.
 typedef void ( *TplDownsampleRowFn )( const Pel* src, ptrdiff_t srcStride, Pel* dst, int dstWidth );
 
@@ -111,8 +115,9 @@ void tplDownsampleRowCore( const Pel* src, ptrdiff_t srcStride, Pel* dst, int ds
 // distortion and rate caused by the reference's coding error is what propagates.
 //
 // The analysis runs on half-resolution luma in 8x8 or 16x16 blocks (see TplBlkSize), in coding order. The stage
-// holds back the pictures of a GOP until the next GOP has arrived, because the GOP's key picture is also
-// referenced by the next one. The result is a QP offset per CTU, applied where QPA and the frame QP apply the
+// holds back the pictures of a GOP until the next CuTreeLookAheadGOPs GOPs have arrived (never more than the intra
+// period, at least one GOP), because the GOP's key picture is also referenced by the next one, whose key picture by the one after it,
+// and so on. The result is a QP offset per CTU, applied where QPA and the frame QP apply the
 // block importance mapping (BIM) offsets, which CU-tree replaces.
 // ====================================================================================================================
 
@@ -150,6 +155,7 @@ public:
 
   TplCodeBlockFn     m_codeBlock[NUM_TPL_BLK_SIZES];   // kernels per block size, SIMD where available
   TplPredBlockFn     m_predBlock[NUM_TPL_BLK_SIZES];
+  TplPredErrorFn     m_predError[NUM_TPL_BLK_SIZES];   // AVX2 only; elsewhere the search predicts, then measures
   TplDownsampleRowFn m_downsampleRow;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
@@ -171,12 +177,14 @@ private:
   RdCost                                m_rdCost;        // provides the SIMD Hadamard SATD
   FpDistFunc                            m_hadFunc;
   int                                   m_lookAheadPics;
+  bool                                  m_capToIntra;    // the look-ahead is shortened to the intra period
   int                                   m_blkSizeIdx;    // TplBlkSize of the analysis blocks
   int                                   m_blkSize;       // their side at half resolution
   int                                   m_blkWidth;      // width and height of the picture in analysis blocks
   int                                   m_blkHeight;
   int                                   m_qpBDOffset;
   double                                m_lambdaLeaf;    // Lagrange multiplier at the QP of unreferenced pictures
+  double                                m_noiseVar;      // CuTreePicStrength: mean MCTF noise estimate of the latest batch's T2 pictures
   std::map<int, std::unique_ptr<Frame>> m_frames;        // analysis data by POC, kept while it can still be referenced
   // the IRAP and the IDR picture coded last among the erased ones
   PocCodingNum                          m_lastErasedIrap;
@@ -184,6 +192,7 @@ private:
 
   void   xForEachRow         ( int numRows, const std::function<void( int )>& fn ) const;
   void   xDownsample         ( const PelStorage& src, PelStorage& dst ) const;
+  double xMeanAbsDiff        ( const PelStorage& a, const PelStorage& b ) const;
   bool   xIsBatchReady       ( const PicList& picList, int& batchEndPoc ) const;
   Frame* xFindFrame          ( int poc ) const;
   void   xMarkRandomAccess   ( const PicList& picList );

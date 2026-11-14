@@ -6986,6 +6986,44 @@ static bool check_tplPredBlock( TplPredBlockFn opt, unsigned num_cases )
   return passed;
 }
 
+// The fused prediction error against the reference prediction and its squared error.
+template<int N>
+static bool check_tplPredError( TplPredErrorFn opt, unsigned num_cases )
+{
+  if( ! opt )
+  {
+    return true;   // no SIMD version: the search predicts and measures separately
+  }
+  InputGenerator<Pel> pelGen( 10, /*is_signed=*/false );
+  MinMaxGenerator<Pel> extremeGen( 10, /*is_signed=*/false );
+  bool passed = true;
+
+  constexpr int STRIDE = N + 16;
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    Pel src[( N + 1 ) * STRIDE], org[N * STRIDE], pred[N * N];
+    for( int i = 0; i < ( N + 1 ) * STRIDE; i++ ) src[i] = ( n & 1 ) ? extremeGen() : pelGen();
+    for( int i = 0; i < N * STRIDE; i++ )         org[i] = ( n & 2 ) ? extremeGen() : pelGen();
+    const int fx = rand() & 15, fy = rand() & 15;
+    tplPredBlockCore<N>( src, STRIDE, fx, fy, pred );
+    int ref = 0;
+    for( int y = 0; y < N; y++ )
+    {
+      for( int x = 0; x < N; x++ )
+      {
+        const int d = org[y * STRIDE + x] - pred[y * N + x];
+        ref += d * d;
+      }
+    }
+    const int got = opt( src, STRIDE, fx, fy, org, STRIDE );
+
+    std::ostringstream ctx;
+    ctx << "tplPredError" << N << " fx=" << fx << " fy=" << fy << " case=" << n;
+    passed = compare_value( ctx.str(), ref, got ) && passed;
+  }
+  return passed;
+}
+
 // The CU-tree look-ahead's 2x2 down-sampling of one row.
 static bool check_tplDownsampleRow( TplDownsampleRowFn opt, unsigned num_cases )
 {
@@ -7019,6 +7057,8 @@ static bool test_CuTree()
   passed = check_tplCodeBlock<16>( cuTree.m_codeBlock[TPL_BLK_16], num_cases, MinMaxGenerator<int>( 11 ) ) && passed;
   passed = check_tplPredBlock<8> ( cuTree.m_predBlock[TPL_BLK_8],  num_cases ) && passed;
   passed = check_tplPredBlock<16>( cuTree.m_predBlock[TPL_BLK_16], num_cases ) && passed;
+  passed = check_tplPredError<8> ( cuTree.m_predError[TPL_BLK_8],  num_cases ) && passed;
+  passed = check_tplPredError<16>( cuTree.m_predError[TPL_BLK_16], num_cases ) && passed;
   passed = check_tplDownsampleRow( cuTree.m_downsampleRow, num_cases ) && passed;
   return passed;
 }
@@ -7223,6 +7263,43 @@ static bool test_RefreshMarking()
 
 bool test_ThreadPool();   // test_ThreadPool.cpp
 
+// The CU tree's look-ahead in pictures: N GOPs, more GOPs never past the next intra picture; one GOP stays one GOP.
+static bool test_CuTreeLookAhead()
+{
+  struct Case { int gopSize, intraPeriod, lookAheadGops, expected; };
+  const Case cases[] = {
+    // one GOP: the GOP size at every intra period (as before the option)
+    { 32, -1, 1, 32 }, { 32, 16, 1, 32 }, { 32, 24, 1, 32 }, { 32, 32, 1, 32 }, { 32, 72, 1, 32 }, { 32, 240, 1, 32 },
+    // three GOPs, capped at the intra period (at least one GOP)
+    { 32, 24, 3, 32 }, { 32, 48, 3, 48 }, { 32, 72, 3, 72 }, { 32, 120, 3, 96 }, { 32, -1, 3, 96 },
+    // four GOPs
+    { 32, 72, 4, 72 }, { 32, 120, 4, 120 }, { 32, 240, 4, 128 }, { 32, -1, 4, 128 },
+    // two GOPs
+    { 32, 48, 2, 48 }, { 32, 72, 2, 64 }, { 32, 240, 2, 64 },
+    // GOP 16
+    { 16, 32, 3, 32 }, { 16, 64, 3, 48 }, { 16, -1, 2, 32 },
+    // automatic (-1): one GOP
+    { 32, 240, -1, 32 }, { 32, -1, -1, 32 },
+  };
+  bool passed = true;
+  for( const Case& c : cases )
+  {
+    VVEncCfg cfg;
+    vvenc_config_default( &cfg );
+    cfg.m_GOPSize             = c.gopSize;
+    cfg.m_IntraPeriod         = c.intraPeriod;
+    cfg.m_cuTreeLookAheadGOPs = c.lookAheadGops;
+    const int lookAhead = CuTree::getNumLookAheadPics( cfg );
+    if( lookAhead != c.expected )
+    {
+      printf( "CuTreeLookAhead: GOP %d, intra period %d, %d GOPs: %d pictures, expected %d\n", c.gopSize, c.intraPeriod,
+              c.lookAheadGops, lookAhead, c.expected );
+      passed = false;
+    }
+  }
+  return passed;
+}
+
 struct UnitTestEntry
 {
   std::string name;
@@ -7280,6 +7357,7 @@ static const UnitTestEntry test_suites[] = {
     { "CuTreeRefs", test_CuTreeRefs },
     { "ThreadPool", test_ThreadPool },
     { "RefreshMarking", test_RefreshMarking },
+    { "CuTreeLookAhead", test_CuTreeLookAhead },
 };
 
 struct UnitTestArgs

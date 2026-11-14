@@ -411,7 +411,8 @@ typedef struct vvencMCTF
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
   int                 MCTFUnitSize;
-  int                 mctfUnused;                                                        // TODO: remove unused memory from configuration
+  int                 MCTFLevelTilt;                                                     // MCTF filter strength raised for the three upper temporal levels
+                                                                                         // (0: off, 1: on, default; random access only; also raises explicit MCTFStrength values)
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -767,7 +768,7 @@ typedef struct vvenc_config
   int8_t              m_poc0idr;                                                         // encoding with first IRAP at POC 0 (0: off, 1: on, -1: default automatic setting (on for idr_no_radl, disabled picture reorderding and non-first segments; off otherwise))
   int8_t              m_ifpLines;
   int8_t              m_blockImportanceMapping;                                          // block importance mapping, the QP of blocks that later pictures predict from (0: off,
-                                                                                         // 1: CU-tree with the TPL model and one GOP of look-ahead, 2: from MCTF's motion error)
+                                                                                         // 1: CU-tree with the TPL model and m_cuTreeLookAheadGOPs of look-ahead, 2: from MCTF's motion error)
   bool                m_saoScc;
   bool                m_addGOP32refPics;
   bool                m_fastHad;
@@ -799,8 +800,16 @@ typedef struct vvenc_config
   uint8_t             m_QPFractionVal;                                                   // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
 #define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
   uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
-  int8_t              m_reservedInt8_2[2];
-  int32_t             m_reservedInt32;
+  int8_t              m_reservedInt8_2[1];
+#define VVENC_SET_CUTREE_PIC_STRENGTH(s) ((uint8_t)((s)*32+0.5))
+  uint8_t             m_cuTreePicStrength;                                               // CU-tree (BIM 1), random access, constant QP: picture QPs from the CU tree's dependency estimate
+                                                                                         // in place of the temporal layers' QP offsets, scaled by this 5-bit fixed point value (default 0: off),
+                                                                                         // e.g. VVENC_SET_CUTREE_PIC_STRENGTH(2.0); the encoder then codes at QP + round( 3 + 2 * strength ),
+                                                                                         // to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32)
+  int8_t              m_cuTreeLookAheadGOPs;                                             // GOPs the CU tree looks ahead (BIM 1), never more than the intra period (at least 1 GOP): 1 to 4
+                                                                                         // (default -1: automatic, 1); each extra GOP costs one GOP of pictures in memory and of delay,
+                                                                                         // none once the window reaches the intra period
+  int8_t              m_reservedInt8_3[3];
   double              m_reservedDouble[7];
 
   // internal state variables

@@ -323,11 +323,51 @@ int testLibParameterRanges()
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 1 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 0,2 }, true );
 
+  // MCTF level tilt: 0 (off) or 1 (on)
+  testParamList( "MCTFLevelTilt",                          vvencParams.m_vvencMCTF.MCTFLevelTilt,    vvencParams, { 0,1 } );
+  testParamList( "MCTFLevelTilt",                          vvencParams.m_vvencMCTF.MCTFLevelTilt,    vvencParams, { -1,2 }, true );
+
   // block importance mapping: 0 (off), 1 (CU-tree) or 2 (from MCTF)
   testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { 0,1,2 } );
   testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { -1,3 }, true );
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { -1,16,32 } );
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { 0,8,64 }, true );
+  // CU-tree look-ahead: 1 to 4 GOPs or automatic
+  testParamList( "CuTreeLookAheadGOPs",                    vvencParams.m_cuTreeLookAheadGOPs,        vvencParams, { -1,1,2,3,4 } );
+  testParamList( "CuTreeLookAheadGOPs",                    vvencParams.m_cuTreeLookAheadGOPs,        vvencParams, { -2,0,5 }, true );
+
+  // CU-tree picture QPs: only with the CU tree, random access and constant QP; each refused case is checked to be valid
+  // with the option off
+  const vvenc_config savedParams = vvencParams;
+  const auto picStrength = VVENC_SET_CUTREE_PIC_STRENGTH( 2.0 );
+  vvencParams.m_blockImportanceMapping = 1;
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0, picStrength } );
+  vvencParams.m_blockImportanceMapping = 2;
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  vvencParams = savedParams;
+  vvencParams.m_blockImportanceMapping = 1;
+  vvencParams.m_IntraPeriod            = 1;
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  vvencParams = savedParams;
+  vvencParams.m_blockImportanceMapping = 1;
+  vvencParams.m_picReordering          = false;
+  vvencParams.m_DecodingRefreshType    = VVENC_DRT_NONE;
+  vvencParams.m_GOPSize                = 8;
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  vvencParams = savedParams;
+  vvencParams.m_blockImportanceMapping = 1;
+  vvencParams.m_RCTargetBitrate        = 1000000;
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  vvencParams = savedParams;
+  vvencParams.m_blockImportanceMapping = 1;
+  vvencParams.m_RCMaxBitrate           = 2000000;
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  vvencParams = savedParams;
 
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
