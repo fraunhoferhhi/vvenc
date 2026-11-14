@@ -257,6 +257,7 @@ private:
   void xEncodePicture                 ( Picture* pic, EncPicture* picEncoder );
   void xOutputRecYuv                  ( const PicList& picList );
   void xReleasePictures               ( const PicList& picList, PicList& freeList );
+  bool xFgaReadsSource                ( const Picture& pic ) const;
 
   void xInitVPS                       ( VPS &vps ) const;
   void xInitDCI                       ( DCI &dci, const SPS &sps, const int dciId ) const;

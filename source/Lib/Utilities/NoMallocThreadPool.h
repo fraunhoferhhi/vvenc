@@ -203,6 +203,9 @@ struct WaitCounter
 
   bool isBlocked() const
   {
+    // take the lock: a caller that sees "not blocked" may at once reuse what the counted tasks read
+    WaitCounter* nonconst = const_cast<WaitCounter*>( this );
+    std::unique_lock<std::mutex> l( nonconst->m_lock );
     return 0 != m_count;
   }
 
