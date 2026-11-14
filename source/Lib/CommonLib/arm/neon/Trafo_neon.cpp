@@ -69,6 +69,66 @@ static inline int64_t shift_and_round( int64_t x, int shift )
   return ( x + ( static_cast<int64_t>(1) << ( shift - 1 ) ) ) >> shift;
 }
 
+// The forward matrix multiply of a single line (TCoeffOps::fastFwdCore_1D: the 1-D transforms of 1xN and Nx1 blocks),
+// 4 outputs at a time. The inputs are residuals, so narrowing them to 16 bits is exact (as fastFwdCore_neon), and
+// vrshlq_s32 by -shift is C's ( sum + ( 1 << ( shift - 1 ) ) ) >> shift for shift >= 1.
+template<unsigned trSize>
+static void fastFwd1D_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line, unsigned reducedLine,
+                            unsigned cutoff, int shift )
+{
+  static_assert( trSize % 4 == 0, "trSize should be a multiple of four" );
+  CHECKD( line != 1 || reducedLine != 1, "the 1-D transform has a single line" );
+  CHECKD( shift < 1, "shift must be at least one" );
+
+  int16x4_t s[trSize / 4];
+  for( unsigned k = 0; k < trSize / 4; k++ )
+  {
+    const int32x4_t v = vld1q_s32( src + 4 * k );
+    s[k]              = vmovn_s32( v );
+  }
+  const int32x4_t vshift = vdupq_n_s32( -shift );
+
+  unsigned j = 0;
+  for( ; j + 4 <= cutoff; j += 4 )
+  {
+    const TMatrixCoeff* row0 = tc + j * trSize;
+    const TMatrixCoeff* row1 = row0 + trSize;
+    const TMatrixCoeff* row2 = row1 + trSize;
+    const TMatrixCoeff* row3 = row2 + trSize;
+
+    int32x4_t sum0 = vdupq_n_s32( 0 );
+    int32x4_t sum1 = vdupq_n_s32( 0 );
+    int32x4_t sum2 = vdupq_n_s32( 0 );
+    int32x4_t sum3 = vdupq_n_s32( 0 );
+    for( unsigned k = 0; k < trSize / 4; k++ )
+    {
+      const int16x4_t c0 = vld1_s16( row0 + 4 * k );
+      const int16x4_t c1 = vld1_s16( row1 + 4 * k );
+      const int16x4_t c2 = vld1_s16( row2 + 4 * k );
+      const int16x4_t c3 = vld1_s16( row3 + 4 * k );
+      sum0 = vmlal_s16( sum0, s[k], c0 );
+      sum1 = vmlal_s16( sum1, s[k], c1 );
+      sum2 = vmlal_s16( sum2, s[k], c2 );
+      sum3 = vmlal_s16( sum3, s[k], c3 );
+    }
+    vst1q_s32( dst + j, vrshlq_s32( horizontal_add_4d_s32x4( sum0, sum1, sum2, sum3 ), vshift ) );
+  }
+
+  // the encoder's cut-offs are multiples of 4; any remainder one output at a time
+  for( ; j < cutoff; j++ )
+  {
+    const TMatrixCoeff* row = tc + j * trSize;
+
+    int32x4_t sum = vdupq_n_s32( 0 );
+    for( unsigned k = 0; k < trSize / 4; k++ )
+    {
+      const int16x4_t c = vld1_s16( row + 4 * k );
+      sum = vmlal_s16( sum, s[k], c );
+    }
+    dst[j] = (TCoeff) shift_and_round( horizontal_add_s32x4( sum ), shift );
+  }
+}
+
 template<int W>
 void cpyCoeff_neon( const Pel* src, ptrdiff_t srcStride, TCoeff* dst, unsigned width, unsigned height );
 
@@ -383,6 +443,12 @@ void TCoeffOps::_initTCoeffOpsARM<NEON>()
   cpyCoeff8  = cpyCoeff_neon<8>;
   roundClip4 = roundClip_neon<4>;
   roundClip8 = roundClip_neon<8>;
+
+  fastFwdCore_1D[ 0 ] = fastFwd1D_neon<4>;
+  fastFwdCore_1D[ 1 ] = fastFwd1D_neon<8>;
+  fastFwdCore_1D[ 2 ] = fastFwd1D_neon<16>;
+  fastFwdCore_1D[ 3 ] = fastFwd1D_neon<32>;
+  fastFwdCore_1D[ 4 ] = fastFwd1D_neon<64>;
 
   fastInvCore[ 0 ]    = fastInvCore_neon<4>;
   fastInvCore[ 1 ]    = fastInvCore_neon<8>;
