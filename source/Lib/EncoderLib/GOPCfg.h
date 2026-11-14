@@ -96,6 +96,7 @@ class GOPCfg
     int  m_minIntraDist;
     int  m_lastIntraPOC;
     bool m_adjustNoLPcodingOrder;
+    int  m_fgaInterval;
 
   public:
     GOPCfg( MsgLog& _m )
@@ -121,6 +122,7 @@ class GOPCfg
       , m_minIntraDist    ( -1 )
       , m_lastIntraPOC    ( -1 )
       , m_adjustNoLPcodingOrder( false )
+      , m_fgaInterval     ( 0 )
     {
     };
 
@@ -128,7 +130,7 @@ class GOPCfg
     {
     };
 
-    void initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int m_minIntraDist );
+    void initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int m_minIntraDist, int fgaInterval );
     void getNextGopEntry( GOPEntry& gopEntry );
     void startIntraPeriod( GOPEntry& gopEntry );
     void fixStartOfLastGop( GOPEntry& gopEntry );
@@ -152,6 +154,7 @@ class GOPCfg
     void xPruneGopList       ( int gopSize, GOPEntryList& gopList ) const;
     void xGetRefsOfNextGop   ( int gopSize, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], int pocOffset, std::vector<int>& pocList ) const;
     void xSetMctfIndex       ( int maxGopSize, GOPEntryList& gopList ) const;
+    void xSetFgaPictures     ( int maxGopSize, GOPEntryList& gopList ) const;
     void xSetSkipFirstPass   ( GOPEntryList& gopList ) const;
     void xCreatePocToGopIdx  ( const GOPEntryList& gopList, bool bShift, std::vector<int>& pocToGopIdx ) const;
     void xSetSTSA            ( GOPEntryList& gopList, const std::vector<int>& pocToGopIdx ) const;

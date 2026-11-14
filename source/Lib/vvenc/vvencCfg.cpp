@@ -697,10 +697,12 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_GOPQPA                                  = -1;
 
   c->m_fga                                     = 0;
+  c->m_fgaIntervalLog2                         = -1;
   c->m_fgaStrengthVal                          = VVENC_SET_FGA_STRENGTH(1.0);
 
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
-  c->m_reservedInt32 = 0;
+  memset( c->m_reservedInt8_3, 0, sizeof(c->m_reservedInt8_3) );
+  memset( c->m_reservedInt8_4, 0, sizeof(c->m_reservedInt8_4) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -1802,10 +1804,20 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter( c, c->m_fga < 0 || c->m_fga > 3, "Film grain analysis (fga) must be 0, 1, 2 or 3!");
+  vvenc_confirmParameter( c, c->m_fgaIntervalLog2 < -1 || c->m_fgaIntervalLog2 > 6, "Film grain analysis interval (FgaIntervalLog2) must be -1 (automatic) or 0 to 6!");
   if (c->m_fga)
   {
     vvenc_confirmParameter( c, !c->m_vvencMCTF.MCTF, "Film grain analysis cannot be enabled when MCTF is disabled!");
     vvenc_confirmParameter( c, c->m_IntraPeriod <=1, "Film grain analysis cannot be enabled when intra period is less than two!");
+    if( c->m_fgaIntervalLog2 >= 0 && c->m_fgaIntervalLog2 <= 6 )
+    {
+      // The analysed pictures are the multiples of the interval by their position in the GOP, so the interval divides
+      // the GOP size. With the look-ahead of the one-pass rate control the pictures reach the final stage in coding
+      // order, so they cannot be analysed in POC order before their access units: only the GOP's first picture then.
+      const int interval = 1 << c->m_fgaIntervalLog2;
+      vvenc_confirmParameter( c, c->m_GOPSize % interval != 0, "Film grain analysis interval (1 << FgaIntervalLog2) must divide the GOP size!");
+      vvenc_confirmParameter( c, c->m_LookAhead && interval != c->m_GOPSize, "Film grain analysis interval (FgaIntervalLog2) must be -1 (automatic) or the GOP size with the look-ahead!");
+    }
   }
 
   vvenc_confirmParameter( c, !autoGop && c->m_numRefPics    != 0,                         "NumRefPics cannot be used if explicit GOP configuration is used!" );
@@ -3307,7 +3319,15 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
     }
     css << loglvl << "Cost function                          : " << getCostFunctionStr( c->m_costMode ) << "\n";
-    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << " (strength: " << c->m_fgaStrengthVal / 64.0 << ")\n";
+    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << " (strength: " << c->m_fgaStrengthVal / 64.0;
+    if( c->m_fga )
+    {
+      css << ", interval: ";
+      if( c->m_fgaIntervalLog2 < 0 )       css << "auto";
+      else if( c->m_fgaIntervalLog2 <= 6 ) css << ( 1 << c->m_fgaIntervalLog2 );
+      else                                 css << "log2 " << (int)c->m_fgaIntervalLog2 << " (invalid)";
+    }
+    css << ")\n";
   }
 
   if( eMsgLevel >= VVENC_VERBOSE )

@@ -741,16 +741,41 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   double   meanRmsAcrossPic    = 0.0;
   uint64_t sumSRmsAcrossPic    = 0;
   uint16_t nMax = 0, maxRmsCTU = 0;
-  bool  isFilterThisFrame      = mctfIdx >= 0;
+  bool  isFilterThisFrame      = mctfIdx >= 0 && ( pic->useMCTF || pic->gopEntry->m_isStartOfGop );
+  // The film grain analysis looks at the first picture of every GOP, the pictures FgaIntervalLog2 adds
+  // (GOPCfg::xSetFgaPictures) and the first picture of every shot: the sequence's first picture and the scene cuts
+  // PreProcess finds, so that no shot is given the grain of another. PreProcess marks a cut when the picture after it
+  // has passed, which MCTF's future references guarantee here; with the look-ahead, pictures reach the analysis in
+  // coding order, where only GOP starts keep the analyses in POC order (EncGOP::xAnalyzeFilmGrain).
+  const bool fgaShots          = !m_encCfg->m_LookAhead && m_encCfg->m_vvencMCTF.MCTFFutureReference;
+  const bool fgaShotStart      = fgaShots && ( pic->poc == 0 || pic->m_picShared->fgaSceneCut() );
+  // A shot start has no neighbour before it in its shot, so its temporal residual is one-sided and overshoots the
+  // grain (11-28 % in the fine band on a 4K film shot, where two-sided analyses inside the shot land at 0.88-0.95).
+  // So with the improved analysis (--fga 2) the picture after it, whose neighbours are both inside the shot, is analysed
+  // as well and restarts the shot's statistics without the start's analysis (EncGOP::xIssueFgaTask), which then serves
+  // the start picture alone. PreProcess has marked the cut on the picture before it by then (fgaLastSceneCutPoc).
+  const bool fgaShotRestart    = fgaShots && m_encCfg->m_fga >= 2
+                                 && ( pic->poc == 1 || pic->m_picShared->fgaLastSceneCutPoc() == pic->poc - 1 );
+  const bool fgaPicture        = m_encCfg->m_fga && m_isFinalPass
+                                 && ( pic->gopEntry->m_isStartOfGop || pic->gopEntry->m_isFgaPicture || fgaShotStart || fgaShotRestart );
+  if( fgaPicture && fgaShotRestart )
+  {
+    pic->m_picShared->fgaShotRestart() = true;
+  }
+  // A picture the analysis looks at that MCTF does not filter: its motion is estimated for the analysis copies only,
+  // nothing that changes the coding (the filtered picture, the QP offsets).
+  const bool fgaOnly           = fgaPicture && !isFilterThisFrame;
 
   int dropFrames = ( m_encCfg->m_usePerceptQPA ? VVENC_MCTF_RANGE >> 1 : 0 );
-  if( mctfIdx >= 0 )
+  if( isFilterThisFrame || fgaOnly )
   {
-    const int idxTLayer = m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1);
+    // the reference range of the picture's temporal level (for an analysis-only picture, of its position in the GOP;
+    // a shot start off the FgaIntervalLog2 positions keeps m_fgaLayer 0, the full range of a GOP start)
+    const int idxTLayer = isFilterThisFrame ? m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1) : pic->gopEntry->m_fgaLayer;
     const int threshold = (m_MCTFSpeedVal >> (idxTLayer * 3)) & 7;
 
     dropFrames          = std::min(VVENC_MCTF_RANGE, threshold);
-    isFilterThisFrame   = threshold < VVENC_MCTF_RANGE;
+    isFilterThisFrame   = isFilterThisFrame && threshold < VVENC_MCTF_RANGE;
   }
 
   const int filterFrames = VVENC_MCTF_RANGE - 2 - dropFrames;
@@ -758,12 +783,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames + 2 );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames + 2 );
 
-  if( !pic->useMCTF && !pic->gopEntry->m_isStartOfGop )
-  {
-    isFilterThisFrame = false;
-  }
-
-  if ( isFilterThisFrame )
+  if ( isFilterThisFrame || fgaOnly )
   {
     bool  useMCTFadaptation = true;
     const bool condAddLevel = useMCTFadaptation && m_area.width >= 1920;
@@ -861,19 +881,19 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     }
 
     // filter
-    if( pic->useMCTF )
+    if( isFilterThisFrame && pic->useMCTF )
     {
       fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
       bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
     }
 
     // The film grain analysis compares the original with a filtered copy of fixed strength, independent of the
-    // filtering for the encoding, as the dedicated temporal filter of the VTM analysis does (strength 1.5). It analyses
-    // the first picture of every GOP, whose motion has just been estimated.
-    if( m_encCfg->m_fga && m_isFinalPass && pic->gopEntry->m_isStartOfGop )
+    // filtering for the encoding, as the dedicated temporal filter of the VTM analysis does (strength 1.5), on the
+    // pictures chosen above (fgaPicture), whose motion has just been estimated.
+    if( fgaPicture )
     {
       static constexpr double FGA_FILTER_STRENGTH = 1.5;
-      if( pic->useMCTF && overallStrength == FGA_FILTER_STRENGTH )
+      if( isFilterThisFrame && pic->useMCTF && overallStrength == FGA_FILTER_STRENGTH )
       {
         // the picture filtered for the encoding is exactly the one the analysis needs (from QP 20 on)
         pic->m_picShared->fgaUsesFilteredBuf() = true;
@@ -903,7 +923,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
                                                                      pic->m_picShared->getFgaResidualBuf() );
     }
 
-    if( m_encCfg->hasBlockQpOffsets() || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop )
+    if( isFilterThisFrame && ( m_encCfg->hasBlockQpOffsets() || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop ) )
     {
       const int ctuSize        = m_encCfg->m_bimCtuSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
@@ -1098,7 +1118,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       }
     }
   }
-  else
+  if( !isFilterThisFrame )
   {
     pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
   }

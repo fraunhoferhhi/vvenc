@@ -332,6 +332,10 @@ int testLibParameterRanges()
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
 
+  // film grain analysis interval: -1 (automatic) or 0 to 6 (the interval's log2; with the analysis on see checkFgaIntervalLog2)
+  testParamList( "FgaIntervalLog2",                        vvencParams.m_fgaIntervalLog2,            vvencParams, { -1,0,3,6 } );
+  testParamList( "FgaIntervalLog2",                        vvencParams.m_fgaIntervalLog2,            vvencParams, { -2,7 }, true );
+
   testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],        vvencParams, { 8,10 } );
   testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],        vvencParams, { 0,1,7,9,11 }, true );
 
@@ -372,6 +376,35 @@ int testLibParameterRanges()
   testParamList<bool, bool>( "usePictureTimingSEIEnabled",    vvencParams.m_pictureTimingSEIEnabled,    vvencParams, { true }, true );
 
   return 0;
+}
+
+// The film grain analysis interval with the analysis on: 1 << FgaIntervalLog2 must divide the GOP size, and with the
+// look-ahead of the one-pass rate control only -1 (automatic) or the GOP size pass. Each refused setting passes at -1
+// (the same GOP size and rate control), so the refusal comes from the interval.
+int checkFgaIntervalLog2()
+{
+  struct Case { int gopSize; int targetBitrate; int log2Interval; bool valid; };
+  const Case cases[] = { { 32, 0, -1, true }, { 32, 0, 0, true }, { 32, 0, 5, true }, { 32, 0, 6, false },
+                         { 16, 0, -1, true }, { 16, 0, 4, true }, { 16, 0, 5, false },
+                         { 16, 500000, -1, true }, { 16, 500000, 4, true }, { 16, 500000, 3, false } };
+  vvencEncoder* enc = vvenc_encoder_create();
+  int result = 0;
+  for( const Case& t : cases )
+  {
+    vvenc_config c;
+    vvenc_config_default( &c );
+    fillEncoderParameters( c, false );
+    c.m_fga             = 2;
+    c.m_GOPSize         = t.gopSize;
+    c.m_RCTargetBitrate = t.targetBitrate;   // with one pass (the default) the look-ahead is on
+    c.m_fgaIntervalLog2 = t.log2Interval;
+    if( ( 0 == vvenc_check_config( enc, &c ) ) != t.valid )
+    {
+      result = -1;
+    }
+  }
+  vvenc_encoder_close( enc );
+  return result;
 }
 
 int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool expectedFail = false )
@@ -1279,6 +1312,7 @@ int testLibCallingOrder()
 int testSDKDefaultBehaviour()
 {
   testfunc( "checkSDKDefaultBehaviourRC", &checkSDKDefaultBehaviourRC, false );
+  testfunc( "checkFgaIntervalLog2", &checkFgaIntervalLog2, false );
   testfunc( "checkSDKHdrChromaQpMappingTables", &checkSDKHdrChromaQpMappingTables, false );
   return 0;
 }
