@@ -118,6 +118,48 @@ void cpyCoeff_neon<8>( const Pel* src, ptrdiff_t srcStride, TCoeff* dst, unsigne
   } while( --height != 0 );
 }
 
+// cpyResi: the residual (rows contiguous in src) narrowed to Pel with signed saturation, as the x86 kernels'
+// _mm_packs_epi32; C's truncation gives the same in the inverse transform's 16-bit output range.
+template<int W>
+void cpyResi_neon( const TCoeff* src, Pel* dst, ptrdiff_t stride, unsigned width, unsigned height );
+
+template<>
+void cpyResi_neon<4>( const TCoeff* src, Pel* dst, ptrdiff_t stride, unsigned width, unsigned height )
+{
+  // the callers take cpyResi8 for widths that are multiples of 8, so with power-of-two widths only 4 is left
+  CHECKD( width != 4, "Width must be 4" );
+
+  for( ; height > 0; height--, src += 4, dst += stride )
+  {
+    const int32x4_t s = vld1q_s32( src );
+    vst1_s16( dst, vqmovn_s32( s ) );
+  }
+}
+
+template<>
+void cpyResi_neon<8>( const TCoeff* src, Pel* dst, ptrdiff_t stride, unsigned width, unsigned height )
+{
+  for( ; height > 0; height--, src += width, dst += stride )
+  {
+    unsigned x = 0;
+    for( ; x + 16 <= width; x += 16 )
+    {
+      const int32x4_t s0 = vld1q_s32( src + x );
+      const int32x4_t s1 = vld1q_s32( src + x + 4 );
+      const int32x4_t s2 = vld1q_s32( src + x + 8 );
+      const int32x4_t s3 = vld1q_s32( src + x + 12 );
+      vst1q_s16( dst + x, vcombine_s16( vqmovn_s32( s0 ), vqmovn_s32( s1 ) ) );
+      vst1q_s16( dst + x + 8, vcombine_s16( vqmovn_s32( s2 ), vqmovn_s32( s3 ) ) );
+    }
+    if( width & 8 )
+    {
+      const int32x4_t s0 = vld1q_s32( src + x );
+      const int32x4_t s1 = vld1q_s32( src + x + 4 );
+      vst1q_s16( dst + x, vcombine_s16( vqmovn_s32( s0 ), vqmovn_s32( s1 ) ) );
+    }
+  }
+}
+
 template<int W>
 void roundClip_neon( TCoeff* dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin,
                      const TCoeff outputMax, const TCoeff round, const TCoeff shift );
@@ -383,6 +425,8 @@ void TCoeffOps::_initTCoeffOpsARM<NEON>()
   cpyCoeff8  = cpyCoeff_neon<8>;
   roundClip4 = roundClip_neon<4>;
   roundClip8 = roundClip_neon<8>;
+  cpyResi4   = cpyResi_neon<4>;
+  cpyResi8   = cpyResi_neon<8>;
 
   fastInvCore[ 0 ]    = fastInvCore_neon<4>;
   fastInvCore[ 1 ]    = fastInvCore_neon<8>;
