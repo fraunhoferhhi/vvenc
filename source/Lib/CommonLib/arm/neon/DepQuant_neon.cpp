@@ -708,13 +708,26 @@ void checkAllRdCostsOdd1_neon( const ScanPosType spt, const int64_t pq_a_dist, c
   store_s8x4( decisions.prevId, prevId );
 }
 
+// The bits of a candidate level in the coefficient context cff of state stateId, as in the scalar checkRdCosts: from 4
+// on, two levels share a gtx entry and the Rice code with the state's parameter tells them apart
+static inline int32_t levelBits_neon( const StateMem& state, const int stateId, const CoeffFracBits& cff, const TCoeff level )
+{
+  if( level < 4 )
+  {
+    return cff.bits[level];
+  }
+  const unsigned value = ( level - 4 ) >> 1;
+  return cff.bits[level - ( value << 1 )] + g_goRiceBits[state.m_goRicePar[stateId]][std::min<unsigned>( value, RICEMAX - 1 )];
+}
+
 // checkAllRdCosts of the four states with the data flow of the x86 DQInternSimd::checkAllRdCosts: the same costs, and per
 // decision the same candidates in the same order, each replacing the best only when strictly smaller. Decisions are
-// written, not read. All candidate levels are below 4. Per decision (A: pqData[0] from states 0 and 1,
+// written, not read. anyGe4: a candidate level may be 4 or more. Per decision (A: pqData[0] from states 0 and 1,
 // pqData[3] from 2 and 3; B: pqData[2] from 0 and 1, pqData[1] from 2 and 3):
 //   decision 0: Z from 0, A from 0, B from 1    decision 1: Z from 2, A from 2, B from 3
 //   decision 2: B from 0, Z from 1, A from 1    decision 3: B from 2, Z from 3, A from 3
 // Forced inline: xPopulateTrellis calls it for every coefficient
+template<bool anyGe4>
 static ALWAYS_INLINE void checkAllRdCosts_neon( const ScanPosType spt, const PQData* pqData, Decisions& decisions, const StateMem& state )
 {
   const int64x2_t rdCost01 = vld1q_s64( &state.rdCost[0] );
@@ -745,17 +758,34 @@ static ALWAYS_INLINE void checkAllRdCosts_neon( const ScanPosType spt, const PQD
   const CoeffFracBits& cff1 = state.m_gtxFracBitsArray[state.ctx.cff[1]];
   const CoeffFracBits& cff2 = state.m_gtxFracBitsArray[state.ctx.cff[2]];
   const CoeffFracBits& cff3 = state.m_gtxFracBitsArray[state.ctx.cff[3]];
-  // each lane straight from its table entry
-  int32x2_t addA01 = vld1_dup_s32( &cff0.bits[lvl0] );
-  int32x2_t addA23 = vld1_dup_s32( &cff2.bits[lvl3] );
-  int32x2_t addB01 = vld1_dup_s32( &cff0.bits[lvl2] );
-  int32x2_t addB23 = vld1_dup_s32( &cff2.bits[lvl1] );
-  addA01 = vld1_lane_s32( &cff1.bits[lvl0], addA01, 1 );
-  addA23 = vld1_lane_s32( &cff3.bits[lvl3], addA23, 1 );
-  addB01 = vld1_lane_s32( &cff1.bits[lvl2], addB01, 1 );
-  addB23 = vld1_lane_s32( &cff3.bits[lvl1], addB23, 1 );
-  int32x4_t addA = vcombine_s32( addA01, addA23 );
-  int32x4_t addB = vcombine_s32( addB01, addB23 );
+  int32x4_t addA, addB;
+  if( !anyGe4 )
+  {
+    // levels below 4: each lane straight from its table entry
+    int32x2_t addA01 = vld1_dup_s32( &cff0.bits[lvl0] );
+    int32x2_t addA23 = vld1_dup_s32( &cff2.bits[lvl3] );
+    int32x2_t addB01 = vld1_dup_s32( &cff0.bits[lvl2] );
+    int32x2_t addB23 = vld1_dup_s32( &cff2.bits[lvl1] );
+    addA01 = vld1_lane_s32( &cff1.bits[lvl0], addA01, 1 );
+    addA23 = vld1_lane_s32( &cff3.bits[lvl3], addA23, 1 );
+    addB01 = vld1_lane_s32( &cff1.bits[lvl2], addB01, 1 );
+    addB23 = vld1_lane_s32( &cff3.bits[lvl1], addB23, 1 );
+    addA = vcombine_s32( addA01, addA23 );
+    addB = vcombine_s32( addB01, addB23 );
+  }
+  else
+  {
+    const int32_t bitsA0 = levelBits_neon( state, 0, cff0, lvl0 );
+    const int32_t bitsA1 = levelBits_neon( state, 1, cff1, lvl0 );
+    const int32_t bitsA2 = levelBits_neon( state, 2, cff2, lvl3 );
+    const int32_t bitsA3 = levelBits_neon( state, 3, cff3, lvl3 );
+    const int32_t bitsB0 = levelBits_neon( state, 0, cff0, lvl2 );
+    const int32_t bitsB1 = levelBits_neon( state, 1, cff1, lvl2 );
+    const int32_t bitsB2 = levelBits_neon( state, 2, cff2, lvl1 );
+    const int32_t bitsB3 = levelBits_neon( state, 3, cff3, lvl1 );
+    addA = vcombine_s32( vset_lane_s32( bitsA1, vdup_n_s32( bitsA0 ), 1 ), vset_lane_s32( bitsA3, vdup_n_s32( bitsA2 ), 1 ) );
+    addB = vcombine_s32( vset_lane_s32( bitsB1, vdup_n_s32( bitsB0 ), 1 ), vset_lane_s32( bitsB3, vdup_n_s32( bitsB2 ), 1 ) );
+  }
 
   if( spt == SCAN_SOCSBB )
   {
@@ -839,7 +869,11 @@ struct KernelsNeon
 {
   static void checkAllRdCosts( const vvenc::DepQuant&, const ScanPosType spt, const PQData* pqData, Decisions& decisions, const StateMem& state )
   {
-    checkAllRdCosts_neon( spt, pqData, decisions, state );
+    checkAllRdCosts_neon<false>( spt, pqData, decisions, state );
+  }
+  static void checkAllRdCostsGe4( const vvenc::DepQuant&, const ScanPosType spt, const PQData* pqData, Decisions& decisions, const StateMem& state )
+  {
+    checkAllRdCosts_neon<true>( spt, pqData, decisions, state );
   }
   static void checkAllRdCostsOdd1( const vvenc::DepQuant&, const ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, Decisions& decisions, const StateMem& state )
   {
@@ -865,7 +899,8 @@ void DepQuant::_initDepQuantARM<NEON>()
   m_dequantCoeffs = DQInternSimd::dequantCoeffs_neon;
   m_updateStates = DQInternSimd::updateStates_neon;
   m_updateStatesEOS = DQInternSimd::updateStatesEOS_neon;
-  m_checkAllRdCosts = DQInternSimd::checkAllRdCosts_neon;
+  m_checkAllRdCosts = DQInternSimd::checkAllRdCosts_neon<false>;
+  m_checkAllRdCostsGe4 = DQInternSimd::checkAllRdCosts_neon<true>;
   m_populateTrellis = xPopulateTrellis<DQInternSimd::KernelsNeon>;
 }
 
