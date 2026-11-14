@@ -260,6 +260,8 @@ public:
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
+  // Whether the stage holds the pictures it needs to process: minQueueSize pictures; stages may override
+  virtual bool hasEnoughPictures( const PicList& picList ) const { return (int)picList.size() >= m_minQueueSize; }
 
 public:
   // Waits until a picture in coding is finished; returns false at once when no picture is in coding.
@@ -400,7 +402,7 @@ public:
     }
 
     // ready to go?
-    if( ( (int)m_procList.size() >= m_minQueueSize )
+    if( hasEnoughPictures( m_procList )
         || ( m_procList.size() && flush ) )
     {
       // process always one picture or all if encoder should be flushed
