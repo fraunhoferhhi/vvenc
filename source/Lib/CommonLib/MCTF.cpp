@@ -869,7 +869,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
     // The film grain analysis compares the original with a filtered copy of fixed strength, independent of the
     // filtering for the encoding, as the dedicated temporal filter of the VTM analysis does (strength 1.5). It analyses
-    // the first picture of every GOP, whose motion has just been estimated.
+    // the start picture of every GOP, whose motion has just been estimated.
     if( m_encCfg->m_fga && m_isFinalPass && pic->gopEntry->m_isStartOfGop )
     {
       static constexpr double FGA_FILTER_STRENGTH = 1.5;
