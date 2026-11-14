@@ -58,6 +58,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <map>
 #include <set>
+#include <tuple>
 #include "EncStage.h"
 #include "SEIFilmGrainAnalyzer.h"
 
@@ -223,6 +224,39 @@ private:
   static constexpr size_t   FGC_SEI_HISTORY = 160;
   std::set<int>             m_fgcWrittenPocs;
   bool                      m_fgcRaslSeiPending = false;
+  // The film grain SEI fitted to the grain the coding lost (xScaleToLostGrain): per component, intensity interval and
+  // temporal layer, the interval's summed spectra of the latest LOST_GRAIN_POOL pictures of that layer and the last
+  // cut-offs and scaling factor written; per component and temporal layer, the last cut-off shift. Cleared at every
+  // random access point (--fga 2 and 3).
+  struct LostGrainSums
+  {
+    double orig[ 256 ] = {};
+    double reco[ 256 ] = {};
+    int    blocks      = 0;
+    int    poc         = 0;
+  };
+  // Only the layer's pictures at most this many pictures before the current one are pooled: the lower temporal layers'
+  // pictures are 4, 8 or more apart, so their pools reached 12, 24 or more pictures back, into different content, while
+  // the highest layer's reached 6. On gangster_chase the pictures of layers 3 and 4 then got 1.6-2.2 times the scaling
+  // factor of the layer-5 pictures between them (--fga 3: 112 / 84 / 82 against 49-53).
+  static constexpr int LOST_GRAIN_POOL_SPAN = 6;
+  struct LostGrainFitted
+  {
+    int h, w, scale;
+  };
+  using LostGrainKey = std::tuple<int, int, int, unsigned>;   ///< component, interval lower and upper bound, temporal layer
+  static constexpr size_t LOST_GRAIN_POOL = 4;
+  std::map<LostGrainKey, std::deque<LostGrainSums>>        m_lostGrainHistory;
+  std::map<LostGrainKey, LostGrainFitted>                  m_lostGrainFitted;
+  std::map<std::pair<int, unsigned>, std::pair<int, int>> m_lostGrainShift;   ///< (component, layer) -> (dh, dw)
+  // With the auto-regressive model (--fga 3): per component, the grain of the filter last signalled (FGAnalyzer::arGrain
+  // is computed once per filter, the fit runs for every picture).
+  struct ArGrainOfFilter
+  {
+    std::vector<int>    filter;   ///< log2 scale factor, then the model values after the scaling factor
+    FGAnalyzer::ArGrain grain;
+  };
+  ArGrainOfFilter           m_arGrain[ MAX_NUM_COMP ];
 
 public:
   EncGOP( MsgLog& msglog );
@@ -281,7 +315,14 @@ private:
   const FilmGrainParam& xFilmGrainParametersAt( int poc ) const;
   SeiFgc xFilmGrainSei                ( const FilmGrainParam& param, ChromaFormat chromaFormat );
   bool xFilmGrainSeiNeeded           ( const Slice& slice, const SeiFgc& sei, ChromaFormat chromaFormat );
-  void xWriteLeadingSEIs              ( const Picture& pic, AccessUnitList& accessUnit );
+  bool xFitsLostGrain                ( ) const;
+  void xStoreLostGrainSpectra        ( Picture& pic ) const;
+  void xScaleToLostGrain             ( Picture& pic, const Slice& slice, SeiFgc& sei );
+  void xFitLostGrainAr               ( int c, unsigned layer, int bitDepth, int log2ScaleFactor,
+                                       const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm );
+  void xFitLostGrain                 ( int c, unsigned layer, int bitDepth, bool chroma420, int log2ScaleFactor,
+                                       const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm );
+  void xWriteLeadingSEIs              ( Picture& pic, AccessUnitList& accessUnit );
   void xWriteTrailingSEIs             ( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr );
   int  xWriteVPS                      ( AccessUnitList &accessUnit, const VPS *vps, HLSWriter& hlsWriter );
   int  xWriteDCI                      ( AccessUnitList &accessUnit, const DCI *dci, HLSWriter& hlsWriter );

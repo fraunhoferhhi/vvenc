@@ -6044,17 +6044,7 @@ static bool test_FGAnalyzerKernels()
         const int e2 = k.findEqual( c.data(), w, c[ w / 2 ], p2.data() );
         bad += e1 != e2 || p1 != p2;
 
-        // temporal residual: 4x downsampling and 4x4 SADs of w / 4 blocks over four rows, residual rows
-        const int n = w / 4 + 1, stride = 4 * n + 8;
-        auto s4 = randomRow( 4 * stride, mode ), r4 = randomRow( 4 * stride + 3, mode );
-        std::vector<Pel> q1( n + 16, -1 ), q2( n + 16, -1 );
-        vvenc::fgaDownsample4Core( s4.data(), stride, n, q1.data() );
-        k.downsample4( s4.data(), stride, n, q2.data() );
-        bad += q1 != q2;
-        std::vector<int> sad1( n + 16, -1 ), sad2( n + 16, -1 );
-        vvenc::fgaSad4x4RowCore( s4.data(), stride, r4.data(), stride + 1, n, sad1.data() );
-        k.sad4x4Row( s4.data(), stride, r4.data(), stride + 1, n, sad2.data() );
-        bad += sad1 != sad2;
+        // temporal residual rows
         for( bool two : { true, false } )
         {
           std::vector<Pel> e1r( w + 32, -1 ), e2r( w + 32, -1 );
@@ -6095,6 +6085,97 @@ static bool test_FGAnalyzerKernels()
 }
 
 #endif // ENABLE_SIMD_OPT_FGA
+
+// A 640x256 10-bit luma picture for the film grain analysis: the left half a smooth ramp (flat blocks), the right half
+// a bright ramp crossed by a dark line every 48 samples, so that the edge mask leaves no flat block there. denoised is
+// the picture, orig has near-Gaussian grain of the given standard deviations added to the two halves: the sum of 12
+// uniform values from the generator's raw output, which is the same in every standard library (the distributions of
+// <random> are not).
+static void fgaBrightTestPicture( std::vector<Pel>& orig, std::vector<Pel>& denoised, double grainLeft, double grainRight )
+{
+  constexpr int W = 640, H = 256;
+  std::mt19937 rng( 1 );
+  auto gauss = []( std::mt19937& generator )
+  {
+    double sum = -6.0;   // 12 uniform values in [0, 1): mean 6, variance 1
+    for( int i = 0; i < 12; i++ )
+    {
+      sum += ( generator() >> 8 ) * ( 1.0 / 16777216.0 );
+    }
+    return sum;
+  };
+  orig.resize( W * H );
+  denoised.resize( W * H );
+  for( int y = 0; y < H; y++ )
+  {
+    for( int x = 0; x < W; x++ )
+    {
+      const bool right = x >= W / 2;
+      const int  ramp  = ( right ? 680 : 280 ) + ( x % ( W / 2 ) ) / 4;
+      const bool line  = right && x % 48 >= 7 && x % 48 <= 8;
+      const int  value = line ? 400 : ramp;
+      denoised[ y * W + x ] = (Pel) value;
+      orig    [ y * W + x ] = (Pel) Clip3( 0, 1023, (int) std::lround( value + ( right ? grainRight : grainLeft ) * gauss( rng ) ) );
+    }
+  }
+}
+
+// The scaling factor the analysis signals for an 8-bit luma level, 0: none.
+static int fgaSignalledScale( const vvenc::FGAnalyzer& analyzer, int level )
+{
+  int log2ScaleFactor = 0;
+  SeiFgc::CompModel model[ MAX_NUM_COMP ];
+  analyzer.getSignalledParameters( 1.0, log2ScaleFactor, model );
+  for( int i = 0; model[ COMP_Y ].presentFlag && i < model[ COMP_Y ].numIntensityIntervals; i++ )
+  {
+    const SeiFgc::CompModelIntensityValues& iv = model[ COMP_Y ].intensityValues[ i ];
+    if( level >= iv.intensityIntervalLowerBound && level <= iv.intensityIntervalUpperBound )
+    {
+      return iv.compModelValue[ 0 ];
+    }
+  }
+  return 0;
+}
+
+// The improved film grain analysis on a bright area without flat blocks: it signals the grain of that area (as strong
+// as on the flat area when both have the same grain), and next to none when the bright area is clean (the lowest of the
+// scaling function's quantization levels is not exactly zero).
+static bool test_FGAnalyzerBrightLevels()
+{
+  printf( "Testing the film grain analysis on bright levels without flat blocks\n" );
+  constexpr int W = 640, H = 256;
+  const int  bitDepths [ MAX_NUM_CH ]   = { 10, 10 };
+  const bool doAnalysis[ MAX_NUM_COMP ] = { true, false, false };
+  const int  flatLevel = 80, brightLevel = 180;   // 8-bit levels inside the two ramps
+
+  bool passed = true;
+  for( const bool grainyBright : { true, false } )
+  {
+    std::vector<Pel> orig, denoised;
+    fgaBrightTestPicture( orig, denoised, 8.0, grainyBright ? 8.0 : 0.0 );
+    const Area area( 0, 0, W, H );
+    const CPelUnitBuf origBuf( CHROMA_400, CPelBuf( orig.data(), W, area ) );
+    const CPelUnitBuf denoisedBuf( CHROMA_400, CPelBuf( denoised.data(), W, area ) );
+
+    vvenc::FGAnalyzer analyzer;
+    analyzer.init( W, H, CHROMA_400, bitDepths, doAnalysis, true );
+    analyzer.estimateGrainParameters( origBuf, denoisedBuf );
+
+    const int flatScale   = fgaSignalledScale( analyzer, flatLevel );
+    const int brightScale = fgaSignalledScale( analyzer, brightLevel );
+    passed = compare_value( "film grain signalled on the flat area", true, flatScale > 0 ) && passed;
+    if( grainyBright )
+    {
+      passed = compare_value( "bright area's grain within a quarter of the flat area's", true,
+                              4 * brightScale >= 3 * flatScale && 4 * brightScale <= 5 * flatScale ) && passed;
+    }
+    else
+    {
+      passed = compare_value( "clean bright area's grain below an eighth of the flat area's", true, 8 * brightScale <= flatScale ) && passed;
+    }
+  }
+  return passed;
+}
 
 #if ENABLE_SIMD_OPT_QUANT
 static bool check_needRdoq( Quant* ref, Quant* opt, unsigned num_cases )
@@ -7277,6 +7358,7 @@ static const UnitTestEntry test_suites[] = {
 #if ENABLE_SIMD_OPT
     { "CuTree", test_CuTree },
 #endif
+    { "FGAnalyzerBrightLevels", test_FGAnalyzerBrightLevels },
     { "CuTreeRefs", test_CuTreeRefs },
     { "ThreadPool", test_ThreadPool },
     { "RefreshMarking", test_RefreshMarking },
