@@ -1254,6 +1254,7 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter( bool enableOpt )
 
   m_getPreBlkStatsAccum = getPreBlkStatsAccum;
   m_getPreBlkStatsWeightedAccum = getPreBlkStatsWeightedAccum;
+  m_getLinBlkInputs = getLinBlkInputs<false>;
   m_getPreBlkStatsAccumEqualBins = getPreBlkStatsAccumEqualBins;
 
   if( enableOpt )
@@ -3652,7 +3653,8 @@ static void getPreBlkStatsWeightedAccum( AlfCovariance& alfCovariance, const Alf
 
 void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const ChannelType channel, int vbCTUHeight, int vbPos)
 {
-  const int numBins = ( isLuma( channel ) ? m_encCfg->m_useNonLinearAlfLuma : m_encCfg->m_useNonLinearAlfChroma ) ? AlfNumClippingValues : 1;
+  const bool linear  = isLuma( channel ) ? !m_encCfg->m_useNonLinearAlfLuma : !m_encCfg->m_useNonLinearAlfChroma;
+  const int  numBins = linear ? 1 : AlfNumClippingValues;
 
   int transposeIdx = 0;
   int classIdx = 0;
@@ -3686,6 +3688,8 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         clipBotRow[ii] = -clipTopRow[ii]; // symmetric
       }
     }
+    // no row of the group clipped at a virtual boundary (clipTopRow is -clipBotRow): each block's inputs in one call
+    const bool unclipped = std::all_of( clipBotRow, clipBotRow + 4, [&]( int clip ) { return clip == maxFilterSamples; } );
 
     for( int j = 0; j < areaDst.width; j += 4 )
     {
@@ -3702,57 +3706,63 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
       }
 
       Pel yLocal[4][4];
-      for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
-      {
-        yLocal[ii][jj] = org[j + jj + ii * orgStride] - rec[j + jj + ii * recStride];
-      }
-
-
       Pel ELocal[MaxAlfNumClippingValues * ( MAX_NUM_ALF_LUMA_COEFF << 4 )];
 
-      if( isLuma( channel ) ? !m_encCfg->m_useNonLinearAlfLuma : !m_encCfg->m_useNonLinearAlfChroma )
+      if( linear && unclipped )
       {
-        if( useSimd )
-        {
-          for( int ii = 0; ii < 4; ii++ )
-          {
-            if( clipBotRow[ii] == 4 )
-              calcLinCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
-            else
-              calcLinCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
-          }
-        }
-        else
-        {
-          for( int ii = 0; ii < 4; ii++ )
-          {
-            if( clipBotRow[ii] == 4 )
-              calcLinCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
-            else
-              calcLinCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
-          }
-        }
+        m_getLinBlkInputs( ELocal, yLocal, org + j, orgStride, rec + j, recStride, halfFilterLength, transposeIdx );
       }
       else
       {
-        if( useSimd )
+        for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
         {
-          for( int ii = 0; ii < 4; ii++ )
+          yLocal[ii][jj] = org[j + jj + ii * orgStride] - rec[j + jj + ii * recStride];
+        }
+
+        if( linear )
+        {
+          if( useSimd )
           {
-            if( clipBotRow[ii] == 4 )
-              calcCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
-            else
-              calcCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              if( clipBotRow[ii] == 4 )
+                calcLinCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+              else
+                calcLinCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            }
+          }
+          else
+          {
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              if( clipBotRow[ii] == 4 )
+                calcLinCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+              else
+                calcLinCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            }
           }
         }
         else
         {
-          for( int ii = 0; ii < 4; ii++ )
+          if( useSimd )
           {
-            if( clipBotRow[ii] == 4 )
-              calcCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
-            else
-              calcCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              if( clipBotRow[ii] == 4 )
+                calcCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+              else
+                calcCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            }
+          }
+          else
+          {
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              if( clipBotRow[ii] == 4 )
+                calcCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+              else
+                calcCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            }
           }
         }
       }
@@ -3784,7 +3794,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
   int numClasses = classifier ? MAX_NUM_ALF_CLASSES : 1;
 
-  if( ( isLuma( channel ) ? !m_encCfg->m_useNonLinearAlfLuma : !m_encCfg->m_useNonLinearAlfChroma ) )
+  if( linear )
   {
     for( classIdx = 0; classIdx < numClasses; classIdx++ )
     {
@@ -4217,6 +4227,23 @@ template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  false>( Pel* ELoc
 template void EncAdaptiveLoopFilter::calcLinCovariance4<false, false>( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  true> ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 template void EncAdaptiveLoopFilter::calcLinCovariance4<false, true> ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+
+template<bool simd>
+void EncAdaptiveLoopFilter::getLinBlkInputs( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride,
+                                             const int halfFilterLength, const int transposeIdx )
+{
+  for( int ii = 0; ii < 4; ii++ )
+  {
+    for( int jj = 0; jj < 4; jj++ )
+    {
+      yLocal[ii][jj] = org[jj + ii * orgStride] - rec[jj + ii * recStride];
+    }
+    calcLinCovariance4<false, simd>( ELocal + ( ii << 2 ), rec + ii * recStride, recStride, halfFilterLength, transposeIdx, -4, 4 );
+  }
+}
+
+template void EncAdaptiveLoopFilter::getLinBlkInputs<false>( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride, const int halfFilterLength, const int transposeIdx );
+template void EncAdaptiveLoopFilter::getLinBlkInputs<true> ( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride, const int halfFilterLength, const int transposeIdx );
 
 template<bool clipToBdry, bool simd>
 void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow )

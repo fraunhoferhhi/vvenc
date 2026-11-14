@@ -341,12 +341,90 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
   alfCovariance.pixAcc += _mm_cvtsi128_si32( mmacc );
 }
 
+#ifdef USE_AVX2
+// The 4 samples at p of each of 4 rows, gathered row by row into one register.
+static inline __m256i alfLoad4x4( const Pel* p, const ptrdiff_t stride )
+{
+  const __m128i rows01 = _mm_unpacklo_epi64( _mm_loadl_epi64( ( const __m128i* )p ), _mm_loadl_epi64( ( const __m128i* )( p + stride ) ) );
+  const __m128i rows23 = _mm_unpacklo_epi64( _mm_loadl_epi64( ( const __m128i* )( p + 2 * stride ) ), _mm_loadl_epi64( ( const __m128i* )( p + 3 * stride ) ) );
+  return _mm256_inserti128_si256( _mm256_castsi128_si256( rows01 ), rows23, 1 );
+}
+
+// EncAdaptiveLoopFilter::m_getLinBlkInputs: calcLinCovariance4 of the block's 4 rows at once. A filter tap with the
+// sample pair at ( dy, dx ) and ( -dy, -dx ) gives rec[dy][dx] + rec[-dy][-dx] - 2 * rec[0][0] for each of the 16
+// samples, and its 4 rows of 4 values are contiguous in ELocal (NL_COVAR_kstride is 16): with the 4 rows of each sample
+// pair gathered into one register (alfLoad4x4), each tap is one 256-bit add, subtract and store instead of one per row.
+// The values wrap in 16 bits as in the per-row SSE code; the taps follow its order for the transposeIdx, ending with the
+// samples themselves.
+template<int halfFilterLength>
+static void alfLinBlkInputs_AVX2( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const ptrdiff_t orgStride, const Pel* rec, const ptrdiff_t recStride,
+                                  const int transposeIdx )
+{
+  const int     h    = halfFilterLength;
+  const __m256i cur  = alfLoad4x4( rec, recStride );
+  const __m256i cur2 = _mm256_slli_epi16( cur, 1 );
+  _mm256_storeu_si256( ( __m256i* )&yLocal[0][0], _mm256_sub_epi16( alfLoad4x4( org, orgStride ), cur ) );
+
+  Pel* tapValues = ELocal;
+  auto tap = [&]( const int dy, const int dx )
+  {
+    const ptrdiff_t offset = dy * recStride + dx;
+    const __m256i   pair   = _mm256_add_epi16( alfLoad4x4( rec + offset, recStride ), alfLoad4x4( rec - offset, recStride ) );
+    _mm256_storeu_si256( ( __m256i* )tapValues, _mm256_sub_epi16( pair, cur2 ) );
+    tapValues += NL_COVAR_kstride;
+  };
+
+  switch( transposeIdx )
+  {
+  case 0:
+    for( int i = -h; i < 0; i++ ) for( int j = -h - i; j <= h + i; j++ ) tap( i, j );
+    for( int j = -h; j < 0; j++ ) tap( 0, j );
+    break;
+  case 1:
+    for( int j = -h; j < 0; j++ ) for( int i = -h - j; i <= h + j; i++ ) tap( i, j );
+    for( int i = -h; i < 0; i++ ) tap( i, 0 );
+    break;
+  case 2:
+    for( int i = -h; i < 0; i++ ) for( int j = h + i; j >= -h - i; j-- ) tap( i, j );
+    for( int j = -h; j < 0; j++ ) tap( 0, j );
+    break;
+  default:
+    for( int j = -h; j < 0; j++ ) for( int i = h + j; i >= -h - j; i-- ) tap( i, j );
+    for( int i = -h; i < 0; i++ ) tap( i, 0 );
+    break;
+  }
+  _mm256_storeu_si256( ( __m256i* )tapValues, cur );
+}
+
+static void simdGetLinBlkInputs_AVX2( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride,
+                                      const int halfFilterLength, const int transposeIdx )
+{
+  // the 7x7 luma and 5x5 chroma diamonds
+  if( halfFilterLength == 3 )
+  {
+    alfLinBlkInputs_AVX2<3>( ELocal, yLocal, org, orgStride, rec, recStride, transposeIdx );
+  }
+  else
+  {
+    CHECKD( halfFilterLength != 2, "Unsupported ALF filter length" );
+    alfLinBlkInputs_AVX2<2>( ELocal, yLocal, org, orgStride, rec, recStride, transposeIdx );
+  }
+}
+#endif
+
 template<X86_VEXT vext>
 void EncAdaptiveLoopFilter::_initEncAdaptiveLoopFilter_X86()
 {
   m_getPreBlkStatsAccum = simdGetPreBlkStatsAccum<vext>;
   m_getPreBlkStatsWeightedAccum = simdGetPreBlkStatsWeightedAccum<vext>;
   m_getPreBlkStatsAccumEqualBins = simdGetPreBlkStatsAccumEqualBins<vext>;
+  m_getLinBlkInputs = getLinBlkInputs<true>;
+#ifdef USE_AVX2
+  if( vext >= AVX2 )
+  {
+    m_getLinBlkInputs = simdGetLinBlkInputs_AVX2;
+  }
+#endif
 }
 
 template void EncAdaptiveLoopFilter::_initEncAdaptiveLoopFilter_X86<SIMDX86>();
