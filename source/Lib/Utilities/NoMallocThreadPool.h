@@ -260,6 +260,8 @@ class NoMallocThreadPool
     Barrier*               done      { nullptr };
     CBarrierVec            barriers;
     std::atomic<TaskState> state     { FREE };
+    // lower = more urgent (see addBarrierTask); atomic because a scan may read it while the slot is being refilled
+    std::atomic<int64_t>   priority  { 0 };
   };
 
 
@@ -396,12 +398,17 @@ public:
                       std::chrono::microseconds idleBusyWait, std::chrono::milliseconds safetyWakeInterval );
   ~NoMallocThreadPool();
 
+  // A free thread takes the ready task with the lowest priority value. 0 (the default) is the most urgent: tasks the
+  // caller waits for, such as the pre-analysis rows. A picture's CTU and finish tasks use 1 + the picture's start order
+  // (Picture::encStartOrder), so the picture started first gets the threads first and frees its picture encoder soonest.
+  // 64 bits, so that the start order never wraps. The order in which tasks run never changes the output.
   bool addBarrierTask( bool             ( *func )( int, void* ),
                        void*               param,
                        WaitCounter*        counter                    = nullptr,
                        Barrier*            done                       = nullptr,
                        const CBarrierVec&& barriers                   = {},
-                       bool             ( *readyCheck )( int, void* ) = nullptr )
+                       bool             ( *readyCheck )( int, void* ) = nullptr,
+                       int64_t             priority                   = 0 )
   {
     if( m_threads.empty() )
     {
@@ -462,6 +469,7 @@ public:
           t.done       = done;
           t.counter    = counter;
           t.barriers   = std::move( barriers );
+          t.priority.store( priority, std::memory_order_relaxed );   // published by the store of WAITING
           t.state      = WAITING;
           wakeIdleThread();
 

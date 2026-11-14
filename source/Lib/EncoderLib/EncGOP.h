@@ -91,8 +91,9 @@ struct FinishTaskParam {
   EncGOP*     gopEncoder;
   EncPicture* picEncoder;
   Picture*    pic;
-  FinishTaskParam()                                          : gopEncoder( nullptr ), picEncoder( nullptr ), pic( nullptr ) {}
-  FinishTaskParam( EncGOP* _g, EncPicture* _e, Picture* _p ) : gopEncoder( _g ),      picEncoder( _e ),      pic( _p )      {}
+  unsigned    setupNum;   ///< the picture's place in the order of the setup tasks (when its setup runs as a task)
+  FinishTaskParam()                                          : gopEncoder( nullptr ), picEncoder( nullptr ), pic( nullptr ), setupNum( 0 ) {}
+  FinishTaskParam( EncGOP* _g, EncPicture* _e, Picture* _p ) : gopEncoder( _g ),      picEncoder( _e ),      pic( _p ),      setupNum( 0 ) {}
 };
 
 // ====================================================================================================================
@@ -150,6 +151,9 @@ private:
   NoMallocThreadPool*       m_threadPool;
   std::mutex                m_gopEncMutex;
   std::condition_variable   m_gopEncCond;
+  // pictures finished so far and the count waitForFreeEncoders last returned on (both guarded by m_gopEncMutex)
+  uint64_t                  m_numPicsFinished       = 0;
+  uint64_t                  m_numPicsFinishedWaited = 0;
   XUCache                   m_shrdUnitCache;
   std::mutex                m_unitCacheMutex;
 
@@ -185,6 +189,10 @@ private:
   RateCapParam              m_rcap;
 
   ThreadRsrcPool            m_threadRsrc;          ///< CU encoders of the worker threads, shared by all picture encoders
+  bool                      m_picSetupTasks;       ///< the pictures' setups run as thread pool tasks, see xEncodePicture
+  unsigned                  m_numSetupsQueued;     ///< setup tasks queued so far (main thread only)
+  std::atomic<unsigned>     m_numSetupsDone;       ///< setup tasks finished so far, which lets the next one in order run
+  int64_t                   m_numPicsStarted;      ///< pictures that got a picture encoder so far (main thread only)
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
   std::list<Picture*>       m_gopEncListOutput;
@@ -238,10 +246,14 @@ protected:
   virtual void initPicture    ( Picture* pic );
   virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList );
   virtual bool waitForFreeEncoders();
+  virtual void startReadyPictures();
 
 private:
   void xUpdateRasInit                 ( Slice* slice );
   void xProcessPictures               ( AccessUnitList& auList, PicList& doneList );
+  bool xIsLockStep                    () const;
+  bool xFetchOnEveryPass              ( bool lockStepMode ) const;
+  void xStartPictures                 ( bool lockStepMode, bool fetchOnEveryPass, int maxStarts );   // maxStarts 0: no limit
   void xEncodePicture                 ( Picture* pic, EncPicture* picEncoder );
   void xOutputRecYuv                  ( const PicList& picList );
   void xReleasePictures               ( const PicList& picList, PicList& freeList );
