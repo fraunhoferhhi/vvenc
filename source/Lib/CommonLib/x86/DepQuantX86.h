@@ -45,6 +45,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_QUANT
 
 #  include "x86/CommonDefX86.h"
+#  include "DepQuantDecide.h"
 #  include <simde/x86/sse4.1.h>
 #if defined( USE_SSE41 ) || !defined( REAL_TARGET_X86 )
 #  include <simde/x86/sse4.2.h>
@@ -67,21 +68,21 @@ namespace vvenc {
     template<X86_VEXT vext>
     static inline void updateStates( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr )
     {
-      int8_t s[4] = { 0 }, t[4] = { 0 }, l[4] = { 0 };
-
       __m128i v126_4 = _mm_setr_epi16( 126, 126, 126, 126, 4, 4, 4, 4 );
       __m128i v01 = _mm_setr_epi16( 1, 1, 1, 1, 1, 1, 1, 1 );
       __m128i v032 = _mm_setr_epi8( 0, 0, 0, 0, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0 );
       __m128i vn1 = _mm_set1_epi8( -1 );
 
-      static_assert( sizeof( curr.rdCost ) == sizeof( decisions.rdCost ), "Non-matching array size" );
-      memcpy( curr.rdCost, decisions.rdCost, sizeof( decisions.rdCost ) );
+      // as two 16-byte halves: checkAllRdCosts and checkAllRdCostsOdd1 stored them so, and a 32-byte load does not forward
+      // from two stores
+      static_assert( sizeof( curr.rdCost ) == 32 && sizeof( decisions.rdCost ) == 32, "Non-matching array size" );
+      _mm_storeu_si128( ( __m128i* ) &curr.rdCost[0], _mm_loadu_si128( ( const __m128i* ) &decisions.rdCost[0] ) );
+      _mm_storeu_si128( ( __m128i* ) &curr.rdCost[2], _mm_loadu_si128( ( const __m128i* ) &decisions.rdCost[2] ) );
 
       // in signalling, the coeffs are always max 16 bit!
       __m128i v = _mm_loadu_si64( decisions.absLevel );
       v = _mm_unpacklo_epi64( v, v );
       __m128i p = _mm_loadu_si32( decisions.prevId );
-      _mm_storeu_si32( s, p ); // store previous state indexes
       p = _mm_shuffle_epi32( p, 0 );
       __m128i n2 = _mm_cmplt_epi8( p, vn1 );
       __m128i a_1 = _mm_and_si128( v, v01 );
@@ -89,16 +90,15 @@ namespace vvenc {
       a_m = _mm_packs_epi16( a_m, vn1 );
       a_m = _mm_or_si128( a_m, _mm_sign_epi8( v032, a_m ) );
       a_m = _mm_andnot_si128( n2, a_m );
-      _mm_storeu_si32( l, a_m ); // store abs value
-      a_m = _mm_shuffle_epi32( a_m, 1 );
-      _mm_storeu_si32( t, a_m ); // store store capped abs value
+      // the low four bytes are used: the abs values, and the capped ones next to them
+      const __m128i lvl1 = a_m;
+      const __m128i tpl1 = _mm_shuffle_epi32( a_m, 1 );
 
+#if USE_AVX2
+      __m128i nextTplAcc;
+#endif
       {
-        const int ctxSize = 16 * 4;
-        const int regSize = 16;
-
-        __m128i vshuf = _mm_loadu_si32( s );
-        vshuf = _mm_shuffle_epi32( vshuf, 0 );
+        __m128i vshuf = p;   // the previous state of each decision, in all four positions
         __m128i vshufmask = _mm_cmplt_epi8( vshuf, _mm_setzero_si128() );
         vshuf = _mm_add_epi8( vshuf, _mm_setr_epi8( 0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12 ) );
         vshuf = _mm_blendv_epi8( vshuf, _mm_set1_epi8( -1 ), vshufmask );
@@ -108,17 +108,42 @@ namespace vvenc {
         auto* sum1st = &curr.sum1st[0][0];
 
 #if USE_AVX2
-        // the shuffle repeats every 16 bytes (four positions of four states), so both lanes use it
+        // Each array's 16 positions of four states, 8 positions to a register, are moved to their new states and take this
+        // position's level, all in registers: 4-byte stores into them would not forward to the 32-byte loads of the next
+        // position, and the masks need no jump on numInv. tplAcc and sum1st are read only at positions still to come,
+        // below this one; absVal only at this one and above, as the positions below are set when they come.
         const __m256i vshuf256 = _mm256_broadcastsi128_si256( vshuf );
-        for( int i = 0; i < ctxSize; i += 2 * regSize )
+        const __m256i addLevel = _mm256_broadcastd_epi32( lvl1 );
+        const __m256i addTpl   = _mm256_broadcastd_epi32( tpl1 );
+        const __m256i bitsLow  = _mm256_setr_epi32( 1 << 0, 1 << 1, 1 << 2, 1 << 3, 1 << 4, 1 << 5, 1 << 6, 1 << 7 );
+        const __m256i bitsHigh = _mm256_setr_epi32( 1 << 8, 1 << 9, 1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15 );
+        const __m256i vInv     = _mm256_set1_epi32( scanInfo.currNbInfoSbb.invInMask );
+        const __m256i vPos     = _mm256_set1_epi32( 1 << scanInfo.insidePos );
+        auto rows = []( const __m256i& mask, const __m256i& bits ) { return _mm256_cmpeq_epi32( _mm256_and_si256( mask, bits ), bits ); };
+        auto load = [&]( const uint8_t* ctx ) { return _mm256_shuffle_epi8( _mm256_loadu_si256( ( const __m256i* ) ctx ), vshuf256 ); };
+
+        const __m256i invLow = rows( vInv, bitsLow );
+        const __m256i tplLow = _mm256_add_epi8( load( tplAcc ), _mm256_and_si256( addTpl, invLow ) );
+        _mm256_storeu_si256( ( __m256i* ) tplAcc, tplLow );
+        _mm256_storeu_si256( ( __m256i* ) sum1st, _mm256_adds_epu8( load( sum1st ), _mm256_and_si256( addLevel, invLow ) ) );
+        __m256i nextRows = tplLow;
+        if( scanInfo.insidePos > 8 )
         {
-          for( uint8_t* ctx : { tplAcc, absVal, sum1st } )
-          {
-            const __m256i v = _mm256_loadu_si256( ( const __m256i* ) &ctx[i] );
-            _mm256_storeu_si256( ( __m256i* ) &ctx[i], _mm256_shuffle_epi8( v, vshuf256 ) );
-          }
+          const __m256i invHigh = rows( vInv, bitsHigh );
+          nextRows = _mm256_add_epi8( load( tplAcc + 32 ), _mm256_and_si256( addTpl, invHigh ) );
+          _mm256_storeu_si256( ( __m256i* ) ( tplAcc + 32 ), nextRows );
+          _mm256_storeu_si256( ( __m256i* ) ( sum1st + 32 ), _mm256_adds_epu8( load( sum1st + 32 ), _mm256_and_si256( addLevel, invHigh ) ) );
         }
+        nextTplAcc = _mm256_castsi256_si128( _mm256_permutevar8x32_epi32( nextRows, _mm256_set1_epi32( scanInfo.nextInsidePos & 7 ) ) );
+
+        if( scanInfo.insidePos < 8 )
+        {
+          _mm256_storeu_si256( ( __m256i* ) absVal, _mm256_blendv_epi8( load( absVal ), addLevel, rows( vPos, bitsLow ) ) );
+        }
+        _mm256_storeu_si256( ( __m256i* ) ( absVal + 32 ), _mm256_blendv_epi8( load( absVal + 32 ), addLevel, rows( vPos, bitsHigh ) ) );
 #else
+        const int ctxSize = 16 * 4;
+        const int regSize = 16;
         for( int i = 0; i < ctxSize; i += regSize )
         {
           __m128i vtpl = _mm_loadu_si128( ( const __m128i* ) &tplAcc[i]);
@@ -137,9 +162,7 @@ namespace vvenc {
 
         __m128i numSig = _mm_loadu_si32( curr.numSig );
         numSig = _mm_shuffle_epi8( numSig, vshuf );
-        __m128i lvls = _mm_loadu_si32( l );
-        lvls = _mm_cmpgt_epi8( lvls, _mm_setzero_si128() );
-        numSig = _mm_subs_epi8( numSig, lvls );
+        numSig = _mm_subs_epi8( numSig, _mm_cmpgt_epi8( lvl1, _mm_setzero_si128() ) );
         _mm_storeu_si32( curr.numSig, numSig );
 
         __m128i rsc = _mm_loadu_si32( curr.refSbbCtxId );
@@ -158,24 +181,21 @@ namespace vvenc {
         rrb = _mm_shuffle_epi8( rrb, vshuf );
         rrb = _mm_sub_epi16( rrb, v01 );
         rrb = _mm_blendv_epi8( rrb, _mm_set1_epi16( curr.initRemRegBins ), vshuf );
-        __m128i mlvl = _mm_loadu_si32( l );
-        __m128i mbins = _mm_min_epi8( mlvl, _mm_set1_epi8( 2 ) );
+        __m128i mbins = _mm_min_epi8( lvl1, _mm_cvtsi32_si128( 0x02020202 ) );
         __m128i mlutb = _mm_setr_epi8( 0, 1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 );
         rrb = _mm_sub_epi16( rrb, _mm_cvtepi8_epi16( _mm_shuffle_epi8( mlutb, mbins ) ) );
         _mm_storeu_si64( ( __m128i* ) curr.remRegBins, rrb );
-        rrb = _mm_cmplt_epi16( rrb, _mm_set1_epi16( 4 ) );
+        rrb = _mm_cmplt_epi16( rrb, _mm_cvtsi64_si128( 0x0004000400040004 ) );
 
         curr.anyRemRegBinsLt4 = !!_mm_cvtsi128_si64( rrb );
 
-        __m128i lvl1 = _mm_loadu_si32( l );
-        __m128i tpl1 = _mm_loadu_si32( t );
-
+#if !USE_AVX2
         auto update_deps_vec = [&]( int k )
         {
           int addr = scanInfo.currNbInfoSbb.invInPos[k];
 
           __m128i msum = _mm_loadu_si32( &curr.sum1st[addr][0] );
-          msum = _mm_adds_epu8( msum, mlvl );
+          msum = _mm_adds_epu8( msum, lvl1 );
           _mm_storeu_si32( &curr.sum1st[addr][0], msum);
 
           __m128i tpl = _mm_loadu_si32( &curr.tplAcc[addr][0] );
@@ -201,22 +221,27 @@ namespace vvenc {
         }
 
         _mm_storeu_si32( &curr.absVal[scanInfo.insidePos][0], lvl1);
+#endif
       }
 
       {
+#if USE_AVX2
+        __m128i tplAcc = nextTplAcc;
+#else
         __m128i tplAcc = _mm_loadu_si32( &curr.tplAcc[scanInfo.nextInsidePos][0]);
+#endif
 
-        __m128i sumAbs1 = _mm_and_si128( tplAcc, _mm_set1_epi8( 31 ) );
-        __m128i sumNum = _mm_and_si128( _mm_srli_epi32( tplAcc, 5 ), _mm_set1_epi8( 7 ) );
+        // these use the low four bytes only, and a constant in the low lane loads in one step where GCC builds a set1
+        // through a general register and a broadcast
+        __m128i sumAbs1 = _mm_and_si128( tplAcc, _mm_cvtsi32_si128( 0x1f1f1f1f ) );
+        __m128i sumNum = _mm_and_si128( _mm_srli_epi32( tplAcc, 5 ), _mm_cvtsi32_si128( 0x07070707 ) );
         __m128i sumGt1 = _mm_sub_epi8( sumAbs1, sumNum );
-        sumGt1 = _mm_min_epi8( sumGt1, _mm_set1_epi8( 4 ) );
+        sumGt1 = _mm_min_epi8( sumGt1, _mm_cvtsi32_si128( 0x04040404 ) );
         sumGt1 = _mm_add_epi8( _mm_set1_epi8( scanInfo.gtxCtxOffsetNext ), sumGt1 );
         _mm_storeu_si32( curr.ctx.cff, sumGt1 );
 
-        sumAbs1 = _mm_add_epi8( sumAbs1, _mm_set1_epi8( 1 ) );
-        sumAbs1 = _mm_srli_epi32( sumAbs1, 1 );
-        sumAbs1 = _mm_and_si128( sumAbs1, _mm_set1_epi8( 127 ) );
-        sumAbs1 = _mm_min_epi8( sumAbs1, _mm_set1_epi8( 3 ) );
+        sumAbs1 = _mm_avg_epu8( sumAbs1, _mm_setzero_si128() );   // ( sumAbs1 + 1 ) >> 1
+        sumAbs1 = _mm_min_epi8( sumAbs1, _mm_cvtsi32_si128( 0x03030303 ) );
         sumAbs1 = _mm_add_epi8( _mm_set1_epi8( scanInfo.sigCtxOffsetNext ), sumAbs1 );
         _mm_storeu_si32( curr.ctx.sig, sumAbs1 );
 
@@ -261,17 +286,23 @@ namespace vvenc {
       sum1st = sumAbs;
     }
 
-    // Stores the 16 values of each state's register into its column of a [16][4] array.
+    // Stores the 16 values of each state's register into its column of a [16][4] array. With AVX2 as 32-byte stores: the
+    // next position loads 32 bytes.
     static inline void storeStateColumns( const __m128i v[4], uint8_t dst[16][4] )
     {
       const __m128i v01lo = _mm_unpacklo_epi8( v[0], v[1] );
       const __m128i v01hi = _mm_unpackhi_epi8( v[0], v[1] );
       const __m128i v23lo = _mm_unpacklo_epi8( v[2], v[3] );
       const __m128i v23hi = _mm_unpackhi_epi8( v[2], v[3] );
+#if USE_AVX2
+      _mm256_storeu_si256( ( __m256i* ) dst[0], _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( v01lo, v23lo ) ), _mm_unpackhi_epi16( v01lo, v23lo ), 1 ) );
+      _mm256_storeu_si256( ( __m256i* ) dst[8], _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( v01hi, v23hi ) ), _mm_unpackhi_epi16( v01hi, v23hi ), 1 ) );
+#else
       _mm_storeu_si128( ( __m128i* ) dst[ 0], _mm_unpacklo_epi16( v01lo, v23lo ) );
       _mm_storeu_si128( ( __m128i* ) dst[ 4], _mm_unpackhi_epi16( v01lo, v23lo ) );
       _mm_storeu_si128( ( __m128i* ) dst[ 8], _mm_unpacklo_epi16( v01hi, v23hi ) );
       _mm_storeu_si128( ( __m128i* ) dst[12], _mm_unpackhi_epi16( v01hi, v23hi ) );
+#endif
     }
 
     template<X86_VEXT vext>
@@ -283,8 +314,10 @@ namespace vvenc {
         s[i] = decisions.prevId[i] >= 4 ? -2 : decisions.prevId[i];
         l[i] = s[i] > -2 ? std::min<int>( decisions.absLevel[i], 126 + ( decisions.absLevel[i] & 1 ) ) : 0;
         z[i] = 3 - decisions.prevId[i];
-        curr.rdCost[i] = decisions.rdCost[i];
       }
+      // 8-byte loads: checkRdCostSkipSbb may have just set some; two 16-byte stores: the next position loads 16 bytes
+      _mm_storeu_si128( ( __m128i* ) &curr.rdCost[0], _mm_set_epi64x( decisions.rdCost[1], decisions.rdCost[0] ) );
+      _mm_storeu_si128( ( __m128i* ) &curr.rdCost[2], _mm_set_epi64x( decisions.rdCost[3], decisions.rdCost[2] ) );
       {
         const int ctxSize = 16 * 4;
         const int regSize = 16;
@@ -476,54 +509,13 @@ namespace vvenc {
 
       const TCoeff lvl0 = pqData[0].absLevel, lvl1 = pqData[1].absLevel, lvl2 = pqData[2].absLevel, lvl3 = pqData[3].absLevel;
 
-#if USE_AVX2
-      static_assert( sizeof( state.m_gtxFracBitsArray[0] ) == 24, "CoeffFracBits has to be 6 x int32_t" );
-      static_assert( sizeof( state.m_gtxFracBitsArray[0].bits[0] ) == 4, "bits has to be int32_t" );
-
-      __m128i absLvl = _mm_setr_epi32( lvl0, lvl1, lvl2, lvl3 );
-      __m128i cffs   = _mm_loadu_si32( ( const void* ) state.ctx.cff );
-      cffs           = _mm_cvtepi8_epi32( cffs );
-      cffs           = _mm_slli_epi32( cffs, 1 );
-      cffs           = _mm_add_epi32 ( cffs, _mm_slli_epi32( cffs, 1 ) ); // 6 x cff, is the CoeffFracBits offset in multiples of int32_t
-
-      __m128i idxA   = _mm_shuffle_epi32( absLvl, 0 + ( 0 << 2 ) + ( 3 << 4 ) + ( 3 << 6 ) );
-      __m128i idxB   = _mm_shuffle_epi32( absLvl, 2 + ( 2 << 2 ) + ( 1 << 4 ) + ( 1 << 6 ) );
-      idxA           = _mm_add_epi32( idxA, cffs );
-      idxB           = _mm_add_epi32( idxB, cffs );
-
-      addA           = _mm_i32gather_epi32( ( const int32_t* ) state.m_gtxFracBitsArray, idxA, 4 );
-      addB           = _mm_i32gather_epi32( ( const int32_t* ) state.m_gtxFracBitsArray, idxB, 4 );
-#else
-      {
-        // coeff context is indepndent of state
-        auto& base = state.m_gtxFracBitsArray;
-
-        int32_t cffBitsArr[4] =
-        {
-          base[state.ctx.cff[0]].bits[lvl2],
-          base[state.ctx.cff[1]].bits[lvl2],
-          base[state.ctx.cff[2]].bits[lvl1],
-          base[state.ctx.cff[3]].bits[lvl1],
-        };
-
-        addB = _mm_loadu_si128( ( const __m128i* ) cffBitsArr );
-      }
-
-      {
-        // coeff context is indepndent of state
-        auto& base = state.m_gtxFracBitsArray;
-
-        int32_t cffBitsArr[4] =
-        {
-          base[state.ctx.cff[0]].bits[lvl0],
-          base[state.ctx.cff[1]].bits[lvl0],
-          base[state.ctx.cff[2]].bits[lvl3],
-          base[state.ctx.cff[3]].bits[lvl3],
-        };
-
-        addA  = _mm_loadu_si128( ( const __m128i* ) cffBitsArr );
-      }
-#endif
+      // plain loads and inserts: a gather is slower on many cores, and storing to an array and loading it as one stalls
+      const DQIntern::CoeffFracBits& cff0 = state.m_gtxFracBitsArray[state.ctx.cff[0]];
+      const DQIntern::CoeffFracBits& cff1 = state.m_gtxFracBitsArray[state.ctx.cff[1]];
+      const DQIntern::CoeffFracBits& cff2 = state.m_gtxFracBitsArray[state.ctx.cff[2]];
+      const DQIntern::CoeffFracBits& cff3 = state.m_gtxFracBitsArray[state.ctx.cff[3]];
+      addA = _mm_setr_epi32( cff0.bits[lvl0], cff1.bits[lvl0], cff2.bits[lvl3], cff3.bits[lvl3] );
+      addB = _mm_setr_epi32( cff0.bits[lvl2], cff1.bits[lvl2], cff2.bits[lvl1], cff3.bits[lvl1] );
 
       if( spt == DQIntern::SCAN_ISCSBB )
       {
@@ -649,7 +641,7 @@ namespace vvenc {
 
 #if USE_AVX2
       // the four states' 64-bit costs in one register: Z for level 0, A for level 1 (pq_b for states 0, 1, pq_a for 2, 3)
-      __m256i rdCostZ = _mm256_loadu_si256( ( const __m256i* ) state.rdCost );
+      __m256i rdCostZ = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) &state.rdCost[0] ) ), _mm_loadu_si128( ( const __m128i* ) &state.rdCost[2] ), 1 );
       __m256i rdCostA = _mm256_add_epi64( rdCostZ, _mm256_setr_epi64x( pq_b_dist, pq_b_dist, pq_a_dist, pq_a_dist ) );
 #else
       __m128i mrd01 = _mm_loadu_si128( ( const __m128i* ) & state.rdCost[0] );
@@ -808,13 +800,23 @@ namespace vvenc {
     template<X86_VEXT vext>
     void findFirstPos( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight )
     {
-      if( firstTestPos >= 16 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 )
+      if( firstTestPos >= 15 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 )
       {
         const int sbbSize = tuPars.m_sbbSize;
         // move the pointer to the beginning of the current subblock
         firstTestPos -= ( sbbSize - 1 );
 
         const __m128i xdfTh = _mm_set1_epi32( defaultTh );
+        // for each position in the coefficient scan of a subblock, the raster position it holds
+        static const uint8_t scanToRasterPos[16] = { 0, 4, 1, 8, 5, 2, 12, 9, 6, 3, 13, 10, 7, 14, 11, 15 };
+        const __m128i scanToRaster = _mm_loadu_si128( ( const __m128i* ) scanToRasterPos );
+#if _DEBUG
+        for( int i = 0; i < sbbSize; i++ )
+        {
+          const int base = tuPars.m_scanId2BlkPos[firstTestPos].idx;
+          CHECKD( tuPars.m_scanId2BlkPos[firstTestPos + i].idx != base + ( scanToRasterPos[i] >> 2 ) * tuPars.m_width + ( scanToRasterPos[i] & 3 ), "not the scan of a subblock" );
+        }
+#endif
 
         // for each subblock
         for( ; firstTestPos >= 0; firstTestPos -= sbbSize )
@@ -826,37 +828,27 @@ namespace vvenc {
             continue;
           }
 
-          // read first line of the subblock and check for coefficients larger than the threshold
+          // check each line of the subblock for coefficients larger than the threshold
           // assumming the subblocks are dense 4x4 blocks in raster scan order with the stride of tuPars.m_width
           int pos = tuPars.m_scanId2BlkPos[firstTestPos].idx;
-          __m128i xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) );
-          __m128i xdf = _mm_cmpgt_epi32( xl0, xdfTh );
-
-          // same for the next line in the subblock
+          const __m128i xdf0 = _mm_cmpgt_epi32( _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) ), xdfTh );
           pos += tuPars.m_width;
-          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) );
-          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
-
-          // and the third line
+          const __m128i xdf1 = _mm_cmpgt_epi32( _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) ), xdfTh );
           pos += tuPars.m_width;
-          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) );
-          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
-
-          // and the last line
+          const __m128i xdf2 = _mm_cmpgt_epi32( _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) ), xdfTh );
           pos += tuPars.m_width;
-          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) );
-          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
+          const __m128i xdf3 = _mm_cmpgt_epi32( _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) ), xdfTh );
 
-          // if any of the 16 comparisons were true, break, because this subblock contains a coefficient larger than threshold
-          if( !_mm_testz_si128( xdf, xdf ) ) break;
+          // one bit per coefficient, in scan order: the highest one set is the position wanted, with no loop over the subblock
+          const __m128i xdf  = _mm_packs_epi16( _mm_packs_epi32( xdf0, xdf1 ), _mm_packs_epi32( xdf2, xdf3 ) );
+          const int     mask = _mm_movemask_epi8( _mm_shuffle_epi8( xdf, scanToRaster ) );
+          if( mask )
+          {
+            firstTestPos += Log2( mask );
+            return;
+          }
         }
-
-        if( firstTestPos >= 0 )
-        {
-          // if a coefficient was found, advance the pointer to the end of the current subblock
-          // for the subsequent coefficient-wise refinement.
-          firstTestPos += sbbSize - 1;
-        }
+        return;
       }
 
       for( ; firstTestPos >= 0; firstTestPos-- )
@@ -874,6 +866,32 @@ namespace vvenc {
     }
   };
 
+namespace DQInternSimd
+{
+  // The per-coefficient kernels of this SIMD level, for DepQuant::xPopulateTrellis to inline. vvenc::DepQuant in full:
+  // MSVC 2019 finds the plain name ambiguous here (DQIntern's friend declaration of DepQuant in DepQuant.h).
+  template<X86_VEXT vext>
+  struct KernelsX86
+  {
+    static void checkAllRdCosts( const vvenc::DepQuant&, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+    {
+      DQInternSimd::checkAllRdCosts<vext>( spt, pqData, decisions, state );
+    }
+    static void checkAllRdCostsOdd1( const vvenc::DepQuant&, const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+    {
+      DQInternSimd::checkAllRdCostsOdd1<vext>( spt, pq_a_dist, pq_b_dist, decisions, state );
+    }
+    static void updateStates( const vvenc::DepQuant&, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr )
+    {
+      DQInternSimd::updateStates<vext>( scanInfo, decisions, curr );
+    }
+    static void updateStatesEOS( const vvenc::DepQuant&, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx )
+    {
+      DQInternSimd::updateStatesEOS<vext>( scanInfo, decisions, skip, curr, commonCtx );
+    }
+  };
+}
+
 template<X86_VEXT vext>
 void DepQuant::_initDepQuantX86()
 {
@@ -882,6 +900,7 @@ void DepQuant::_initDepQuantX86()
   m_updateStatesEOS     = DQInternSimd::updateStatesEOS<vext>;
   m_updateStates        = DQInternSimd::updateStates<vext>;
   m_findFirstPos        = DQInternSimd::findFirstPos<vext>;
+  m_populateTrellis     = xPopulateTrellis<DQInternSimd::KernelsX86<vext>>;
 }
 template void DepQuant::_initDepQuantX86<SIMDX86>();
 

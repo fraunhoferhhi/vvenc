@@ -531,6 +531,139 @@ static bool check_checkAllRdCostsOdd1( DepQuant* ref, DepQuant* opt, unsigned nu
   return passed;
 }
 
+static bool check_one_checkAllRdCosts( DepQuant* ref, DepQuant* opt, DQIntern::ScanPosType spt, const DQIntern::PQData* pqData,
+                                       const DQIntern::StateMem& state, const std::string& context )
+{
+  DQIntern::Decisions decisions_ref;
+  DQIntern::Decisions decisions_opt;
+  for( int j = 0; j < 4; ++j )
+  {
+    // The start decisions of a scan position: no candidate yet. absLevel and prevId differ between ref and opt, so a
+    // decision left unwritten fails.
+    decisions_ref.rdCost[j] = decisions_opt.rdCost[j] = DQIntern::rdCostInit >> 2;
+    decisions_ref.absLevel[j] = decisions_ref.prevId[j] = -1;
+    decisions_opt.absLevel[j] = decisions_opt.prevId[j] = -2;
+  }
+
+  ref->m_checkAllRdCosts( spt, pqData, decisions_ref, state );
+  opt->m_checkAllRdCosts( spt, pqData, decisions_opt, state );
+
+  bool passed = true;
+  passed = compare_values_1d( context + " rdCost", decisions_ref.rdCost, decisions_opt.rdCost, 4 ) && passed;
+  passed = compare_values_1d( context + " absLevel", decisions_ref.absLevel, decisions_opt.absLevel, 4 ) && passed;
+  passed = compare_values_1d( context + " prevId", decisions_ref.prevId, decisions_opt.prevId, 4 ) && passed;
+  return passed;
+}
+
+static bool check_checkAllRdCosts( DepQuant* ref, DepQuant* opt, unsigned num_cases )
+{
+  printf( "Testing DepQuant::checkAllRdCosts\n" );
+
+  InputGenerator<TCoeff> g4{ 4, /*is_signed=*/false };
+  InputGenerator<TCoeff> g20{ 20, /*is_signed=*/false };
+  InputGenerator<TCoeff> g31{ 31 };
+  InputGenerator<TCoeff> g_dist{ 20 };
+  DimensionGenerator rng;
+
+  DQIntern::StateMem state;
+  BinFracBits sigBuf[4][DQIntern::RateEstimator::sm_maxNumSigCtx];
+  DQIntern::CoeffFracBits gtxBuf[DQIntern::RateEstimator::sm_maxNumGtxCtx];
+  DQIntern::PQData pqData[4];
+
+  // xDecide calls checkAllRdCosts only when every state has at least 4 regular bins left and pqData[0] and pqData[3]
+  // are below level 4, so qIdx is 1, 2 or 3 (its levels are 1 to 3). The four candidates are set up as there.
+  auto setup_pq_data = [&]( int qIdx )
+  {
+    for( int k = 0; k < 4; ++k )
+    {
+      pqData[( qIdx + k ) & 3].absLevel = ( qIdx + k + 1 ) >> 1;
+      pqData[( qIdx + k ) & 3].deltaDist = g_dist();
+    }
+  };
+
+  auto setup_state = [&]
+  {
+    state.m_gtxFracBitsArray = gtxBuf;
+    for( int j = 0; j < 4; ++j )
+    {
+      state.rdCost[j] = g31();
+      state.remRegBins[j] = 4;
+      state.m_goRicePar[j] = 0;
+      state.m_goRiceZero[j] = 0;
+      state.sbbBits1[j] = g20();
+      state.numSig[j] = g4();
+      state.ctx.sig[j] = rng.get( 0, DQIntern::RateEstimator::sm_maxNumSigCtx - 1 );
+      // any gtx context, repeats included: the cff bits are read through each state's own context
+      state.ctx.cff[j] = rng.get( 0, DQIntern::RateEstimator::sm_maxNumGtxCtx - 1 );
+      state.m_sigFracBitsArray[j] = sigBuf[j];
+
+      for( int k = 0; k < DQIntern::RateEstimator::sm_maxNumSigCtx; ++k )
+      {
+        sigBuf[j][k].intBits[0] = g20();
+        sigBuf[j][k].intBits[1] = g20();
+      }
+    }
+    for( auto& cff : gtxBuf )
+    {
+      std::generate( cff.bits, cff.bits + 6, g20 );
+    }
+  };
+
+  bool passed = true;
+
+  for( unsigned i = 0; i < std::max( 1u, num_cases / 5 ); ++i )
+  {
+    for( DQIntern::ScanPosType spt : { DQIntern::SCAN_ISCSBB, DQIntern::SCAN_SOCSBB, DQIntern::SCAN_EOCSBB } )
+    {
+      const char* spt_str = spt == DQIntern::SCAN_ISCSBB   ? "ISC_SBB"
+                            : spt == DQIntern::SCAN_SOCSBB ? "SOC_SBB"
+                                                           : "EOC_SBB";
+      const std::string context = std::string( "DepQuant checkAllRdCosts scanPosType=" ) + spt_str;
+
+      for( int qIdx = 1; qIdx <= 3; ++qIdx )
+      {
+        // Test 1: random states and candidates.
+        setup_state();
+        setup_pq_data( qIdx );
+        passed = check_one_checkAllRdCosts( ref, opt, spt, pqData, state, context + " random qIdx=" + std::to_string( qIdx ) ) && passed;
+
+        // Test 2: equal costs in every state and one gtx context for all, so that candidates tie and the choice
+        // between them must follow the scalar order.
+        const int64_t base_rd_cost = g31();
+        const int64_t dist = g_dist();
+        for( int j = 0; j < 4; ++j )
+        {
+          state.rdCost[j] = base_rd_cost;
+          state.sbbBits1[j] = 1;
+          state.numSig[j] = 1;
+          state.ctx.sig[j] = 0;
+          state.ctx.cff[j] = 0;
+          sigBuf[j][0].intBits[0] = 2;
+          sigBuf[j][0].intBits[1] = 1;
+          pqData[j].deltaDist = dist;
+        }
+        std::fill( gtxBuf[0].bits, gtxBuf[0].bits + 6, 1 );
+        passed = check_one_checkAllRdCosts( ref, opt, spt, pqData, state, context + " ties qIdx=" + std::to_string( qIdx ) ) && passed;
+      }
+    }
+
+    // Test 3: SCAN_EOCSBB with numSig == 0 in some states, where coding no coefficient is not allowed.
+    for( int pattern : { 0, 1 } )
+    {
+      setup_state();
+      setup_pq_data( rng.get( 1, 3 ) );
+      for( int j = 0; j < 4; ++j )
+      {
+        state.numSig[j] = ( j & 1 ) ^ pattern;   // 0,1,0,1 or 1,0,1,0
+      }
+      passed = check_one_checkAllRdCosts( ref, opt, DQIntern::SCAN_EOCSBB, pqData, state,
+                                          "DepQuant checkAllRdCosts scanPosType=EOC_SBB numSig-01mixed" ) && passed;
+    }
+  }
+
+  return passed;
+}
+
 static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases )
 {
   printf( "Testing DepQuant::updateStates\n" );
@@ -559,19 +692,28 @@ static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases
     std::memset( &curr_opt, 0xCD, sizeof( curr_opt ) );
 
     // The settings below are chosen to satisfy the updateStates() constraints:
-    // insidePos = ( nextInsidePos + 1 ) % sbbSize.
-    // All scanInfo.currNbInfoSbb.invInPos are smaller than insidePos.
+    // insidePos = nextInsidePos + 1: position 0 of an SBB goes to updateStatesEOS().
+    // All scanInfo.currNbInfoSbb.invInPos are different and smaller than insidePos.
     // scanInfo.currNbInfoSbb.numInv <= std::min(insidePos, 5).
     scanInfo.sbbSize = rng.getOneOf<int8_t>( { 4, 16 } );
-    scanInfo.nextInsidePos = rng.get( 0, scanInfo.sbbSize - 1 );
-    scanInfo.insidePos = ( scanInfo.nextInsidePos + 1 ) % scanInfo.sbbSize;
+    scanInfo.nextInsidePos = rng.get( 0, scanInfo.sbbSize - 2 );
+    scanInfo.insidePos = scanInfo.nextInsidePos + 1;
     scanInfo.gtxCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
     scanInfo.sigCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
     scanInfo.currNbInfoSbb.numInv = ( uint8_t )rng.get( 0, std::min<int>( scanInfo.insidePos, 5 ) );
 
+    uint8_t positions[16];
+    std::iota( positions, positions + 16, uint8_t( 0 ) );
+    scanInfo.currNbInfoSbb.invInMask = 0;
     for( int inv = 0; inv < 5; ++inv )
     {
-      scanInfo.currNbInfoSbb.invInPos[inv] = ( uint8_t )rng.get( 0, std::max<int>( 0, scanInfo.insidePos - 1 ) );
+      scanInfo.currNbInfoSbb.invInPos[inv] = 0;
+      if( inv < scanInfo.currNbInfoSbb.numInv )
+      {
+        std::swap( positions[inv], positions[rng.get( inv, scanInfo.insidePos - 1 )] );
+        scanInfo.currNbInfoSbb.invInPos[inv] = positions[inv];
+        scanInfo.currNbInfoSbb.invInMask |= uint16_t( 1 << positions[inv] );
+      }
     }
 
     for( int idx = 0; idx < 4; ++idx )
@@ -625,14 +767,16 @@ static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases
       passed =
           compare_value( sstm.str() + " refSbbCtxId", curr_ref.refSbbCtxId[idx], curr_opt.refSbbCtxId[idx] ) && passed;
 
+      // only what is read later: tplAcc and sum1st at the positions still to come, absVal at this one and above
+      const unsigned pos = scanInfo.insidePos;
       passed =
-          compare_values_2d( sstm.str() + " tplAcc", &curr_ref.tplAcc[0][idx], &curr_opt.tplAcc[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " tplAcc", &curr_ref.tplAcc[0][idx], &curr_opt.tplAcc[0][idx], pos, 1, 4 ) &&
           passed;
       passed =
-          compare_values_2d( sstm.str() + " sum1st", &curr_ref.sum1st[0][idx], &curr_opt.sum1st[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " sum1st", &curr_ref.sum1st[0][idx], &curr_opt.sum1st[0][idx], pos, 1, 4 ) &&
           passed;
       passed =
-          compare_values_2d( sstm.str() + " absVal", &curr_ref.absVal[0][idx], &curr_opt.absVal[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " absVal", &curr_ref.absVal[pos][idx], &curr_opt.absVal[pos][idx], 16 - pos, 1, 4 ) &&
           passed;
 
       if( curr_ref.remRegBins[idx] >= 4 )
@@ -705,6 +849,8 @@ static bool check_updateStatesEOS( DepQuant* ref, DepQuant* opt, unsigned num_ca
     scanInfo.sbbPos = rng.get( 0, scanInfo.numSbb - 1 );
     scanInfo.nextSbbRight = 0;
     scanInfo.nextSbbBelow = 0;
+    // as TUParameters sets it: the levels past this SBB that the next SBB's templates reach
+    scanInfo.levelsCopySize = std::max<int>( tuPars.m_scanId2NbInfoOut[scanInfo.scanIdx - 1].maxDist - scanInfo.sbbSize, 0 );
 
     scanInfo.insidePos = 0;
     scanInfo.nextInsidePos = 15;
@@ -882,6 +1028,7 @@ static bool test_DepQuant()
   unsigned num_cases = NUM_CASES;
   bool passed = true;
 
+  passed = check_checkAllRdCosts( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_checkAllRdCostsOdd1( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_updateStates( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_updateStatesEOS( ref.get(), opt.get(), num_cases ) && passed;
