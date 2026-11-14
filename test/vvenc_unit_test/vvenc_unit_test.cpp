@@ -1031,6 +1031,53 @@ static void fillIntraSamples( Pel* buf, size_t n, int bd, int kind )
   }
 }
 
+// IntraPredAngleChroma for every chroma block size and fractional angle (positive and negative, so deltaPos goes
+// negative), 10-bit borders (the SSE kernel computes in 16 bits), padded on both sides; every fourth case alternates 0
+// and 1023 (the largest neighbour difference); the whole destination is compared.
+static bool check_IntraPredAngleChroma( IntraPrediction* ref, IntraPrediction* opt, unsigned num_cases )
+{
+  printf( "Testing IntraPrediction::IntraPredAngleChroma\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 10, /*is_signed=*/false };
+  const int           pad = 16;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width  = rng.getOneOf<int>( { 2, 4, 8, 16, 32, 64 } );
+    const int height = rng.getOneOf<int>( { 2, 4, 8, 16, 32 } );
+    int       angle  = 0;
+    while( angle % 32 == 0 )
+    {
+      angle = INTRA_ANG_TABLE[rng.get( 1, 31 )];
+    }
+    angle *= rng.get( 0, 1 ) ? -1 : 1;
+    const int lowInt  = std::min( angle, angle * height ) >> 5;
+    const int highInt = std::max( angle, angle * height ) >> 5;
+    std::vector<Pel> border( ( highInt - lowInt ) + width + 2 + 2 * pad );
+    std::generate( border.begin(), border.end(), pixels );
+    if( i % 4 == 0 )
+    {
+      for( size_t k = 0; k < border.size(); k++ )
+      {
+        border[k] = ( k & 1 ) ? 1023 : 0;
+      }
+    }
+    Pel* const       pBorder = border.data() + pad - lowInt;
+    const int        stride  = width + rng.get( 0, 8 );
+    std::vector<Pel> dstRef( stride * height, 0x5a5a ), dstOpt( stride * height, 0x5a5a );
+    ref->IntraPredAngleChroma( dstRef.data(), stride, pBorder, width, height, angle, angle );
+    opt->IntraPredAngleChroma( dstOpt.data(), stride, pBorder, width, height, angle, angle );
+
+    std::ostringstream sstm;
+    sstm << "IntraPredAngleChroma " << width << "x" << height << " angle=" << angle;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // IntraAnglePDPC for every luma block size and mode 2 .. 66 that applies it, with the parameters of initPredIntraParams
 // and xPredIntraAng: wide-angle mapping, positive angles only, scale from the side (height, or width for horizontal
 // modes) and the block passed transposed for horizontal modes. The reference samples after the last one the scalar code
@@ -1243,7 +1290,7 @@ static bool check_IntraPredAngleLumaModes( IntraPrediction* ref, IntraPrediction
 // IntraPredAngleLumaHor (horizontal luma modes in the block's own orientation) against the reference implementation's
 // IntraPredAngleLuma on the transposed block, its IntraAnglePDPC (positive angles, reference line 0) and a transpose:
 // every block width 8..64 and height 4..64 (aspect ratios up to 16:1), every horizontal mode after the wide-angle
-// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8, 10 and 12. Samples:
+// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8 and 10. Samples:
 // random, alternating 0 / max (the cubic clip), a ramp, and the PDPC extremes (prediction 0 with side samples at max,
 // and the reverse). Main and side samples outside the ranges the scalar code reads differ between the two runs;
 // destination strides of the block width and of MAX_CU_SIZE in canary-filled buffers, compared whole.
@@ -1259,7 +1306,7 @@ static bool check_IntraPredAngleLumaHor( IntraPrediction* ref, IntraPrediction* 
   std::vector<Pel> tmp( MAX_CU_SIZE * MAX_CU_SIZE ), dstRef( MAX_CU_SIZE * MAX_CU_SIZE ), dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
   const unsigned size = static_cast<unsigned>( dstRef.size() );
   bool passed = true;
-  for( int bd : { 8, 10, 12 } )
+  for( int bd : { 8, 10 } )   // the internal bit depths VVenC codes (the NEON kernel refuses more than 10)
   for( int log2W : INTRA_LOG2_SIZES ) for( int log2H : INTRA_LOG2_SIZES )
   for( int mode = 2; mode < NUM_LUMA_MODE; mode++ )
   for( bool cubic : { true, false } )
@@ -1354,6 +1401,7 @@ static bool test_IntraPred()
   passed = check_IntraPredAngleLuma( &ref, &opt, num_cases ) && passed;
   passed = check_LMLumaDownsample420( &ref, &opt, num_cases ) && passed;
   passed = check_IntraFilterRefSamples( &ref, &opt, num_cases ) && passed;
+  passed = check_IntraPredAngleChroma( &ref, &opt, num_cases ) && passed;
   passed = check_IntraAnglePDPC( &ref, &opt ) && passed;
   passed = check_IntraHorVerPDPC( &ref, &opt ) && passed;
   passed = check_IntraPlanarAndSampleFilter( &ref, &opt ) && passed;
