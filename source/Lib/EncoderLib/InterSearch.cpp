@@ -4361,27 +4361,36 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   }
   else
   {
-    // The search leaves blocks with a zero cbf uncleared. With joint CbCr a zero cbf can still have a residual.
-    for( const TransformUnit* tu : cs.tus )
+    // Block by block: a block without a residual (a zero cbf, unless joint CbCr codes the chroma) reconstructs to the
+    // prediction. Its residual buffer is stale (the search does not clear it), so it is not added.
+    for( int comp = 0; comp < numValidComponents; comp++ )
     {
-      for( int comp = 0; comp < numValidComponents; comp++ )
+      const ComponentID compID = ComponentID( comp );
+      if( !( isLuma( compID ) ? luma : chroma ) )
       {
-        const ComponentID compID = ComponentID( comp );
-        const bool        wanted = isLuma( compID ) ? luma : chroma;
-        if( wanted && tu->blocks[compID].valid() && !TU::getCbf( *tu, compID ) && !( isChroma( compID ) && tu->jointCbCr ) )
+        continue;
+      }
+      PelBuf         reco   = cs.getRecoBuf( compID );
+      const CPelBuf  pred   = cs.getPredBuf( compID );
+      const CPelBuf  resi   = cs.getResiBuf( compID );
+      const Position origin = cs.area.blocks[compID].pos();
+      for( const TransformUnit* tu : cs.tus )
+      {
+        const CompArea& blk = tu->blocks[compID];
+        if( !blk.valid() )
         {
-          cs.getResiBuf( tu->blocks[compID] ).fill( 0 );
+          continue;
+        }
+        const auto inBlock = [&]( auto buf ) { return buf.subBuf( blk.x - origin.x, blk.y - origin.y, blk.width, blk.height ); };
+        if( TU::getCbf( *tu, compID ) || ( isChroma( compID ) && tu->jointCbCr ) )
+        {
+          inBlock( reco ).reconstruct( inBlock( pred ), inBlock( resi ), cs.slice->clpRngs[compID] );
+        }
+        else
+        {
+          inBlock( reco ).copyFrom( inBlock( pred ) );
         }
       }
-    }
-    if (luma)
-    {
-      cs.getRecoBuf().bufs[0].reconstruct(cs.getPredBuf().bufs[0], cs.getResiBuf().bufs[0], cs.slice->clpRngs[COMP_Y]);
-    }
-    if (chroma)
-    {
-      cs.getRecoBuf().bufs[1].reconstruct(cs.getPredBuf().bufs[1], cs.getResiBuf().bufs[1], cs.slice->clpRngs[COMP_Cb]);
-      cs.getRecoBuf().bufs[2].reconstruct(cs.getPredBuf().bufs[2], cs.getResiBuf().bufs[2], cs.slice->clpRngs[COMP_Cr]);
     }
   }
   // update with clipped distortion and cost (previously unclipped reconstruction values were used)
