@@ -155,6 +155,7 @@ Picture::Picture()
     , picApsMap           ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
     , isInitDone          ( false )
     , isReconstructed     ( false )
+    , isEncoded           ( false )
     , isBorderExtended    ( false )
     , isReferenced        ( false )
     , isNeededForOutput   ( false )
@@ -224,6 +225,7 @@ void Picture::reset()
   // reset picture
   isInitDone           = false;
   isReconstructed      = false;
+  isEncoded            = false;
   isBorderExtended     = false;
   isReferenced         = true;
   isNeededForOutput    = true;
