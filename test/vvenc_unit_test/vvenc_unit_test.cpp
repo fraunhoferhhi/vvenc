@@ -4033,6 +4033,136 @@ static bool check_reco( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases
   return passed;
 }
 
+// reco4, reco8, copyClip4 and copyClip8 with any Pel values (the SIMD versions saturate the sum, which keeps C's clip
+// result) for the widths AreaBuf::reconstruct and copyClip pass them (multiples of 8 to the 8 versions, other multiples
+// of 4 to the 4 versions), heights 1 to 64, padded strides, bit depths 8 to 12, also in place (dest = src0); the whole
+// destination is compared, so that writes beyond the block and samples left out are found
+static bool check_recoCopyClip4And8( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::reco4, reco8, copyClip4, copyClip8\n" );
+  DimensionGenerator rng;
+  auto anyPel = []()
+  {
+    const int r = rand() & 15;   // the extremes one time in eight
+    return Pel( r == 0 ? -32768 : r == 1 ? 32767 : int( ( unsigned( rand() ) << 8 ) ^ unsigned( rand() ) ) );
+  };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int    width   = rng.getOneOf<int>( { 4, 12, 20, 28, 8, 16, 24, 32, 64 } );
+    const int    height  = rng.get( 1, 64 );
+    const int    stride  = width + rng.get( 0, 9 );
+    const bool   inPlace = rng.get( 0, 3 ) == 0;
+    const ClpRng clpRng{ int( rng.getOneOf<unsigned>( { 8, 10, 12 } ) ) };
+    std::vector<Pel> src0( stride * height ), src1( stride * height );
+    std::generate( src0.begin(), src0.end(), anyPel );
+    std::generate( src1.begin(), src1.end(), anyPel );
+    std::vector<Pel> dstRef = inPlace ? src0 : std::vector<Pel>( stride * height, 0x5a5a );
+    std::vector<Pel> dstOpt = dstRef;
+    const Pel* src0Ref = inPlace ? dstRef.data() : src0.data();
+    const Pel* src0Opt = inPlace ? dstOpt.data() : src0.data();
+
+    std::ostringstream sstm;
+    sstm << " " << width << "x" << height << " stride=" << stride << " bd=" << clpRng.bd << " inPlace=" << inPlace;
+    const auto reco     = ( width & 7 ) ? &PelBufferOps::reco4 : &PelBufferOps::reco8;
+    const auto copyClip = ( width & 7 ) ? &PelBufferOps::copyClip4 : &PelBufferOps::copyClip8;
+    ( ref->*reco )( src0Ref, stride, src1.data(), stride, dstRef.data(), stride, width, height, clpRng );
+    ( opt->*reco )( src0Opt, stride, src1.data(), stride, dstOpt.data(), stride, width, height, clpRng );
+    bool ok = compare_values_1d( "reco" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+
+    ( ref->*copyClip )( src1.data(), stride, dstRef.data(), stride, width, height, clpRng );
+    ( opt->*copyClip )( src1.data(), stride, dstOpt.data(), stride, width, height, clpRng );
+    ok = ok && compare_values_1d( "copyClip" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+// weightCiip, roundGeo and roundIntVector at the sizes the callers pass, on inputs inside every SIMD kernel's domain:
+// Pel values of the bit depth for weightCiip (SSE averages unsigned), src + offset within int16 for roundGeo (SSE adds
+// with saturation). roundIntVector has no C pointer: it is checked against roundAffineMv and Clip3, the path
+// InterPrediction takes without it.
+static bool check_ciipGeoDmv( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::weightCiip, roundGeo, roundIntVector\n" );
+  DimensionGenerator rng;
+  auto anyPel = []()
+  {
+    const int r = rand() & 15;   // the extremes one time in eight
+    return r == 0 ? -32768 : r == 1 ? 32767 : int( Pel( ( unsigned( rand() ) << 8 ) ^ unsigned( rand() ) ) );
+  };
+  auto predPel = []( int bd )
+  {
+    const int r = rand() & 15;
+    return Pel( r == 0 ? 0 : r == 1 ? ( 1 << bd ) - 1 : rand() & ( ( 1 << bd ) - 1 ) );
+  };
+  alignas( 32 ) Pel src[4096];
+  alignas( 32 ) Pel dstRef[4096];
+  alignas( 32 ) Pel dstOpt[4096];
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const ClpRng clpRng{ int( rng.getOneOf<unsigned>( { 8, 10, 12 } ) ) };
+    const int    numSamples = 16 * rng.get( 1, 256 );
+    const int    numIntra   = rng.get( 0, 2 );
+    std::ostringstream sstm;
+    sstm << " numSamples=" << numSamples << " bd=" << clpRng.bd << " numIntra=" << numIntra;
+
+    for( int n = 0; n < numSamples; n++ )
+    {
+      src[n]    = predPel( clpRng.bd );
+      dstRef[n] = predPel( clpRng.bd );
+      dstOpt[n] = dstRef[n];
+    }
+    ref->weightCiip( dstRef, src, numSamples, numIntra );
+    opt->weightCiip( dstOpt, src, numSamples, numIntra );
+    bool ok = compare_values_1d( "weightCiip" + sstm.str(), dstRef, dstOpt, numSamples );
+
+    // the encoder's rshift and offset (EncCu)
+    const unsigned rshift = std::max( 2, IF_INTERNAL_PREC - clpRng.bd );
+    const int      offset = ( 1 << ( rshift - 1 ) ) + IF_INTERNAL_OFFS;
+    for( int n = 0; n < numSamples; n++ )
+    {
+      src[n] = Pel( std::min( anyPel(), 32767 - offset ) );
+    }
+    ref->roundGeo( src, dstRef, numSamples, rshift, offset, clpRng );
+    opt->roundGeo( src, dstOpt, numSamples, rshift, offset, clpRng );
+    ok = ok && compare_values_1d( "roundGeo" + sstm.str(), dstRef, dstOpt, numSamples );
+
+    if( opt->roundIntVector )
+    {
+      const int size     = 16 * rng.get( 1, 2 );
+      const int nShift   = rng.get( 1, 12 );
+      const int dmvLimit = rng.get( 1, 1000 );
+      int vRef[32], vOpt[32];
+      for( int k = 0; k < size; k++ )
+      {
+        // |v| < 2^28 (C's rounding offset must not overflow): the extremes one time in eight, exact halves (rounded
+        // toward 0, so the direction depends on the sign) one time in four
+        const int r    = rand() & 15;
+        const int half = ( 2 * ( rand() & 63 ) + 1 ) << ( nShift - 1 );
+        vRef[k] = r == 0 ? -( 1 << 28 ) : r == 1 ? ( 1 << 28 ) - 1 : r < 4 ? half : r < 6 ? -half
+                : int( ( ( unsigned( rand() ) << 15 ) ^ unsigned( rand() ) ) & ( ( 1u << 29 ) - 1 ) ) - ( 1 << 28 );
+        vOpt[k] = vRef[k];
+        int unused = 0;
+        roundAffineMv( vRef[k], unused, nShift );
+        vRef[k] = Clip3( -dmvLimit, dmvLimit, vRef[k] );
+      }
+      opt->roundIntVector( vOpt, size, nShift, dmvLimit );
+      ok = ok && compare_values_1d( "roundIntVector size=" + std::to_string( size ) + " nShift=" + std::to_string( nShift )
+                                      + " limit=" + std::to_string( dmvLimit ), vRef, vOpt, size );
+    }
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // The plane checksum of the decoded picture hash SEI: widths and heights beyond 256, where the high bytes of the
 // positions enter the mask, any Pel values (the arithmetic shift of negative values) and both sample sizes.
 static bool check_pictureChecksum( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -4566,6 +4696,8 @@ static bool test_PelBufferOps()
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
+  passed = check_recoCopyClip4And8( &ref, &opt, num_cases ) && passed;
+  passed = check_ciipGeoDmv( &ref, &opt, num_cases ) && passed;
   passed = check_geoSads( &ref, &opt, num_cases ) && passed;
   passed = check_copyClip( &ref, &opt, num_cases ) && passed;
   passed = check_copyClipScalarTail( &ref, num_cases ) && passed;
