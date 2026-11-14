@@ -47,6 +47,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "NoMallocThreadPool.h"
 
+#include <limits>
+
 #ifdef HAVE_PTHREADS
 #  include <pthread.h>
 #  define THREAD_MIN_STACK_SIZE 1024 * 1024
@@ -268,12 +270,18 @@ void NoMallocThreadPool::wakeIdleThread()
   }
 }
 
+// Returns the most urgent ready task (lowest priority value), claimed (RUNNING); among equally urgent ones the first one
+// from startSearch, so the threads spread over the queue. Only a task more urgent than the best one found so far gets its
+// barriers and ready check tested; a ready task of priority 0 ends the search at once. A claimed task that a more urgent
+// one replaces goes back to WAITING (reported as rescheduled, like a failed ready check).
 NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId, TaskIterator startSearch, bool* rescheduled )
 {
   if( !startSearch.isValid() )
   {
     startSearch = m_tasks.begin();
   }
+  TaskIterator best;
+  int64_t      bestPriority = std::numeric_limits<int64_t>::max();
   bool first = true;
   for( auto it = startSearch; it != startSearch || first; it.incWrap() )
   {
@@ -284,32 +292,49 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
     first = false;
 
     Slot& t = *it;
-    auto expected = WAITING;
-    if( t.state.load( std::memory_order_relaxed ) == WAITING && t.state.compare_exchange_strong( expected, RUNNING ) )
+    if( t.state.load( std::memory_order_relaxed ) != WAITING || t.priority.load( std::memory_order_relaxed ) >= bestPriority )
     {
-      if( !t.barriers.empty() )
+      continue;
+    }
+    auto expected = WAITING;
+    if( !t.state.compare_exchange_strong( expected, RUNNING ) )
+    {
+      continue;
+    }
+    // read again now that the slot is ours: it may have been refilled since the first read
+    const int64_t priority = t.priority.load( std::memory_order_relaxed );
+    bool          ready    = priority < bestPriority;
+    if( ready && !t.barriers.empty() )
+    {
+      ready = std::none_of( t.barriers.cbegin(), t.barriers.cend(), []( const Barrier* b ) { return b && b->isBlocked(); } );
+      if( ready )
       {
-        if( std::any_of( t.barriers.cbegin(), t.barriers.cend(), []( const Barrier* b ) { return b && b->isBlocked(); } ) )
-        {
-          // reschedule
-          t.state.store( WAITING );
-          if( rescheduled ) *rescheduled = true;
-          continue;
-        }
         t.barriers.clear();   // clear barriers, so we don't need to check them on the next try (we assume they won't get locked again)
       }
-      if( t.readyCheck && t.readyCheck( threadId, t.param ) == false )
-      {
-        // reschedule
-        t.state.store( WAITING );
-        if( rescheduled ) *rescheduled = true;
-        continue;
-      }
+    }
+    ready = ready && ( !t.readyCheck || t.readyCheck( threadId, t.param ) );
+    if( !ready )
+    {
+      // give the slot back: not more urgent than the best (refilled since the first read), blocked by a barrier, or not
+      // ready yet; it was invisible to other scans meanwhile, so the caller wakes the idle thread
+      t.state.store( WAITING );
+      if( rescheduled ) *rescheduled = true;
+      continue;
+    }
 
-      return it;
+    if( best.isValid() )
+    {
+      ( *best ).state.store( WAITING );
+      if( rescheduled ) *rescheduled = true;
+    }
+    best         = it;
+    bestPriority = priority;
+    if( priority == 0 )
+    {
+      break;   // nothing is more urgent
     }
   }
-  return {};
+  return best;
 }
 
 bool NoMallocThreadPool::processTask( int threadId, NoMallocThreadPool::Slot& task )

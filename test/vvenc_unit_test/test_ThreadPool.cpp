@@ -160,7 +160,9 @@ bool test_ThreadPool()
       // added last cell first, so that most tasks wait for their neighbours
       for( auto cell = cells.rbegin(); cell != cells.rend(); cell++ )
       {
-        pool.addBarrierTask( poolGridCellTask, &*cell, &done, nullptr, {}, poolGridCellReady );
+        // rows of three priorities, like pictures started at different times: a thread may claim a ready cell and
+        // give it back for a more urgent one
+        pool.addBarrierTask( poolGridCellTask, &*cell, &done, nullptr, {}, poolGridCellReady, cell->y % 3 );
       }
       done.wait();
 

@@ -243,6 +243,7 @@ public:
   int64_t                       picsInMissing;      // summed up missing frames on input
   int64_t                       picOutOffset;       // signalization of pic offset to re-calc dts
   bool                          isPreAnalysis;
+  int64_t                       encStartOrder;      // 1, 2, ...: the order in which the pictures got a picture encoder (per EncGOP)
 
   PicShared*                    m_picShared;
 

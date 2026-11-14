@@ -145,6 +145,10 @@ EncGOP::EncGOP( MsgLog& logger )
   , m_pocCRA             ( 0 )
   , m_associatedIRAPPOC  ( 0 )
   , m_associatedIRAPType ( VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP )
+  , m_picSetupTasks      ( false )
+  , m_numSetupsQueued    ( 0 )
+  , m_numSetupsDone      ( 0 )
+  , m_numPicsStarted     ( 0 )
 {
 }
 
@@ -224,6 +228,16 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   {
     m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_internalUsePerceptQPATempFiltISlice == 2) && encCfg.m_salienceBasedOpt ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
   }
+
+  // With pictures coded in parallel, a picture's setup (EncPicture::compressPicture up to its CTU tasks) runs as a
+  // thread pool task instead of on the calling thread, which also runs the pre-processing stages (MCTF). Its results
+  // are read only by the picture's own tasks, except with rate control and look-ahead (lock-step, the rate cap, two
+  // passes and the pre-analysis encoder read them on the calling thread) and with the pumping reduction of the QPA,
+  // whose CTU QP vector is shared by all pictures; those keep the setup on the calling thread. MaxParallelFrames > 0 is
+  // needed because only then do the pictures share their unit cache under a mutex.
+  m_picSetupTasks = encCfg.m_numThreads > 0 && encCfg.m_maxParallelFrames > 0 && ! isPreAnalysis
+                    && encCfg.m_RCTargetBitrate == 0 && encCfg.m_RCNumPasses != 2 && ! encCfg.m_rateCap
+                    && encCfg.m_LookAhead <= 0 && m_globalCtuQpVector.size() <= 1;
 
   if( m_pcEncCfg->m_FrameRate && m_pcEncCfg->m_TicksPerSecond > 0 )
   {
@@ -419,24 +433,141 @@ static std::list<Picture*>::iterator findNextPicToStart( std::list<Picture*>& pr
   return best;
 }
 
+// In lock-step mode (rate control with frame-parallel coding) pictures are coded in chunks, each after the previous
+// chunk's rate-control update.
+bool EncGOP::xIsLockStep() const
+{
+  return ( m_pcEncCfg->m_RCTargetBitrate > 0 || ( m_pcEncCfg->m_LookAhead > 0 && ! m_isPreAnalysis ) ) && m_pcEncCfg->m_maxParallelFrames > 0;
+}
+
+// Whether new pictures join the processing list on every pass and start by temporal layer (findNextPicToStart), so that
+// the long key pictures of the next GOP overlap the current GOP. Otherwise the list is refilled when empty and pictures
+// start in list order: with one picture encoder (its start order is the coding order, which AMaxBT follows), lock-step
+// RC, rate cap, IFP coding one GOP at a time (NumParallelGOPs 0), and the I pictures' temporal pumping reduction, whose
+// CTU QP memory (sized only then) the key pictures fill and the next I picture reads.
+bool EncGOP::xFetchOnEveryPass( bool lockStepMode ) const
+{
+  const bool ctuQpMemory = m_globalCtuQpVector.size() > 1;
+  return m_pcEncCfg->m_maxParallelFrames > 0 && ! lockStepMode && ! m_pcEncCfg->m_rateCap
+         && ! ( m_pcEncCfg->m_ifpLines && ! m_pcEncCfg->m_numParallelGOPs ) && ! ctuQpMemory;
+}
+
+// Starts ready pictures of the processing list while picture encoders are free, at most maxStarts of them (0: no limit).
+// In blocking mode it waits for a picture encoder or a reference as needed.
+void EncGOP::xStartPictures( bool lockStepMode, bool fetchOnEveryPass, int maxStarts )
+{
+  int numStarted = 0;
+  while( true )
+  {
+    Picture* pic           = nullptr;
+    EncPicture* picEncoder = nullptr;
+
+    // fetch next picture to be encoded and next free picture encoder
+    {
+      std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
+      if( m_pcEncCfg->m_numThreads > 0) lock.lock();
+
+      // leave the loop when nothing to do (when all encoders are finished or in non-blocking mode)
+      if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) )
+      {
+        break;
+      }
+
+      // get next picture ready to be encoded
+      // if ALF enabled and ALFTempPred is used, ensure that refAps is initialized
+      // rate capping and MT frame parallel: in the first GOP after scene cut, ensure that the two first frames of 
+      //                                     this GOP are finished. Their data will be used to adjust the QP of
+      //                                     remaining frames of this scene-cut-GOP.
+      const std::list<Picture *>* rcUpdateList = &m_rcUpdateList;
+      const VVEncCfg* encCfg = m_pcEncCfg;
+      auto isReady = [encCfg, rcUpdateList]( const Picture* cand ) {
+        return ( encCfg->m_ifp || cand->slices[ 0 ]->checkAllRefPicsReconstructed() )
+          && ( !encCfg->m_alf || ( !cand->refApsGlobal || cand->refApsGlobal->initalized ) )
+          && ( !encCfg->m_rateCap || !encCfg->m_maxParallelFrames || !cand->isSceneCutGOP || (!rcUpdateList->front()->isSceneCutCheckAdjQP && !rcUpdateList->front()->gopEntry->m_isStartOfGop ) )
+          ; };
+      auto picItr = fetchOnEveryPass ? findNextPicToStart( m_procList, m_pcEncCfg->m_ifp, isReady )
+                                     : find_if( m_procList.begin(), m_procList.end(), isReady );
+
+      const bool nextPicReady = picItr != m_procList.end();
+
+      // check at least one picture and one pic encoder ready
+      if( m_freePicEncoderList.empty() || ! nextPicReady )
+      {
+        // non-blocking stage: wait on top level, let other stages do their jobs
+        // in non-lockstep mode, check if next picture can be output
+        if( isNonBlocking() || ( ! lockStepMode && m_gopEncListOutput.front()->isEncoded ) )
+        {
+          break;
+        }
+        CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+        CHECK( xEncodersFinished(), "wait for picture to be finished, but no pic encoder running" );
+        m_gopEncCond.wait( lock );
+        continue;
+      }
+
+      pic = *picItr;
+      picEncoder = m_freePicEncoderList.front();
+
+      // rate-control with look-ahead: init next chunk
+      if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead )
+      {
+        CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
+
+        if( pic->isFlush )
+        {
+          m_pcRateCtrl->setRCRateSavingState(0); // tell budget estimation that end of video is near
+        }
+        if( pic->gopEntry->m_isStartOfGop )
+        {
+          // check the RC final pass requirement for availability of preprocessed pictures (GOP + 1)
+          if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && ! pic->isFlush )
+          {
+            break;
+          }
+          m_pcRateCtrl->processFirstPassData( pic->isFlush, pic->poc );
+        }
+      }
+
+      m_freePicEncoderList.pop_front();
+    }
+
+    CHECK( picEncoder == nullptr, "no free picture encoder available" );
+    CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
+    m_procList.remove( pic );
+
+    xEncodePicture( pic, picEncoder );
+    if( ++numStarted == maxStarts )
+    {
+      break;
+    }
+  }
+}
+
+// The poll of the earlier stages (EncStage::pollStartStage) while the main thread waits in them: starts up to two
+// ready pictures (so the stage's wait is not delayed much), never outputs or updates rate control. Not with rate
+// control or look-ahead (a picture's RC init reads the updates made at output) or the rate cap, whose starts wait for
+// those updates.
+void EncGOP::startReadyPictures()
+{
+  CHECKD( m_isPreAnalysis, "the pre-analysis encoder is not polled" );
+  if( ! isNonBlocking() || m_pcEncCfg->m_RCTargetBitrate > 0 || m_pcEncCfg->m_LookAhead > 0 || m_pcEncCfg->m_rateCap || m_procList.empty() )
+  {
+    return;
+  }
+  xStartPictures( false, xFetchOnEveryPass( false ), 2 );
+}
+
 void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
 {
   // in lockstep mode, process all pictures in processing list
-  const bool lockStepMode = (m_pcEncCfg->m_RCTargetBitrate > 0 || (m_pcEncCfg->m_LookAhead > 0 && !m_isPreAnalysis)) && (m_pcEncCfg->m_maxParallelFrames > 0);
+  const bool lockStepMode = xIsLockStep();
 
   // get list of pictures to be encoded and used for RC update
   CHECK( m_pcEncCfg->m_rateCap && lockStepMode, "Rate capping should not be used in lockstep mode" );
   // rate cap and MT: finish the previous GOP before processing the next one
   const bool rateCapPrevGopConstr = m_pcEncCfg->m_rateCap && !m_rcUpdateList.empty();
 
-  // New pictures join the processing list on every pass and start by temporal layer (findNextPicToStart): fetched only
-  // when the list was empty, they waited until every picture before them had started, and the long key pictures of the
-  // next GOP ran nearly alone. Kept as before: one picture encoder (its start order is the coding order, which AMaxBT
-  // follows), lock-step RC, rate cap, IFP coding one GOP at a time (NumParallelGOPs 0), and the I pictures' temporal
-  // pumping reduction, whose CTU QP memory (sized only then) the key pictures fill and the next I picture reads.
-  const bool ctuQpMemory      = m_globalCtuQpVector.size() > 1;
-  const bool fetchOnEveryPass = m_pcEncCfg->m_maxParallelFrames > 0 && ! lockStepMode && ! m_pcEncCfg->m_rateCap
-                                && ! ( m_pcEncCfg->m_ifpLines && ! m_pcEncCfg->m_numParallelGOPs ) && ! ctuQpMemory;
+  const bool fetchOnEveryPass = xFetchOnEveryPass( lockStepMode );
   if( ( m_procList.empty() || fetchOnEveryPass ) && (!m_gopEncListInput.empty() || !m_rcInputReorderList.empty()) && !rateCapPrevGopConstr )
   {
     xGetProcessingLists( m_procList, m_rcUpdateList, lockStepMode );
@@ -446,86 +577,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
   {
     // encode one picture in serial mode / multiple pictures in FPP mode
     PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_IGNORE );
-    while( true )
-    {
-      Picture* pic           = nullptr;
-      EncPicture* picEncoder = nullptr;
-
-      // fetch next picture to be encoded and next free picture encoder
-      {
-        std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
-        if( m_pcEncCfg->m_numThreads > 0) lock.lock();
-
-        // leave the loop when nothing to do (when all encoders are finished or in non-blocking mode)
-        if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) )
-        {
-          break;
-        }
-
-        // get next picture ready to be encoded
-        // if ALF enabled and ALFTempPred is used, ensure that refAps is initialized
-        // rate capping and MT frame parallel: in the first GOP after scene cut, ensure that the two first frames of 
-        //                                     this GOP are finished. Their data will be used to adjust the QP of
-        //                                     remaining frames of this scene-cut-GOP.
-        const std::list<Picture *>* rcUpdateList = &m_rcUpdateList;
-        const VVEncCfg* encCfg = m_pcEncCfg;
-        auto isReady = [encCfg, rcUpdateList]( const Picture* cand ) {
-          return ( encCfg->m_ifp || cand->slices[ 0 ]->checkAllRefPicsReconstructed() )
-            && ( !encCfg->m_alf || ( !cand->refApsGlobal || cand->refApsGlobal->initalized ) )
-            && ( !encCfg->m_rateCap || !encCfg->m_maxParallelFrames || !cand->isSceneCutGOP || (!rcUpdateList->front()->isSceneCutCheckAdjQP && !rcUpdateList->front()->gopEntry->m_isStartOfGop ) )
-            ; };
-        auto picItr = fetchOnEveryPass ? findNextPicToStart( m_procList, m_pcEncCfg->m_ifp, isReady )
-                                       : find_if( m_procList.begin(), m_procList.end(), isReady );
-
-        const bool nextPicReady = picItr != m_procList.end();
-
-        // check at least one picture and one pic encoder ready
-        if( m_freePicEncoderList.empty() || ! nextPicReady )
-        {
-          // non-blocking stage: wait on top level, let other stages do their jobs
-          // in non-lockstep mode, check if next picture can be output
-          if( isNonBlocking() || ( ! lockStepMode && m_gopEncListOutput.front()->isEncoded ) )
-          {
-            break;
-          }
-          CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-          CHECK( xEncodersFinished(), "wait for picture to be finished, but no pic encoder running" );
-          m_gopEncCond.wait( lock );
-          continue;
-        }
-
-        pic = *picItr;
-        picEncoder = m_freePicEncoderList.front();
-
-        // rate-control with look-ahead: init next chunk
-        if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead )
-        {
-          CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
-
-          if( pic->isFlush )
-          {
-            m_pcRateCtrl->setRCRateSavingState(0); // tell budget estimation that end of video is near
-          }
-          if( pic->gopEntry->m_isStartOfGop )
-          {
-            // check the RC final pass requirement for availability of preprocessed pictures (GOP + 1)
-            if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && ! pic->isFlush )
-            {
-              break;
-            }
-            m_pcRateCtrl->processFirstPassData( pic->isFlush, pic->poc );
-          }
-        }
-
-        m_freePicEncoderList.pop_front();
-      }
-
-      CHECK( picEncoder == nullptr, "no free picture encoder available" );
-      CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
-      m_procList.remove( pic );
-
-      xEncodePicture( pic, picEncoder );
-    }
+    xStartPictures( lockStepMode, fetchOnEveryPass, 0 );
   }
 
   if( lockStepMode && m_pcEncCfg->m_ifpLines && !m_rcUpdateList.empty() )
@@ -698,6 +750,8 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 
   // initialize next picture
   pic->isPreAnalysis = m_isPreAnalysis;
+  // before any task of the picture is queued: its tasks' priority (EncSlice::xProcessCtus)
+  pic->encStartOrder = ++m_numPicsStarted;
 
   if( pic->slices[0]->TLayer + 1 < m_pcEncCfg->m_maxTLayer ) // skip for highest two temporal levels
   {
@@ -717,41 +771,76 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
     pic->gopAdaptedQP += m_rcap.gopAdaptedQPAdj;
   }
 
+  // finish picture encoding and cleanup, once all CTU tasks of the picture are done
+  static auto finishTask = []( int, void* task_param )
+  {
+    FinishTaskParam* param = static_cast<FinishTaskParam*>( task_param );
+    // The pictures that reference this one may start as soon as what they read is final: the reconstruction and
+    // motion (done by the CTU tasks) and the ALF APSs. Writing the slice data, the distortion and the cleanup run on
+    // this one thread after that and do not change the reconstruction, motion or APSs.
+    param->picEncoder->finalizeReference( *param->pic );
+    {
+      std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
+      param->pic->isReconstructed = true;
+      if( param->pic->picApsGlobal )
+        param->pic->picApsGlobal->initalized = true;
+      // counted like a finish, so that waitForFreeEncoders returns for it: the pictures referencing this one may start
+      param->gopEncoder->m_numPicsFinished++;
+      param->gopEncoder->m_gopEncCond.notify_one();
+    }
+    param->picEncoder->finalizePicture( *param->pic );
+    {
+      std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
+      param->pic->isEncoded = true;
+      param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
+      param->gopEncoder->m_numPicsFinished++;
+      param->gopEncoder->m_gopEncCond.notify_one();
+    }
+    delete param;
+    return true;
+  };
+
+  if( m_picSetupTasks )
+  {
+    // compress next picture in a thread pool task, see init(). The setups run one at a time in start order, as they did on
+    // the calling thread: with inter-frame parallelism, a picture's CTU tasks wait for CTU lines of its references, which
+    // only exist once the references' setups have run.
+    static auto setupTask = []( int, void* task_param )
+    {
+      FinishTaskParam* param = static_cast<FinishTaskParam*>( task_param );
+      EncGOP* gopEncoder     = param->gopEncoder;
+      param->picEncoder->compressPicture( *param->pic, *gopEncoder );
+      gopEncoder->m_numSetupsDone++;
+      // The finish task is added only now: until compressPicture added the CTU tasks, the done barrier of the picture
+      // encoder's CTU task counter is still open from its previous picture. Once it is added, the finish task may run,
+      // delete param and let the encoder finish, so nothing is touched after it. It has the same priority as the
+      // picture's CTU tasks (EncSlice::xProcessCtus).
+      gopEncoder->m_threadPool->addBarrierTask( finishTask, param, nullptr, nullptr, { &param->picEncoder->m_ctuTasksDoneCounter.done }, nullptr,
+                                                1 + param->pic->encStartOrder );
+      return true;
+    };
+    static auto setupReady = []( int, void* task_param )
+    {
+      const FinishTaskParam* param = static_cast<const FinishTaskParam*>( task_param );
+      return param->gopEncoder->m_numSetupsDone == param->setupNum;
+    };
+    FinishTaskParam* param = new FinishTaskParam( this, picEncoder, pic );
+    param->setupNum        = m_numSetupsQueued++;
+    // the most urgent priority (0), as the pre-analysis rows: a setup is short and holds back all of its picture's tasks
+    m_threadPool->addBarrierTask( setupTask, param, nullptr, nullptr, {}, setupReady, 0 );
+    return;
+  }
+
   // compress next picture
   picEncoder->compressPicture( *pic, *this );
 
   // finish picture encoding and cleanup
   if( m_pcEncCfg->m_numThreads > 0 )
   {
-    static auto finishTask = []( int, void* task_param )
-    {
-      FinishTaskParam* param = static_cast<FinishTaskParam*>( task_param );
-      // The pictures that reference this one may start as soon as what they read is final: the reconstruction and
-      // motion (done by the CTU tasks) and the ALF APSs. Writing the slice data, the distortion and the cleanup run on
-      // this one thread after that and do not change the reconstruction, motion or APSs.
-      param->picEncoder->finalizeReference( *param->pic );
-      {
-        std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
-        param->pic->isReconstructed = true;
-        if( param->pic->picApsGlobal )
-          param->pic->picApsGlobal->initalized = true;
-        // counted like a finish, so that waitForFreeEncoders returns for it: the pictures referencing this one may start
-        param->gopEncoder->m_numPicsFinished++;
-        param->gopEncoder->m_gopEncCond.notify_one();
-      }
-      param->picEncoder->finalizePicture( *param->pic );
-      {
-        std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
-        param->pic->isEncoded = true;
-        param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
-        param->gopEncoder->m_numPicsFinished++;
-        param->gopEncoder->m_gopEncCond.notify_one();
-      }
-      delete param;
-      return true;
-    };
     FinishTaskParam* param = new FinishTaskParam( this, picEncoder, pic );
-    m_threadPool->addBarrierTask( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done } );
+    // the priority of the picture's CTU tasks (EncSlice::xProcessCtus): it frees the picture encoder, so it ranks with them
+    m_threadPool->addBarrierTask( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done }, nullptr,
+                                  1 + pic->encStartOrder );
   }
   else
   {
