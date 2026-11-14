@@ -1390,6 +1390,194 @@ static void padHorizontal_neon( Pel* src, const ptrdiff_t stride, const int widt
   }
 }
 
+// MIP upsampling (MatrixIntraPrediction::predBlock): with diff = behind - before, phase p = 0 .. 2^L - 1 is
+// ( ( before << L ) + 2^(L-1) + ( p + 1 ) * diff ) >> L = before + ( ( ( p + 1 ) * diff + 2^(L-1) ) >> L )
+// (before << L is a multiple of 2^L), i.e. vrsra( before, ( p + 1 ) * diff, L ); the last phase is behind itself. For
+// samples of up to 12 bits (the range of the SIMD versions) ( p + 1 ) * diff fits int16, and vrsra rounds in wider
+// precision.
+template<unsigned L>
+static inline void mipInterpolate_neon( const int16x8_t before, const int16x8_t behind, int16x8_t* out )
+{
+  const int16x8_t diff = vsubq_s16( behind, before );
+  int16x8_t       acc  = diff;
+  for( int p = 0; p < ( 1 << L ) - 1; p++, acc = vaddq_s16( acc, diff ) )
+  {
+    out[p] = vrsraq_n_s16( before, acc, L );
+  }
+  out[( 1 << L ) - 1] = behind;
+}
+
+template<unsigned L>
+static inline void mipInterpolate_neon( const int16x4_t before, const int16x4_t behind, int16x4_t* out )
+{
+  const int16x4_t diff = vsub_s16( behind, before );
+  int16x4_t       acc  = diff;
+  for( int p = 0; p < ( 1 << L ) - 1; p++, acc = vadd_s16( acc, diff ) )
+  {
+    out[p] = vrsra_n_s16( before, acc, L );
+  }
+  out[( 1 << L ) - 1] = behind;
+}
+
+// one row of the horizontal pass: out[i * 2^L + p] = v[p][i], one overload per factor (tag MipLog2Factor<L>).
+// Factors 2 and 4 with interleaving stores; factor 8 zips the phases in pairs, so that each 32-bit lane i of the four
+// zipped vectors holds phases 2j, 2j + 1 of sample i, and a 4-way interleaving store of 32-bit lanes writes them in
+// order (dst is only 2-byte aligned: fine for ST4).
+template<unsigned L> struct MipLog2Factor {};
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x8_t* v, MipLog2Factor<1> )
+{
+  int16x8x2_t w;
+  w.val[0] = v[0];
+  w.val[1] = v[1];
+  vst2q_s16( dst, w );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x8_t* v, MipLog2Factor<2> )
+{
+  int16x8x4_t w;
+  for( int p = 0; p < 4; p++ )
+  {
+    w.val[p] = v[p];
+  }
+  vst4q_s16( dst, w );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x8_t* v, MipLog2Factor<3> )
+{
+  int32x4x4_t lo, hi;
+  for( int j = 0; j < 4; j++ )
+  {
+    const int16x8x2_t z = vzipq_s16( v[2 * j], v[2 * j + 1] );
+    lo.val[j] = vreinterpretq_s32_s16( z.val[0] );
+    hi.val[j] = vreinterpretq_s32_s16( z.val[1] );
+  }
+  vst4q_s32( ( int32_t* ) dst, lo );
+  vst4q_s32( ( int32_t* ) dst + 16, hi );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x4_t* v, MipLog2Factor<1> )
+{
+  int16x4x2_t w;
+  w.val[0] = v[0];
+  w.val[1] = v[1];
+  vst2_s16( dst, w );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x4_t* v, MipLog2Factor<2> )
+{
+  int16x4x4_t w;
+  for( int p = 0; p < 4; p++ )
+  {
+    w.val[p] = v[p];
+  }
+  vst4_s16( dst, w );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x4_t* v, MipLog2Factor<3> )
+{
+  int32x2x4_t lo, hi;
+  for( int j = 0; j < 4; j++ )
+  {
+    const int16x4x2_t z = vzip_s16( v[2 * j], v[2 * j + 1] );
+    lo.val[j] = vreinterpret_s32_s16( z.val[0] );
+    hi.val[j] = vreinterpret_s32_s16( z.val[1] );
+  }
+  vst4_s32( ( int32_t* ) dst, lo );
+  vst4_s32( ( int32_t* ) dst + 8, hi );
+}
+
+// horizontal pass over the predSize (4 or 8) rows of the reduced prediction; "before" of a row's first sample is the
+// row's boundary sample
+template<unsigned L>
+static void mipUpsampleHorFactor_neon( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride,
+                                       const SizeType bndryStep, const SizeType predSize )
+{
+  const Pel* bndryLine = bndry + bndryStep - 1;
+  if( predSize == 8 )
+  {
+    for( int row = 0; row < 8; row++, src += 8, dst += dstStride, bndryLine += bndryStep )
+    {
+      const int16x8_t behind = vld1q_s16( src );
+      int16x8_t       v[1 << L];
+      mipInterpolate_neon<L>( vextq_s16( vld1q_dup_s16( bndryLine ), behind, 7 ), behind, v );
+      mipStoreRow_neon( dst, v, MipLog2Factor<L>() );
+    }
+  }
+  else
+  {
+    for( int row = 0; row < 4; row++, src += 4, dst += dstStride, bndryLine += bndryStep )
+    {
+      const int16x4_t behind = vld1_s16( src );
+      int16x4_t       v[1 << L];
+      mipInterpolate_neon<L>( vext_s16( vld1_dup_s16( bndryLine ), behind, 3 ), behind, v );
+      mipStoreRow_neon( dst, v, MipLog2Factor<L>() );
+    }
+  }
+}
+
+// vertical pass: input row k gives the output rows k * 2^L .. k * 2^L + 2^L - 1, the lanes run over the columns (8 per
+// step, a block 4 wide in 64-bit vectors). The source rows can be the output rows k * 2^L + 2^L - 1 (in place): each is
+// loaded before the stores of its phases, the last of which writes it back unchanged.
+template<unsigned L>
+static void mipUpsampleVerFactor_neon( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth,
+                                       const SizeType srcStep, const SizeType inHeight )
+{
+  if( outWidth == 4 )
+  {
+    int16x4_t before = vld1_s16( bndry );
+    for( SizeType k = 0; k < inHeight; k++ )
+    {
+      const int16x4_t behind = vld1_s16( src + k * srcStep );
+      int16x4_t       v[1 << L];
+      mipInterpolate_neon<L>( before, behind, v );
+      for( int p = 0; p < ( 1 << L ); p++ )
+      {
+        vst1_s16( dst + ( ( k << L ) + p ) * 4, v[p] );
+      }
+      before = behind;
+    }
+    return;
+  }
+  for( SizeType x = 0; x < outWidth; x += 8 )
+  {
+    int16x8_t before = vld1q_s16( bndry + x );
+    for( SizeType k = 0; k < inHeight; k++ )
+    {
+      const int16x8_t behind = vld1q_s16( src + k * srcStep + x );
+      int16x8_t       v[1 << L];
+      mipInterpolate_neon<L>( before, behind, v );
+      for( int p = 0; p < ( 1 << L ); p++ )
+      {
+        vst1q_s16( dst + ( ( k << L ) + p ) * outWidth + x, v[p] );
+      }
+      before = behind;
+    }
+  }
+}
+
+static void mipUpsampleHor_neon( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride,
+                                 const SizeType bndryStep, const SizeType predSize, const unsigned log2Factor )
+{
+  switch( log2Factor )
+  {
+  case 1:  mipUpsampleHorFactor_neon<1>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  case 2:  mipUpsampleHorFactor_neon<2>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  default: mipUpsampleHorFactor_neon<3>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  }
+}
+
+static void mipUpsampleVer_neon( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth,
+                                 const SizeType srcStep, const SizeType inHeight, const unsigned log2Factor )
+{
+  switch( log2Factor )
+  {
+  case 1:  mipUpsampleVerFactor_neon<1>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  case 2:  mipUpsampleVerFactor_neon<2>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  default: mipUpsampleVerFactor_neon<3>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  }
+}
+
 template<>
 void addAvg_strided_neon<8>( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest,
                              int destStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
@@ -2112,6 +2300,8 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   roundGeo       = roundGeo_neon;
   roundIntVector = roundIntVector_neon;
   padHorizontal  = padHorizontal_neon;
+  mipUpsampleHor = mipUpsampleHor_neon;
+  mipUpsampleVer = mipUpsampleVer_neon;
   addAvg8  = addAvg_strided_neon<8>;
   sumSquaredErrorParts = sumSquaredErrorParts_neon;
   addAvg16 = addAvg_strided_neon<16>;
