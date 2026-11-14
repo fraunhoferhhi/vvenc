@@ -968,7 +968,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ?      1   : 0   ;
   if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ?      0   : 1   ;
   if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ?      0   : 1   ;
-  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = c->m_ifp        ?      0   : 1   ;
+  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = 1;
   if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ?      0.0 : 0.75;
   if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ?      0.0 : 0.5 ;
   if( c->m_maxParallelFrames < 0 )
@@ -2214,7 +2214,6 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1 && c->m_numThreads > 1, "Tracing and frame parallel encoding not supported" );
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
-    vvenc_confirmParameter(c, c->m_ifpLines && c->m_alfTempPred != 0, "IFP: ALFTempPred is not supported (must be disabled)" );
     vvenc_confirmParameter(c, c->m_ifpLines && c->m_numTileRows > 1,  "IFP: Only single tile row is supported" );
     vvenc_confirmParameter(c, c->m_ifpLines < 0, "IFPLines must be >= 0" );
     vvenc_confirmParameter(c, c->m_ifp && c->m_ifpLines == 0, "IFP requires IFPLines=[-1 or >0]" );

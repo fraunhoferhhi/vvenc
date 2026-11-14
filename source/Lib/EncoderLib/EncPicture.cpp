@@ -70,7 +70,8 @@ void EncPicture::init( const VVEncCfg& encCfg,
                        const PPS& pps,
                        RateCtrl& rateCtrl,
                        NoMallocThreadPool* threadPool,
-                       ThreadRsrcPool& threadRsrc )
+                       ThreadRsrcPool& threadRsrc,
+                       std::function<void( Picture& )> apsReady )
 {
   m_pcEncCfg = &encCfg;
 
@@ -79,6 +80,21 @@ void EncPicture::init( const VVEncCfg& encCfg,
 
   m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, threadRsrc, &m_ctuTasksDoneCounter );
   m_pcRateCtrl = &rateCtrl;
+
+  // With IFP, the pictures that predict their ALF APSs from this one need its APSs, which are final once the ALF and
+  // CC-ALF filters are derived from the first CTU lines. They get them then, not at the end of the picture.
+  if( encCfg.m_ifpLines && encCfg.m_alf && encCfg.m_alfTempPred )
+  {
+    m_SliceEncoder.m_alfFiltersDerived = [this, apsReady]( Picture& pic )
+    {
+      if( !pic.picApsGlobal )
+        return;
+      pic.picApsMap.setApsIdStart( m_ALF.getApsIdStart() );
+      xCopyApsToGlobal( pic );
+      m_apsCopiedEarly = true;
+      apsReady( pic );
+    };
+  }
 }
 
 
@@ -148,25 +164,13 @@ void EncPicture::finalizePicture( Picture& pic )
     pic.picBlkStat.storeBlkSize( pic );
   }
 
-  // copy ALF APSs to global list
+  // copy ALF APSs to global list, unless that was done at the ALF derivation (IFP), as pictures may read them already
   CHECK( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred && !pic.picApsGlobal, "Missing APS from top level" );
-  if( pic.picApsGlobal )
+  if( pic.picApsGlobal && !m_apsCopiedEarly )
   {
-    CHECK( pic.picApsGlobal->poc != pic.poc, "Global APS POC must be consistent with picture poc" );
-    const ParameterSetMap<APS>& src = pic.picApsMap;
-    ParameterSetMap<APS>&       dst = pic.picApsGlobal->apsMap;
-    for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
-    {
-      const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
-      const APS* srcAPS = src.getPS( apsMapIdx );
-      if( srcAPS )
-      {
-        APS* dstAPS = dst.allocatePS( apsMapIdx );
-        *dstAPS = *srcAPS;
-      }
-    }
-    dst.setApsIdStart( src.getApsIdStart() );
+    xCopyApsToGlobal( pic );
   }
+  m_apsCopiedEarly = false;
 
   // cleanup
   pic.cs->releaseIntermediateData();
@@ -177,6 +181,24 @@ void EncPicture::finalizePicture( Picture& pic )
   pic.cs->destroyFullMotionBuf();
 
   pic.encTime.stopTimer();
+}
+
+void EncPicture::xCopyApsToGlobal( Picture& pic )
+{
+  CHECK( pic.picApsGlobal->poc != pic.poc, "Global APS POC must be consistent with picture poc" );
+  const ParameterSetMap<APS>& src = pic.picApsMap;
+  ParameterSetMap<APS>&       dst = pic.picApsGlobal->apsMap;
+  for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+  {
+    const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
+    const APS* srcAPS = src.getPS( apsMapIdx );
+    if( srcAPS )
+    {
+      APS* dstAPS = dst.allocatePS( apsMapIdx );
+      *dstAPS = *srcAPS;
+    }
+  }
+  dst.setApsIdStart( src.getApsIdStart() );
 }
 
 uint64_t findDistortionPlane( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift )

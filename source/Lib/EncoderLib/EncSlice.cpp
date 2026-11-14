@@ -1393,6 +1393,12 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
         }
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_derive );
 
+        // IFP: the ALF filters (derived before, at ALF_DERIVE_FILTER) and the CC-ALF filters are final now
+        if( ctuRsAddr == deriveFilterCtu && syncLines && encSlice->m_alfFiltersDerived )
+        {
+          encSlice->m_alfFiltersDerived( *cs.picture );
+        }
+
         processStates[ctuRsAddr] = CCALF_RECONSTRUCT;
       }
       break;
