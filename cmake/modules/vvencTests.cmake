@@ -65,6 +65,9 @@ add_vvenc_test( vvencapp-fast       40 OUT_VVC   ""                       vvenca
 add_vvenc_test( vvencFFapp-fast     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_fast.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 8 --Threads=-1 -b OUTPUT )
 add_vvenc_test( compare_output-fast 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
+# CU-tree picture QPs: the dependency model's picture offsets in place of the QP cascade.
+add_vvenc_test( vvencapp-fast_cutreepicstrength 30 OUT_VVC ""               vvencapp --preset fast -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -t 4 --additional "BIM=1 CuTreePicStrength=2" -o OUTPUT )
+
 add_vvenc_test( vvencapp-medium       30 OUT_VVC   ""                       vvencapp --preset medium -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -f 5 --mtprofile 0 -o OUTPUT )
 add_vvenc_test( vvencFFapp-medium     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 5 --Threads=-1 -b OUTPUT )
 add_vvenc_test( compare_output-medium 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
@@ -76,6 +79,9 @@ add_vvenc_test( compare_output-slow 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAK
 add_vvenc_test( vvencapp-medium_noqpa_0thr       30 OUT_VVC   ""                       vvencapp --preset medium --qpa 0 --threads 0 -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -f 5 -o OUTPUT )
 add_vvenc_test( vvencFFapp-medium_noqpa_0thr     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -qpa 0 --WppBitEqual=0 --Threads=0 -f 5 -b OUTPUT )
 add_vvenc_test( compare_output-medium_noqpa_0thr 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
+
+# MCTF level tilt (on by default): switched off.
+add_vvenc_test( vvencapp-fast_mctfleveltilt_off 30 OUT_VVC ""               vvencapp --preset fast -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -t 4 --additional MCTFLevelTilt=0 -o OUTPUT )
 
 add_vvenc_test( vvencFFapp-lowdelay_medium 30 OUTF_VVC  ""            vvencFFapp -c ${CFG_DIR}/experimental/lowdelay_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} --IntraPeriod=-1 -dph 1 -f 8 --Threads=-1 -b OUTPUT )
 

@@ -1094,7 +1094,8 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bUseDQP = m_pcEncCfg->m_cuQpDeltaSubdiv > 0;
   bUseDQP |= m_pcEncCfg->m_lumaLevelToDeltaQPEnabled == 1;
   bUseDQP |= m_pcEncCfg->m_usePerceptQPA;
-  bUseDQP |= m_pcEncCfg->hasBlockQpOffsets();
+  // CU-tree at strength 0 (with CuTreePicStrength: picture QPs only) leaves every block offset 0: nothing to signal
+  bUseDQP |= m_pcEncCfg->hasBlockQpOffsets() && ! ( m_pcEncCfg->useCuTree() && m_pcEncCfg->m_cuTreeStrength == 0 );
 
   if (m_pcEncCfg->m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_pcEncCfg->m_costMode==VVENC_COST_LOSSLESS_CODING)
   {

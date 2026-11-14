@@ -599,6 +599,21 @@ void MCTF::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* t
   m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
   m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? ( m_encCfg->m_vvencMCTF.MCTFSpeed >= 3 ? 2 : 1 ) : 0;
   m_mctfUnitSize     = m_encCfg->m_vvencMCTF.MCTFUnitSize;
+
+  // The filter strength per MCTF index, from the GOP's key pictures (the last index, the pictures most others predict
+  // from) down the temporal levels: the configured strength, raised for the three upper levels with MCTFLevelTilt. A
+  // cleaner reference pays most where more pictures predict from it. Random access only: with GOP size 1 (all intra)
+  // every picture has MCTF index 0 and none is predicted from another, and in low delay (no picture reordering) the
+  // raise costs bits (measured +0.8 to +0.9 % BD-rate on a grainy and a clean clip). BIM keeps the configured strength,
+  // the film grain analysis its own fixed strength.
+  static constexpr double LEVEL_RAISE[ 4 ] = { 0.6, 0.46, 0.21, 0.0 };   // from the key pictures down
+  const bool levelTilt = m_encCfg->m_vvencMCTF.MCTFLevelTilt && m_encCfg->m_GOPSize > 1 && m_encCfg->m_picReordering;
+  const int  numFrames = m_encCfg->m_vvencMCTF.numFrames;
+  for( int i = 0; i < numFrames; i++ )
+  {
+    const int level     = std::min( numFrames - 1 - i, 3 );
+    m_filterStrength[i] = m_encCfg->m_vvencMCTF.MCTFStrengths[i] * ( levelTilt ? 1.0 + LEVEL_RAISE[level] : 1.0 );
+  }
 }
 
 // ====================================================================================================================
@@ -738,6 +753,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
   const int mctfIdx            = pic->gopEntry ? pic->gopEntry->m_mctfIndex : -1;
   const double overallStrength = mctfIdx >= 0 ? m_encCfg->m_vvencMCTF.MCTFStrengths[ mctfIdx ] : -1.0;
+  const double filterStrength  = mctfIdx >= 0 ? m_filterStrength[ mctfIdx ] : -1.0;   // with the level tilt
   double   meanRmsAcrossPic    = 0.0;
   uint64_t sumSRmsAcrossPic    = 0;
   uint16_t nMax = 0, maxRmsCTU = 0;
@@ -864,7 +880,25 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     if( pic->useMCTF )
     {
       fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
-      bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+      bilateralFilter( origBuf, srcFrameInfo, fltrBuf, filterStrength );
+
+      // CuTreePicStrength's noise floor (CuTree::xSetQpOffsets): the luma energy the filter removes, measured on the
+      // pictures of temporal layer 2, whose strength-table entry does not change with the QP (the filter's sigma does)
+      if( m_encCfg->m_cuTreePicScale > 0.0 && pic->gopEntry->m_temporalId == 2 )
+      {
+        const CPelBuf orig = origBuf.get( COMP_Y );
+        const CPelBuf filt = fltrBuf.get( COMP_Y );
+        int64_t sse = 0;
+        for( int y = 0; y < (int)orig.height; y++ )
+        {
+          for( int x = 0; x < (int)orig.width; x++ )
+          {
+            const int64_t d = orig.at( x, y ) - filt.at( x, y );
+            sse += d * d;
+          }
+        }
+        pic->m_picShared->m_mctfNoiseVar = double( sse ) / ( double( orig.width ) * orig.height );
+      }
     }
 
     // The film grain analysis compares the original with a filtered copy of fixed strength, independent of the
@@ -873,9 +907,10 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     if( m_encCfg->m_fga && m_isFinalPass && pic->gopEntry->m_isStartOfGop )
     {
       static constexpr double FGA_FILTER_STRENGTH = 1.5;
-      if( pic->useMCTF && overallStrength == FGA_FILTER_STRENGTH )
+      if( pic->useMCTF && filterStrength == FGA_FILTER_STRENGTH )
       {
-        // the picture filtered for the encoding is exactly the one the analysis needs (from QP 20 on)
+        // the picture filtered for the encoding is exactly the one the analysis needs (from QP 20 on with MCTFLevelTilt
+        // off; the tilt raises the key pictures' strength, so the analysis filters its own copy)
         pic->m_picShared->fgaUsesFilteredBuf() = true;
       }
       else
@@ -1000,7 +1035,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           if( doFilter )
           {
             fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
-            bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+            bilateralFilter( origBuf, srcFrameInfo, fltrBuf, filterStrength );
           }
         }
       }
@@ -1033,8 +1068,8 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         pic->m_picShared->m_forceSCC = forceSCC;
       }
 
-      // BIM 2 uses these offsets as they are. CU-tree (BIM 1) keeps their picture offset, m_picAuxQpOffset, and
-      // replaces the CTU offsets with its own.
+      // BIM 2 uses these offsets as they are. CU-tree (BIM 1) keeps their picture offset, m_picAuxQpOffset (unless
+      // CuTreePicStrength replaces it as well), and replaces the CTU offsets with its own.
       if( !m_encCfg->hasBlockQpOffsets() || !pic->useMCTF )
       {
         CHECKD( !pic->m_picShared->m_ctuBimQpOffset.empty(), "BIM disabled, but offset vector not empty!" );

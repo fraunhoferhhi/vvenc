@@ -600,6 +600,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
   IStreamToInt8                     toCuTreeBlockSize             ( &c->m_cuTreeBlockSize );
+  IStreamToFixedPointU8             toCuTreePicStrength           ( &c->m_cuTreePicStrength, 5 );
   IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFractionVal );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
 
@@ -1120,6 +1121,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("AllowDisFracMMVD",                                c->m_allowDisFracMMVD,                               "Disable fractional MVD in MMVD mode adaptively")
     ("MCTF",                                            c->m_vvencMCTF.MCTF,                                 "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
     ("MCTFSpeed",                                       c->m_vvencMCTF.MCTFSpeed,                            "MCTF Fast Mode (0:best quality ... 4:fastest operation)")
+    ("MCTFLevelTilt",                                   c->m_vvencMCTF.MCTFLevelTilt,                        "MCTF filter strength raised for the three upper temporal levels, the pictures the others predict from (0: off, 1: on; random access only; also raises explicit MCTFStrength values)")
     ("MCTFUnitSize",                                    c->m_vvencMCTF.MCTFUnitSize,                         "Size of MCTF operation area (block size for motion compensation).")
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
@@ -1127,6 +1129,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("BIM",                                             toBIM,                                               "Block importance mapping: lower the QP of blocks that later pictures predict from (0: off, 1: CU-tree, TPL model with one GOP of look-ahead, 2: from MCTF's motion error)")
     ("CuTreeStrength",                                  toCuTreeStrength,                                    "CU-tree (BIM 1): scale of its QP offsets [0...8.0)")
     ("CuTreeBlockSize",                                 toCuTreeBlockSize,                                   "CU-tree (BIM 1): side of its analysis blocks in luma samples (16, 32, or -1: automatic, 32 from 720 lines on, else 16)")
+    ("CuTreePicStrength",                               toCuTreePicStrength,                                 "CU-tree (BIM 1), random access, constant QP: picture QPs from how much later pictures depend on each picture, in place of the temporal layers' fixed QP offsets; scale of these offsets [0...8.0) (0: off). Codes at QP + round( 3 + 2 * strength ) to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32)")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
