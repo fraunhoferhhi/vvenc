@@ -205,6 +205,8 @@ private:
 
   uint64_t  xGetIntraFracBitsQTChroma ( const TransformUnit& tu, const ComponentID compID, CUCtx *cuCtx );
 
+  // partitioner's current TU: an ISP sub-TU and a CU's only TU need no walk from the position
+  TransformUnit& xCurrTU( CodingStructure& cs, Partitioner& partitioner ) const;
   void     xEncCoeffQT                ( CodingStructure& cs, Partitioner& pm, const ComponentID compID, CUCtx* cuCtx = nullptr, const int subTuIdx = -1, const PartSplit ispType = TU_NO_ISP );
 
   void      xIntraCodingTUBlock       ( TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig = nullptr, PelUnitBuf *pPred = nullptr, const bool loadTr = false, const QpParam* lumaQP = nullptr, const bool predKnown = false, const LfnstPrimary lfnstPrimary = LFNST_PRIMARY_NEW);
