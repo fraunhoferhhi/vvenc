@@ -5960,6 +5960,99 @@ static bool test_LoopFilterPandQ()
   return passed;
 }
 
+// Filters one 4-line luma edge segment of a 32 x 20 buffer with both kernels, in every combination of edge direction,
+// strong / weak and second-P / second-Q flags, and compares the whole buffer (writes outside p3..q3 included).
+static bool check_xPelFilterLuma( LoopFilter& ref, LoopFilter& opt, const std::vector<Pel>& input, int tc, int bd )
+{
+  const ptrdiff_t stride = 32;
+  const ClpRng    clpRng{ bd };
+  bool            passed = true;
+  for( int vertical = 0; vertical < 2; vertical++ )
+  {
+    // vertical edge: lines are rows 6..9, the edge before column 12; horizontal: lines are columns 12..15, edge before row 8
+    const ptrdiff_t step   = vertical ? stride : 1;
+    const ptrdiff_t offset = vertical ? 1 : stride;
+    const ptrdiff_t pos    = vertical ? 6 * stride + 12 : 8 * stride + 12;
+    for( int flags = 0; flags < 8; flags++ )
+    {
+      const bool       sw = flags & 1, secondP = flags & 2, secondQ = flags & 4;
+      std::vector<Pel> buf_ref = input;
+      std::vector<Pel> buf_opt = input;
+      ref.xPelFilterLuma( buf_ref.data() + pos, step, offset, tc, sw, 10 * tc, secondP, secondQ, clpRng );
+      opt.xPelFilterLuma( buf_opt.data() + pos, step, offset, tc, sw, 10 * tc, secondP, secondQ, clpRng );
+
+      std::ostringstream ctx;
+      ctx << "xPelFilterLuma vertical=" << vertical << " sw=" << sw << " secondP=" << secondP << " secondQ=" << secondQ
+          << " tc=" << tc << " bd=" << bd;
+      passed = compare_values_1d( ctx.str(), buf_ref.data(), buf_opt.data(), (unsigned) input.size() ) && passed;
+    }
+  }
+  return passed;
+}
+
+static bool test_LoopFilterPelLuma()
+{
+  printf( "Testing LoopFilter::xPelFilterLuma\n" );
+
+  LoopFilter ref( /*enableOpt=*/false );
+  LoopFilter opt( /*enableOpt=*/true );
+
+  const int stride = 32, rows = 20;
+  bool      passed = true;
+  unsigned  num_cases = g_fastUnitTest ? 10 : NUM_CASES;
+
+  for( int bd = 8; bd <= 10; bd += 2 )
+  {
+    const int maxVal = ( 1 << bd ) - 1;
+    const int maxTc  = 395 >> ( 10 - bd );   // the largest tc of the bit depth (LoopFilter's tc table)
+
+    // fixed buffers: all zero, all maximum, alternating
+    for( int pattern = 0; pattern < 3; pattern++ )
+    {
+      std::vector<Pel> buf( stride * rows );
+      for( int i = 0; i < stride * rows; i++ ) buf[i] = pattern == 0 ? 0 : pattern == 1 ? maxVal : ( i & 1 ) * maxVal;
+      passed = check_xPelFilterLuma( ref, opt, buf, 1, bd ) && passed;
+      passed = check_xPelFilterLuma( ref, opt, buf, maxTc, bd ) && passed;
+    }
+
+    for( unsigned i = 0; i < num_cases; i++ )
+    {
+      // uniform random samples
+      std::vector<Pel> buf( stride * rows );
+      for( Pel& v : buf ) v = rand() % ( maxVal + 1 );
+      passed = check_xPelFilterLuma( ref, opt, buf, 1 + rand() % maxTc, bd ) && passed;
+
+      // samples near 0 and the maximum only, with a large tc: the weak filter clips at both ends
+      for( Pel& v : buf ) v = ( rand() & 1 ) ? rand() % 8 : maxVal - rand() % 8;
+      passed = check_xPelFilterLuma( ref, opt, buf, maxTc - rand() % 8, bd ) && passed;
+
+      // lines that differ: each line (row and column alike) a ramp with its own level, slope and step at the edge,
+      // up or down, sized around the weak filter's threshold, so lines pass and fail and the clamps vary per line
+      const int tc = 1 + rand() % ( maxTc / 8 );
+      int level[32], slope[32], jump[32];
+      for( int k = 0; k < 32; k++ )
+      {
+        level[k] = rand() % ( maxVal + 1 );
+        slope[k] = rand() % 9 - 4;
+        jump[k]  = ( rand() % ( 36 * tc + 1 ) ) * ( ( rand() & 1 ) ? 1 : -1 );
+      }
+      for( int vertical = 0; vertical < 2; vertical++ )
+      {
+        for( int y = 0; y < rows; y++ )
+          for( int x = 0; x < stride; x++ )
+          {
+            const int line = vertical ? y : x;
+            const int dist = vertical ? x - 12 : y - 8;   // distance from the edge, >= 0 on the Q side
+            const int v    = level[line] + slope[line] * dist + ( dist >= 0 ? jump[line] : 0 ) + rand() % 3;
+            buf[y * stride + x] = Pel( v < 0 ? 0 : v > maxVal ? maxVal : v );
+          }
+        passed = check_xPelFilterLuma( ref, opt, buf, tc, bd ) && passed;
+      }
+    }
+  }
+  return passed;
+}
+
 #endif   // ENABLE_SIMD_DBLF
 
 #if ENABLE_SIMD_OPT_FGA
@@ -7267,6 +7360,7 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_DBLF
     { "LoopFilterPandQ", test_LoopFilterPandQ },
+    { "LoopFilterPelLuma", test_LoopFilterPelLuma },
 #endif
 #if ENABLE_SIMD_OPT
     { "BvSearch", test_BvSearchOps },

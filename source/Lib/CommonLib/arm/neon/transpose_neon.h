@@ -54,6 +54,23 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc
 {
+// Transposes the two 16-bit 4x4 blocks held in the low and high halves of a0..a3 in place: afterwards the low half of
+// a[j] is column j of the low block, its high half column j of the high block.
+static inline void transpose_4x4_s16_halves( int16x8_t& a0, int16x8_t& a1, int16x8_t& a2, int16x8_t& a3 )
+{
+  // t01.val[0]: a0[0] a1[0] a0[2] a1[2] ..., t01.val[1]: a0[1] a1[1] a0[3] a1[3] ...; t23 alike
+  const int16x8x2_t t01 = vtrnq_s16( a0, a1 );
+  const int16x8x2_t t23 = vtrnq_s16( a2, a3 );
+
+  // c02.val[0]: lanes 0 and 4 of a0..a3, c02.val[1]: lanes 2 and 6; c13: lanes 1 and 5, lanes 3 and 7
+  const int32x4x2_t c02 = vtrnq_s32( vreinterpretq_s32_s16( t01.val[0] ), vreinterpretq_s32_s16( t23.val[0] ) );
+  const int32x4x2_t c13 = vtrnq_s32( vreinterpretq_s32_s16( t01.val[1] ), vreinterpretq_s32_s16( t23.val[1] ) );
+
+  a0 = vreinterpretq_s16_s32( c02.val[0] );
+  a1 = vreinterpretq_s16_s32( c13.val[0] );
+  a2 = vreinterpretq_s16_s32( c02.val[1] );
+  a3 = vreinterpretq_s16_s32( c13.val[1] );
+}
 
 static inline void transpose_concat_8x4_s16( int16x8_t a0, int16x8_t a1, int16x8_t a2, int16x8_t a3,
                                              int16x8_t& b0, int16x8_t& b1, int16x8_t& b2, int16x8_t& b3 )
