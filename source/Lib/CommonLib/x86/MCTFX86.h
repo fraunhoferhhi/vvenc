@@ -1540,6 +1540,46 @@ void applyPlanarCorrectionSIMD( const Pel* refPel, const ptrdiff_t refStride, Pe
   }
 }
 
+#if USE_AVX2
+// The two sums of applyBlockSIMD's noise estimate for a block whose width is a multiple of 16, 16 columns of a row per
+// step: xvar sums d * d over the block (d = src - ref), xdiffsum the squared differences of d between horizontal
+// neighbours (not across the block's right edge) and between vertical neighbours (not across its bottom edge). Each
+// row's d is kept as the next row's upper neighbour instead of being loaded and subtracted again. The lanes add exact
+// integers (see the bit budget in applyBlockSIMD), so the sums are those of the 8-column loop, whatever the order.
+static inline void noiseSums16x_AVX2( const Pel* srcPel, const ptrdiff_t srcStride, const Pel* refPel, const int w, const int h, __m128i& xvar, __m128i& xdiffsum )
+{
+  __m256i vvar     = _mm256_setzero_si256();
+  __m256i vdiffsum = _mm256_setzero_si256();
+  for( int x = 0; x < w; x += 16 )
+  {
+    // the block's last column has no right neighbour: its horizontal term (lane 15 of the last step) is masked out
+    const __m256i rightMask = x + 16 == w ? _mm256_setr_epi16( -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0 ) : _mm256_set1_epi16( -1 );
+    // d of row y; adds its squares and its horizontal term to the sums
+    const auto rowDiff = [&]( const int y )
+    {
+      const Pel* pix = srcPel + srcStride * y + x;
+      const Pel* ref = refPel + w * y + x;
+      const __m256i d      = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) pix ), _mm256_loadu_si256( ( const __m256i* ) ref ) );
+      const __m256i dRight = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) ( pix + 1 ) ), _mm256_loadu_si256( ( const __m256i* ) ( ref + 1 ) ) );
+      const __m256i dh     = _mm256_and_si256( _mm256_sub_epi16( dRight, d ), rightMask );
+      vvar     = _mm256_add_epi32( vvar,     _mm256_madd_epi16( d,  d  ) );
+      vdiffsum = _mm256_add_epi32( vdiffsum, _mm256_madd_epi16( dh, dh ) );
+      return d;
+    };
+    __m256i dUp = rowDiff( 0 );
+    for( int y = 1; y < h; y++ )
+    {
+      const __m256i d  = rowDiff( y );
+      const __m256i dv = _mm256_sub_epi16( d, dUp );
+      vdiffsum = _mm256_add_epi32( vdiffsum, _mm256_madd_epi16( dv, dv ) );
+      dUp = d;
+    }
+  }
+  xvar     = _mm_add_epi32( _mm256_castsi256_si128( vvar ),     _mm256_extracti128_si256( vvar, 1 ) );
+  xdiffsum = _mm_add_epi32( _mm256_castsi256_si128( vdiffsum ), _mm256_extracti128_si256( vdiffsum, 1 ) );
+}
+#endif
+
 template<X86_VEXT vext>
 void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel **correctedPics, int numRefs, const int *verror, const double *refStrenghts, double weightScaling, double sigmaSq )
 {
@@ -1574,6 +1614,13 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     // leaving 12 bit (2^6*2^6) for the sum, which is ok for blocks up to 64x64, with w and h being usually 8 or 16 (2^3 or 2^4)
     // diffsum has double the number of entries, so one less bit
 
+#if USE_AVX2
+    if( vext >= AVX2 && ( w & 15 ) == 0 )
+    {
+      noiseSums16x_AVX2( srcPel, srcStride, refPel, w, h, xvar, xdiffsum );
+    }
+    else
+#endif
     if( ( w & 7 ) == 4 )
     {
       const __m128i xshufr = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 );
