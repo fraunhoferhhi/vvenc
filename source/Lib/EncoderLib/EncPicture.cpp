@@ -109,7 +109,9 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
 }
 
-void EncPicture::finalizePicture( Picture& pic )
+// What the pictures referencing this one read besides the reconstruction and motion: the CC-ALF parameters in the slice
+// and the ALF APSs in the global list. After it the picture can be referenced (isReconstructed).
+void EncPicture::finalizeReference( Picture& pic )
 {
   PROFILER_SCOPE_TOP_LEVEL_EXT( 1, g_timeProfiler, P_TOP_LEVEL, pic.cs );
   CodingStructure& cs = *(pic.cs);
@@ -135,19 +137,6 @@ void EncPicture::finalizePicture( Picture& pic )
     DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
   }
 
-  // write picture
-  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
-  xWriteSliceData( pic );
-  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
-
-  xCalcDistortion( pic, *slice->sps );
-
-  // finalize
-  if ( m_pcEncCfg->m_useAMaxBT )
-  {
-    pic.picBlkStat.storeBlkSize( pic );
-  }
-
   // copy ALF APSs to global list
   CHECK( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred && !pic.picApsGlobal, "Missing APS from top level" );
   if( pic.picApsGlobal )
@@ -166,6 +155,26 @@ void EncPicture::finalizePicture( Picture& pic )
       }
     }
     dst.setApsIdStart( src.getApsIdStart() );
+  }
+}
+
+// The serial rest of the picture's encoding, which the pictures referencing it do not read.
+void EncPicture::finalizePicture( Picture& pic )
+{
+  PROFILER_SCOPE_TOP_LEVEL_EXT( 1, g_timeProfiler, P_TOP_LEVEL, pic.cs );
+  const Slice* slice = pic.slices[0];
+
+  // write picture
+  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
+  xWriteSliceData( pic );
+  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
+
+  xCalcDistortion( pic, *slice->sps );
+
+  // finalize
+  if ( m_pcEncCfg->m_useAMaxBT )
+  {
+    pic.picBlkStat.storeBlkSize( pic );
   }
 
   // cleanup
