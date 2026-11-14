@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 #include "CommonLib/Buffer.h"
 #include "sum_neon.h"
+#include "transpose_neon.h"
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_BUFFER
 
@@ -276,6 +277,254 @@ void addAvg_strided_neon<4>( const Pel* src0, int src0Stride, const Pel* src1, i
   } while( --height != 0 );
 }
 
+// GPM's split SADs of all merge candidates (EncCu.cpp, geoPrefixSums then geoRunSads per split direction), the NEON
+// version of geoPrefixSums_AVX2 / geoRunSads_AVX2 (BufferX86.h) with their layout: per row the positions 0..width, and
+// at each position the running sums of the 8 lanes (candidates) side by side, so that geoRunSads takes one 8-lane load
+// per run end. The two only work as a pair (the C pair keeps one lane after the other). All lanes are computed: the
+// caller points unused lanes at the original and ignores their sums.
+
+// Per group of 8 columns: each lane's 8 absolute differences, transposed to per column the differences of all lanes,
+// added to the running sums of lanes 0-3 and 4-7 and stored as one position. |org - pred| <= 1023 (both are samples),
+// so a row's sums stay far below 2^32.
+static void geoPrefixSums_neon( const Pel* org, int orgStride, const Pel* const* pred, int predStride, int width, int height, const bool* /*all lanes are computed*/, uint32_t* prefix )
+{
+  CHECKD( width % 8 != 0, "GEO widths are multiples of 8" );
+  static_assert( GEO_PREFIX_LANES == 8, "two vectors of 32-bit sums" );
+
+  for( int y = 0; y < height; y++ )
+  {
+    uint32x4_t sumLow  = vdupq_n_u32( 0 );   // lanes 0..3
+    uint32x4_t sumHigh = vdupq_n_u32( 0 );   // lanes 4..7
+    vst1q_u32( prefix, sumLow );
+    vst1q_u32( prefix + 4, sumHigh );
+    prefix += GEO_PREFIX_LANES;
+
+    for( int x = 0; x < width; x += 8 )
+    {
+      const int16x8_t orgs = vld1q_s16( org + x );
+      uint16x8_t diffs[GEO_PREFIX_LANES];
+      for( int lane = 0; lane < GEO_PREFIX_LANES; lane++ )
+      {
+        diffs[lane] = vreinterpretq_u16_s16( vabdq_s16( orgs, vld1q_s16( pred[lane] + y * predStride + x ) ) );
+      }
+      uint16x8_t columns[8];
+      transpose_8x8_u16( diffs, columns );
+      for( int k = 0; k < 8; k++ )
+      {
+        sumLow  = vaddw_u16( sumLow, vget_low_u16( columns[k] ) );
+        sumHigh = vaddw_u16( sumHigh, vget_high_u16( columns[k] ) );
+        vst1q_u32( prefix, sumLow );
+        vst1q_u32( prefix + 4, sumHigh );
+        prefix += GEO_PREFIX_LANES;
+      }
+    }
+    org += orgStride;
+  }
+}
+
+static void geoRunSads_neon( const uint32_t* prefix, const uint8_t* runStart, const uint8_t* runEnd, int width, int height, const bool* /*all lanes are computed*/, uint32_t* sad )
+{
+  uint32x4_t sumLow  = vdupq_n_u32( 0 );
+  uint32x4_t sumHigh = vdupq_n_u32( 0 );
+  for( int y = 0; y < height; y++, prefix += ( width + 1 ) * GEO_PREFIX_LANES )
+  {
+    const uint32_t* atEnd   = prefix + runEnd[y] * GEO_PREFIX_LANES;
+    const uint32_t* atStart = prefix + runStart[y] * GEO_PREFIX_LANES;
+    sumLow  = vaddq_u32( sumLow, vsubq_u32( vld1q_u32( atEnd ), vld1q_u32( atStart ) ) );
+    sumHigh = vaddq_u32( sumHigh, vsubq_u32( vld1q_u32( atEnd + 4 ), vld1q_u32( atStart + 4 ) ) );
+  }
+  vst1q_u32( sad, sumLow );
+  vst1q_u32( sad + 4, sumHigh );
+}
+
+// sumSquaredError with the arithmetic of sumSquaredError_SIMD at SSE4.1: the differences in 16 bits (they wrap like
+// _mm_sub_epi16), their squares (at most 2^30) widened to 64 bits, unsigned. Integer addition does not depend on the
+// order, so the sum is the same as x86's and the C code's whenever the differences lie in [-2^15, 2^15], as for any
+// samples of up to 15 bits.
+
+// adds the squares of the four differences a - b to acc
+static inline uint64x2_t addSquares_neon( const uint64x2_t acc, const int16x4_t a, const int16x4_t b )
+{
+  const int16x4_t diff = vsub_s16( a, b );
+  return vpadalq_u32( acc, vreinterpretq_u32_s32( vmull_s16( diff, diff ) ) );
+}
+
+// adds the squares of the eight differences a - b to acc; two squares share a 32-bit lane first, at most 2^31, so the
+// lane is exact as an unsigned value
+static inline uint64x2_t addSquares_neon( const uint64x2_t acc, const int16x8_t a, const int16x8_t b )
+{
+  const int16x8_t diff    = vsubq_s16( a, b );
+  const int32x4_t squares = vmull_s16( vget_low_s16( diff ), vget_low_s16( diff ) );
+  const int32x4_t sums    = vmlal_s16( squares, vget_high_s16( diff ), vget_high_s16( diff ) );
+  return vpadalq_u32( acc, vreinterpretq_u32_s32( sums ) );
+}
+
+// the two samples of each of up to four rows in one vector, the lanes of missing rows zero (like _vv_loadWidth2Rows)
+static inline int16x8_t loadWidth2Rows_neon( const Pel* p, const ptrdiff_t stride, const int numRows )
+{
+  uint32_t   row;
+  uint32x4_t v = vdupq_n_u32( 0 );
+  memcpy( &row, p, sizeof( row ) );
+  v = vsetq_lane_u32( row, v, 0 );
+  if( numRows > 1 )
+  {
+    memcpy( &row, &p[stride], sizeof( row ) );
+    v = vsetq_lane_u32( row, v, 1 );
+  }
+  if( numRows > 2 )
+  {
+    memcpy( &row, &p[2 * stride], sizeof( row ) );
+    v = vsetq_lane_u32( row, v, 2 );
+  }
+  if( numRows > 3 )
+  {
+    memcpy( &row, &p[3 * stride], sizeof( row ) );
+    v = vsetq_lane_u32( row, v, 3 );
+  }
+  return vreinterpretq_s16_u32( v );
+}
+
+static uint64_t sumSquaredError_neon( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
+{
+  // below 16 the encoder passes only the widths 2, 4 and 8 (SBT parts); the others take the C code
+  if( width < 16 && width != 2 && width != 4 && width != 8 )
+  {
+    return sumSquaredErrorCore( src0, stride0, src1, stride1, width, height );
+  }
+
+  uint64x2_t acc0 = vdupq_n_u64( 0 );
+
+  if( width == 2 )
+  {
+    int y = 0;
+    for( ; y + 4 <= height; y += 4, src0 += 4 * stride0, src1 += 4 * stride1 )
+    {
+      const int16x8_t a = loadWidth2Rows_neon( src0, stride0, 4 );
+      const int16x8_t b = loadWidth2Rows_neon( src1, stride1, 4 );
+      acc0 = addSquares_neon( acc0, a, b );
+    }
+    if( y < height )
+    {
+      const int16x8_t a = loadWidth2Rows_neon( src0, stride0, height - y );
+      const int16x8_t b = loadWidth2Rows_neon( src1, stride1, height - y );
+      acc0 = addSquares_neon( acc0, a, b );
+    }
+    return horizontal_add_u64x2( acc0 );
+  }
+
+  if( width == 4 )
+  {
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
+    {
+      const int16x4_t a0 = vld1_s16( src0 );
+      const int16x4_t a1 = vld1_s16( src0 + stride0 );
+      const int16x4_t b0 = vld1_s16( src1 );
+      const int16x4_t b1 = vld1_s16( src1 + stride1 );
+      acc0 = addSquares_neon( acc0, vcombine_s16( a0, a1 ), vcombine_s16( b0, b1 ) );
+    }
+    if( y < height )
+    {
+      const int16x4_t a = vld1_s16( src0 );
+      const int16x4_t b = vld1_s16( src1 );
+      acc0 = addSquares_neon( acc0, a, b );
+    }
+    return horizontal_add_u64x2( acc0 );
+  }
+
+  // widths 8 and above: two accumulators (four from width 32), for two rows (width 8) or the two halves of 16 columns
+  uint64x2_t acc1 = vdupq_n_u64( 0 );
+
+  if( width == 8 )
+  {
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
+    {
+      const int16x8_t a0 = vld1q_s16( src0 );
+      const int16x8_t b0 = vld1q_s16( src1 );
+      const int16x8_t a1 = vld1q_s16( src0 + stride0 );
+      const int16x8_t b1 = vld1q_s16( src1 + stride1 );
+      acc0 = addSquares_neon( acc0, a0, b0 );
+      acc1 = addSquares_neon( acc1, a1, b1 );
+    }
+    if( y < height )
+    {
+      const int16x8_t a = vld1q_s16( src0 );
+      const int16x8_t b = vld1q_s16( src1 );
+      acc0 = addSquares_neon( acc0, a, b );
+    }
+    return horizontal_add_u64x2( vaddq_u64( acc0, acc1 ) );
+  }
+
+  if( width == 16 )
+  {
+    for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+    {
+      const int16x8_t a0 = vld1q_s16( src0 );
+      const int16x8_t b0 = vld1q_s16( src1 );
+      const int16x8_t a1 = vld1q_s16( src0 + 8 );
+      const int16x8_t b1 = vld1q_s16( src1 + 8 );
+      acc0 = addSquares_neon( acc0, a0, b0 );
+      acc1 = addSquares_neon( acc1, a1, b1 );
+    }
+    return horizontal_add_u64x2( vaddq_u64( acc0, acc1 ) );
+  }
+
+  // wider: 32 columns per step on four accumulators, then 16 columns if that many are left; the last width % 16
+  // columns as the 16 ending at the row's end, with the lanes of the columns already counted set to zero in both
+  // sources
+  uint64x2_t acc2 = vdupq_n_u64( 0 );
+  uint64x2_t acc3 = vdupq_n_u64( 0 );
+
+  static const int16_t laneIndex[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+  const int       tail     = width % 16;
+  const int       lastX    = width - 16;
+  const int16x8_t firstNew = vdupq_n_s16( 16 - tail );
+  const int16x8_t index0   = vld1q_s16( laneIndex );
+  const int16x8_t index1   = vld1q_s16( laneIndex + 8 );
+  const int16x8_t keep0    = vreinterpretq_s16_u16( vcgeq_s16( index0, firstNew ) );
+  const int16x8_t keep1    = vreinterpretq_s16_u16( vcgeq_s16( index1, firstNew ) );
+
+  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+  {
+    int x = 0;
+    for( ; x + 32 <= width; x += 32 )
+    {
+      const int16x8_t a0 = vld1q_s16( &src0[x] );
+      const int16x8_t b0 = vld1q_s16( &src1[x] );
+      const int16x8_t a1 = vld1q_s16( &src0[x + 8] );
+      const int16x8_t b1 = vld1q_s16( &src1[x + 8] );
+      const int16x8_t a2 = vld1q_s16( &src0[x + 16] );
+      const int16x8_t b2 = vld1q_s16( &src1[x + 16] );
+      const int16x8_t a3 = vld1q_s16( &src0[x + 24] );
+      const int16x8_t b3 = vld1q_s16( &src1[x + 24] );
+      acc0 = addSquares_neon( acc0, a0, b0 );
+      acc1 = addSquares_neon( acc1, a1, b1 );
+      acc2 = addSquares_neon( acc2, a2, b2 );
+      acc3 = addSquares_neon( acc3, a3, b3 );
+    }
+    if( x + 16 <= width )
+    {
+      const int16x8_t a0 = vld1q_s16( &src0[x] );
+      const int16x8_t b0 = vld1q_s16( &src1[x] );
+      const int16x8_t a1 = vld1q_s16( &src0[x + 8] );
+      const int16x8_t b1 = vld1q_s16( &src1[x + 8] );
+      acc0 = addSquares_neon( acc0, a0, b0 );
+      acc1 = addSquares_neon( acc1, a1, b1 );
+    }
+    if( tail != 0 )
+    {
+      const int16x8_t a0 = vld1q_s16( &src0[lastX] );
+      const int16x8_t b0 = vld1q_s16( &src1[lastX] );
+      const int16x8_t a1 = vld1q_s16( &src0[lastX + 8] );
+      const int16x8_t b1 = vld1q_s16( &src1[lastX + 8] );
+      acc0 = addSquares_neon( acc0, vandq_s16( a0, keep0 ), vandq_s16( b0, keep0 ) );
+      acc1 = addSquares_neon( acc1, vandq_s16( a1, keep1 ), vandq_s16( b1, keep1 ) );
+    }
+  }
+  return horizontal_add_u64x2( vaddq_u64( vaddq_u64( acc0, acc1 ), vaddq_u64( acc2, acc3 ) ) );
+}
+
 template<>
 void PelBufferOps::_initPelBufOpsARM<NEON>()
 {
@@ -284,6 +533,12 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   addAvg4  = addAvg_strided_neon<4>;
   addAvg8  = addAvg_strided_neon<8>;
   addAvg16 = addAvg_strided_neon<16>;
+
+  // a pair: geoRunSads_neon reads geoPrefixSums_neon's layout
+  geoPrefixSums = geoPrefixSums_neon;
+  geoRunSads    = geoRunSads_neon;
+
+  sumSquaredError = sumSquaredError_neon;
 }
 
 } // namespace vvenc
