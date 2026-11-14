@@ -5568,6 +5568,37 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   const bool skipRepeatedTests = !m_pcEncCfg->m_ifpLines;
   AffineCpmvTestedSet testedMvs( mvNum );
 
+  // Read back what searches of this block found at MVs they tested. Not with IFP, for the same reason, and not at the
+  // Affine levels above 3, which come back to almost no MVs. The prediction is made only when a gradient step needs it:
+  // predIsCurrent says predBuf holds the MVs being looked at.
+  const bool useResults = skipRepeatedTests && m_pcEncCfg->m_Affine <= 3;
+  if( useResults )
+  {
+    // the prediction settings as in xGetAffineTemplateCost, then the list and whether the target is the bi one
+    const int settings = cu.affineType | int( cu.interDir == 3 ) << 1 | int( m_isBi ) << 2 | int( m_skipPROF ) << 3 | int( m_encOnly ) << 4
+                       | int( refPicList ) << 5 | int( bBi ) << 6;
+    const int otherList = 1 - int( refPicList );
+    m_affineMeResults.startSearch( cu.cs->picture, cu.slice->poc, refPic, cu.Y(), settings, bBi ? cu.refIdx[otherList] : 0, bBi ? cu.mv[otherList] : nullptr, mvNum );
+  }
+  bool predIsCurrent = false;
+  auto predDist = [&]( const Mv* mv ) -> Distortion
+  {
+    Distortion dist = 0;
+    if( useResults && m_affineMeResults.findDist( mv, dist ) )
+    {
+      predIsCurrent = false;
+      return dist;
+    }
+    xPredAffineBlk(COMP_Y, cu, refPic, mv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
+    predIsCurrent = true;
+    dist = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
+    if( useResults )
+    {
+      m_affineMeResults.addDist( mv, dist );
+    }
+    return dist;
+  };
+
   // do motion compensation with origin mv
 
   clipMv(acMvTemp[0], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
@@ -5585,14 +5616,12 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   }
   if( !m_pcEncCfg->m_ifpLines || xIsAffineMvInRangeFPP( cu, acMvTemp, m_pcEncCfg->m_ifpLines ) )
   {
-    xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.cs->slice->clpRngs[COMP_Y], refPicList);
+    // get error
+    uiCostBest = predDist( acMvTemp );
     if( skipRepeatedTests )
     {
       testedMvs.record( acMvTemp );
     }
-
-    // get error
-    uiCostBest = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
 
     // get cost with mv
     m_pcRdCost->setCostScale(0);
@@ -5629,43 +5658,54 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
     /*********************************************************************************
     *                         use gradient to update mv
     *********************************************************************************/
-    // get Error Matrix
-    PelBuf( piError, width, height ).subtract( pBuf->Y(), predBuf.Y() );
-
-    // sobel x direction
-    // -1 0 1
-    // -2 0 2
-    // -1 0 1
-    Pel* pPred = predBuf.Y().buf;
-    m_HorizontalSobelFilter(pPred, predBufStride, pdDerivate[0], width, width, height);
-
-    // sobel y direction
-    // -1 -2 -1
-    //  0  0  0
-    //  1  2  1
-    m_VerticalSobelFilter(pPred, predBufStride, pdDerivate[1], width, width, height);
-
-    // solve delta x and y
-    for (int row = 0; row < iParaNum; row++)
+    double dAffinePara[6];
+    if( !useResults || !m_affineMeResults.findStep( acMvTemp, dAffinePara, affineParaNum ) )
     {
-      memset(&i64EqualCoeff[row][0], 0, iParaNum * sizeof(int64_t));
-    }
-
-    m_EqualCoeffComputer[cu.affineType]( piError, width, pdDerivate, width, width, height, i64EqualCoeff );
-
-    for (int row = 0; row < iParaNum; row++)
-    {
-      for (int i = 0; i < iParaNum; i++)
+      if( useResults && !predIsCurrent )
       {
-        pdEqualCoeff[row][i] = (double)i64EqualCoeff[row][i];
+        xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
+      }
+      // get Error Matrix
+      PelBuf( piError, width, height ).subtract( pBuf->Y(), predBuf.Y() );
+
+      // sobel x direction
+      // -1 0 1
+      // -2 0 2
+      // -1 0 1
+      Pel* pPred = predBuf.Y().buf;
+      m_HorizontalSobelFilter(pPred, predBufStride, pdDerivate[0], width, width, height);
+
+      // sobel y direction
+      // -1 -2 -1
+      //  0  0  0
+      //  1  2  1
+      m_VerticalSobelFilter(pPred, predBufStride, pdDerivate[1], width, width, height);
+
+      // solve delta x and y
+      for (int row = 0; row < iParaNum; row++)
+      {
+        memset(&i64EqualCoeff[row][0], 0, iParaNum * sizeof(int64_t));
+      }
+
+      m_EqualCoeffComputer[cu.affineType]( piError, width, pdDerivate, width, width, height, i64EqualCoeff );
+
+      for (int row = 0; row < iParaNum; row++)
+      {
+        for (int i = 0; i < iParaNum; i++)
+        {
+          pdEqualCoeff[row][i] = (double)i64EqualCoeff[row][i];
+        }
+      }
+
+      solveEqual(pdEqualCoeff, affineParaNum, dAffinePara);
+      if( useResults )
+      {
+        m_affineMeResults.addStep( acMvTemp, dAffinePara, affineParaNum );
       }
     }
 
-    double dAffinePara[6];
     double dDeltaMv[6];
     Mv acDeltaMv[3];
-
-    solveEqual(pdEqualCoeff, affineParaNum, dAffinePara);
 
     // convert to delta mv
     dDeltaMv[0] = dAffinePara[0];
@@ -5749,14 +5789,12 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
 
     if( !m_pcEncCfg->m_ifpLines || xIsAffineMvInRangeFPP( cu, acMvTemp, m_pcEncCfg->m_ifpLines ) )
     {
-      xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
+      // get error
+      Distortion uiCostTemp = predDist( acMvTemp );
       if( skipRepeatedTests )
       {
-        testedMvs.record( acMvTemp );   // the gradient steps never skip: the next step reads this prediction
+        testedMvs.record( acMvTemp );
       }
-
-      // get error
-      Distortion uiCostTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
       DTRACE(g_trace_ctx, D_COMMON, " (%d) uiCostTemp=%d\n", DTRACE_GET_COUNTER(g_trace_ctx, D_COMMON), uiCostTemp);
 
       // get cost with mv
@@ -5790,9 +5828,8 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
         xCalcAffineMVBits( cu, ctrlPtMv, acMvPred );
         return;
       }
-      xPredAffineBlk(COMP_Y, cu, refPic, ctrlPtMv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
       // get error
-      Distortion costTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
+      Distortion costTemp = predDist( ctrlPtMv );
       // get cost with mv
       m_pcRdCost->setCostScale(0);
       uint32_t bitsTemp = ruiBits;
@@ -5889,9 +5926,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
                 xCalcAffineMVBits( cu, acMvTemp, acMvPred );
                 continue;
               }
-              xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
-
-              Distortion costTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
+              Distortion costTemp = predDist( acMvTemp );
               uint32_t bitsTemp = ruiBits;
               bitsTemp += xCalcAffineMVBits(cu, acMvTemp, acMvPred);
               costTemp = (Distortion)(floor(fWeight * (double)costTemp) + (double)m_pcRdCost->getCost(bitsTemp));
