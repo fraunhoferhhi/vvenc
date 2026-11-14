@@ -121,6 +121,10 @@ void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int go
   m_numTillIntra = poc0idr ? 0 : (int)m_gopList->size() - 1;
   m_minIntraDist = minIntraDist;
   m_lastIntraPOC = -1;
+  m_cfgGopList.assign( cfgGopList, cfgGopList + VVENC_MAX_GOP );
+  m_maxRefOffset = std::max( 0, -minPrevPoc - m_maxGopSize );
+  m_cuts.clear();
+  m_cutGopLists.clear();
   m_adjustNoLPcodingOrder = m_refreshType == VVENC_DRT_IDR_NO_RADL && m_fixIntraPeriod <= m_maxGopSize;
 }
 
@@ -182,6 +186,27 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   }
   gopEntry.m_isValid   = true;
 
+  // adaptive intra refresh: the cut picture starts a new intra period (the GOP before it was sized to end there),
+  // unless an I picture would not pay there; then it only starts a GOP
+  bool atCut = false;
+  if( ! m_cuts.empty() && m_nextPoc >= m_cuts.front().poc )
+  {
+    atCut = m_nextPoc == m_cuts.front().poc;
+    if( atCut && m_numTillGop == 0 && m_cuts.front().intra )
+    {
+      m_numTillIntra = 0;
+    }
+    m_cuts.erase( m_cuts.begin() );
+  }
+  const int cutLimit = m_cuts.empty() ? MAX_INT : m_cuts.front().poc - m_nextPoc; // pictures until the next cut
+
+  // adaptive intra refresh: a periodic refresh due less than a GOP before a known cut waits for the cut, one I picture
+  // there instead of two within a GOP (the look-ahead sees such a cut only now; the stream's first I picture stays)
+  if( m_numTillIntra == 0 && ! atCut && m_lastIntraPOC >= 0 && cutLimit < m_defGopSize )
+  {
+    m_numTillIntra = cutLimit;
+  }
+
   // mark start of intra
   if( m_numTillIntra == 0 )
   {
@@ -190,6 +215,10 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
     gopEntry.m_temporalId     = 0;
     gopEntry.m_vtl            = 0;
     m_lastIntraPOC            = m_nextPoc;
+    if( atCut )
+    {
+      gopEntry.m_scType = SCT_TL0_SCENE_CUT;   // rate control and capped CQF restart their estimates at a scene cut
+    }
   }
 
   // check for end of current gop
@@ -197,13 +226,22 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   if( m_numTillGop == 0 )
   {
     const int prevGopSize = (int)m_gopList->size();
+    // adaptive intra refresh: a periodic refresh that would fall less than a GOP before a known cut moves to the cut,
+    // one I picture there instead of two within a GOP
+    if( m_numTillIntra > 0 && cutLimit > m_numTillIntra && cutLimit - m_numTillIntra < m_defGopSize )
+    {
+      m_numTillIntra = cutLimit;
+    }
     // check for start of new intra period
     if( m_numTillIntra == 0 )
     {
-      m_gopList      = &m_defaultGopLists[ 0 ];
-      m_nextListIdx  = std::min( 1, (int)m_defaultGopLists.size() - 1 );
-      m_numTillIntra = m_fixIntraPeriod;
+      xStartPeriodGopList( m_nextPoc );
       m_adjustNoLPcodingOrder = m_refreshType == VVENC_DRT_IDR_NO_RADL && m_fixIntraPeriod <= m_maxGopSize;
+    }
+    else if( cutLimit < std::min( m_defGopSize, m_numTillIntra > 0 ? m_numTillIntra : m_defGopSize ) )
+    {
+      m_gopList = xGopListOfSize( cutLimit, m_gopList, m_nextPoc - m_lastIntraPOC ); // this GOP ends at the next cut
+      m_adjustNoLPcodingOrder = false;
     }
     else
     {
@@ -213,10 +251,14 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
         m_gopList     = &m_defaultGopLists[ m_nextListIdx ];
         m_nextListIdx = std::min( m_nextListIdx + 1, (int)m_defaultGopLists.size() - 1 );
       }
+      else if( remainSize == (int)m_remainGopList.size() && prevGopSize == m_defGopSize )
+      {
+        m_gopList = &m_remainGopList;
+      }
       else
       {
-        CHECK( remainSize != (int)m_remainGopList.size() || prevGopSize != m_defGopSize, "remaining size does not match size of pre-calculated gop list" );
-        m_gopList = &m_remainGopList;
+        // the pre-built lists do not fit when a refresh moved to a cut changed the remainder
+        m_gopList = xGopListOfSize( remainSize, m_gopList, m_nextPoc - m_lastIntraPOC );
       }
       //if we have a full gop, we don't need to change the coding order...
       m_adjustNoLPcodingOrder = m_refreshType == VVENC_DRT_IDR_NO_RADL && m_numTillIntra <= m_maxGopSize;
@@ -240,6 +282,31 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   }
 }
 
+// The GOP list after the I picture at poc that starts an intra period: the first default list, or with the adaptive
+// intra refresh a shorter one that ends at a known cut within it.
+void GOPCfg::xStartPeriodGopList( int poc )
+{
+  m_gopList      = &m_defaultGopLists[ 0 ];
+  m_nextListIdx  = std::min( 1, (int)m_defaultGopLists.size() - 1 );
+  m_numTillIntra = m_fixIntraPeriod;
+  const int cutLimit = m_cuts.empty() ? MAX_INT : m_cuts.front().poc - poc;   // pictures until the next cut
+  if( cutLimit < (int)m_gopList->size() )
+  {
+    m_gopList = xGopListOfSize( cutLimit, nullptr, 0 );
+  }
+}
+
+// Adaptive intra refresh: a scene cut the pre-processing stage found ahead of the GOP structure; intra says whether
+// the cut picture starts a new intra period or only a GOP. A cut at a picture whose GOP entry has already been
+// handed out cannot be honoured any more and is dropped.
+void GOPCfg::addCut( int poc, bool intra )
+{
+  if( poc >= m_nextPoc && ( m_cuts.empty() || poc > m_cuts.back().poc ) )
+  {
+    m_cuts.push_back( { poc, intra } );
+  }
+}
+
 void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
 {
   // set gop entry
@@ -251,9 +318,7 @@ void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
   m_lastIntraPOC            = gopEntry.m_POC;
 
   // start with first gop list
-  m_gopList      = &m_defaultGopLists[ 0 ];
-  m_nextListIdx  = std::min( 1, (int)m_defaultGopLists.size() - 1 );
-  m_numTillIntra = m_fixIntraPeriod;
+  xStartPeriodGopList( gopEntry.m_POC );
   m_numTillGop   = (int)m_gopList->size();
 
   xCreatePocToGopIdx( *m_gopList, !m_poc0idr, m_pocToGopIdx );
@@ -295,7 +360,16 @@ void GOPCfg::getDefaultRPLLists( RPLList& rpl0, RPLList& rpl1 ) const
 bool GOPCfg::isSTAallowed( int poc ) const
 {
   int intraDistBack    = poc - m_lastIntraPOC;
+  // the next I picture ahead: the periodic one, or the I picture of a known scene cut (adaptive intra refresh)
   int intraDistForward = m_numTillIntra + 1;
+  for( const SceneCut& cut : m_cuts )
+  {
+    if( cut.intra )
+    {
+      intraDistForward = std::min( intraDistForward, cut.poc - poc );
+      break;
+    }
+  }
   
   //if intraDistBack == 0 we have a regular I-Slice and there we need to do the STA analysis as well
   return ( ( intraDistBack >= m_minIntraDist && intraDistForward >= m_minIntraDist ) || intraDistBack == 0 );
@@ -1129,6 +1203,68 @@ int GOPCfg::xGetMaxNumReorder( const GOPEntry& gopEntry, const GOPEntryList& gop
     }
   }
   return numReorder;
+}
+
+// A GOP list of any size up to the default GOP, for a GOP that a scene cut or a refresh moved to a cut ends early, or
+// for the GOP after it: built like the intra period's remainder list and kept for reuse.
+GOPCfg::GOPEntryList* GOPCfg::xGopListOfSize( int gopSize, const GOPEntryList* prevGopList, int pocOffsetInPeriod )
+{
+  CHECK( gopSize < 1 || gopSize > m_defGopSize, "cut GOP size out of range" );
+  // what xCreateGopList's result depends on: the previous GOP's list when that GOP was a full one (a shorter one
+  // contributes no references), and for a full-size list the position in the intra period, only up to the distance
+  // the configured GOP references back (beyond it every position gives the same list)
+  const bool prevUsed  = prevGopList && (int)prevGopList->size() == m_maxGopSize;
+  const int  offset    = gopSize == m_maxGopSize ? std::min( pocOffsetInPeriod, m_maxRefOffset ) : 0;
+  if( gopSize == m_defGopSize && ! prevUsed && offset == 0 )
+  {
+    return &m_defaultGopLists[ 0 ];   // the same arguments as the period's first list, which keeps its RPL index
+  }
+  const auto key = std::make_tuple( gopSize, prevUsed ? prevGopList : nullptr, offset );
+  auto it = m_cutGopLists.find( key );
+  if( it == m_cutGopLists.end() )
+  {
+    GOPEntryList& list = m_cutGopLists[ key ];
+    xCreateGopList( m_maxGopSize, gopSize, offset, m_cfgGopList.data(), prevGopList, list );
+    CHECK( ! xCheckDBPConstraints( list ), "cut GOP list does not fulfil the DPB constraints (see checkCutGopLists)" );
+    it = m_cutGopLists.find( key );
+  }
+  return &it->second;
+}
+
+// Adaptive intra refresh: builds every list xGopListOfSize can return and checks it against the DPB limits, so that a
+// GOP configuration whose shortened GOPs would break them fails when the encoder starts rather than at a scene cut.
+// The lists are not kept. The previous lists that make a difference are the full-size ones: the default lists, and
+// those of a full GOP after a shortened one (one per position in the intra period from 1 to m_maxRefOffset; at 0 it
+// is the first default list).
+void GOPCfg::checkCutGopLists() const
+{
+  const bool fullDefault = m_defGopSize == m_maxGopSize;
+  std::vector<GOPEntryList> fullAfterCut( fullDefault ? m_maxRefOffset : 0 );
+  std::vector<const GOPEntryList*> prevLists = { nullptr };
+  bool ok = true;
+  for( int i = 0; i < (int)fullAfterCut.size(); i++ )
+  {
+    xCreateGopList( m_maxGopSize, m_maxGopSize, i + 1, m_cfgGopList.data(), nullptr, fullAfterCut[ i ] );
+    ok = ok && xCheckDBPConstraints( fullAfterCut[ i ] );
+    prevLists.push_back( &fullAfterCut[ i ] );
+  }
+  for( int i = 0; fullDefault && i < (int)m_defaultGopLists.size(); i++ )
+  {
+    prevLists.push_back( &m_defaultGopLists[ i ] );
+  }
+  GOPEntryList gopList;
+  for( int gopSize = 1; ok && gopSize < m_defGopSize; gopSize++ )
+  {
+    for( auto prevGopList : prevLists )
+    {
+      xCreateGopList( m_maxGopSize, gopSize, 0, m_cfgGopList.data(), prevGopList, gopList );
+      ok = ok && xCheckDBPConstraints( gopList );
+    }
+  }
+  if( ! ok )
+  {
+    THROW( "adaptive intra refresh: a GOP shortened at a scene cut would not fulfil the DPB constraints of the GOP configuration" );
+  }
 }
 
 void GOPCfg::xAdjustNoLPcodingOrder( GOPEntry& gopEntry, const int orgGopId ) const

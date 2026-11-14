@@ -312,6 +312,31 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
+// The look-ahead of the adaptive intra refresh (mode 1) holds the next GOP's pictures back, so with stage parallel
+// processing, whose picture pool is limited, a GOP shortened by a cut or by the intra period may never reach the
+// minimum queue size. The queue then holds a complete GOP to code when it holds the first coded picture of a GOP not
+// coded yet: that is the GOP's last picture in output order, so the whole GOP has arrived when pictures arrive in
+// output order, as they do unless the pre-encoder of the look-ahead rate control hands them over in coding order.
+// (Coded pictures stay queued as references and do not count.) Without stage parallel processing the queue fills up
+// to the minimum anyway, and starting earlier would start the access unit output before the encoder can return one
+// access unit per input picture.
+bool EncGOP::xAdaptiveIntraGopReady( const PicList& picList ) const
+{
+  const bool arrivesInOutputOrder = m_isPreAnalysis || ! m_pcEncCfg->m_LookAhead;
+  if( m_pcEncCfg->m_adaptiveIntra != 1 || ! m_pcEncCfg->m_stageParallelProc || ! arrivesInOutputOrder )
+  {
+    return false;
+  }
+  for( auto pic : picList )
+  {
+    if( pic->gopEntry && pic->gopEntry->m_isValid && pic->gopEntry->m_isStartOfGop && ! pic->isInitDone )
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool EncGOP::waitForFreeEncoders()
 {
   std::unique_lock<std::mutex> lock( m_gopEncMutex );
@@ -322,6 +347,27 @@ bool EncGOP::waitForFreeEncoders()
   CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
   m_gopEncCond.wait( lock );
   return true;
+}
+
+bool EncGOP::hasEnoughPictures( const PicList& picList ) const
+{
+  if( EncStage::hasEnoughPictures( picList ) || xAdaptiveIntraGopReady( picList ) )
+  {
+    return true;
+  }
+
+  // GOPSize + 1 pictures ensure that the GOP of the next picture to initialize is complete (the GOP QP cascade reads all
+  // of it). Pictures arrive in POC order and a GOP covers consecutive POCs, so that GOP is also complete once any picture
+  // of a later GOP has arrived; the list is in coding order, so its last picture has the highest GOP number. A GOP shorter
+  // than GOPSize (the first one, when the intra period is not a multiple of the GOP size) then need not wait for
+  // GOPSize + 1 pictures. With look-ahead, the GOP encoder gets its pictures in coding order from the pre-analysis
+  // encoder, so the size test alone decides.
+  if( m_isPreAnalysis || m_pcEncCfg->m_LookAhead )
+  {
+    return false;
+  }
+  const auto nextPic = std::find_if( picList.begin(), picList.end(), []( const Picture* pic ) { return ! pic->isInitDone; } );
+  return nextPic != picList.end() && picList.back()->gopEntry->m_gopNum > ( *nextPic )->gopEntry->m_gopNum;
 }
 
 void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
