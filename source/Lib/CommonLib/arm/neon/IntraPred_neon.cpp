@@ -566,6 +566,8 @@ static void IntraPredSampleFilter_neon( PelBuf& dstBuf, const CPelBuf& srcBuf )
   }
 }
 
+void IntraPredAngleChroma_Core( Pel* pDstBuf, const ptrdiff_t dstStride, int16_t* pBorder, int width, int height,
+                                int deltaPos, int intraPredAngle );
 void IntraHorVerPDPC_Core( Pel* pDsty, const int dstStride, Pel* refSide, const int width, const int height, int scale,
                            const Pel* refMain, const ClpRng& clpRng );
 
@@ -687,6 +689,94 @@ static void LMLumaDownsample420_neon( const Pel* src, const ptrdiff_t srcStride,
   }
 }
 
+// [1 2 1] smoothing of 8 reference samples from src[0] on: ( a + 2b + c + 2 ) >> 2 = vrhadd( vhadd( a, c ), b ). With
+// a + c = 2k + r (r = 0 or 1) both are floor( ( k + b + 1 ) / 2 ), exact for any int16.
+static inline int16x8_t filterRefSamples8_neon( const Pel* src )
+{
+  const int16x8_t a = vld1q_s16( src - 1 );
+  const int16x8_t b = vld1q_s16( src );
+  const int16x8_t c = vld1q_s16( src + 1 );
+  return vrhaddq_s16( vhaddq_s16( a, c ), b );
+}
+
+// IntraFilterRefSamples_Core: dst[1 .. length-1], 8 at a time; a length not covered by whole vectors ends with one that
+// overlaps the one before (recomputed from src, so the same values)
+static void IntraFilterRefSamples_neon( const Pel* src, Pel* dst, const int length )
+{
+  if( length < 9 )
+  {
+    for( int i = 1; i < length; i++ )
+    {
+      dst[i] = ( src[i - 1] + 2 * src[i] + src[i + 1] + 2 ) >> 2;
+    }
+    return;
+  }
+  int i = 1;
+  for( ; i + 8 <= length; i += 8 )
+  {
+    vst1q_s16( dst + i, filterRefSamples8_neon( src + i ) );
+  }
+  if( i < length )
+  {
+    vst1q_s16( dst + length - 8, filterRefSamples8_neon( src + length - 8 ) );
+  }
+}
+
+// IntraPredAngleChroma_Core: each row interpolates the two border samples around its position,
+// ( ( 32 - f ) * a + f * b + 16 ) >> 5 = a + ( ( ( b - a ) * f + 16 ) >> 5 ) (32 * a leaves the floor unchanged), and
+// vqrdmulh( b - a, f << 10 ) = ( 2 * ( b - a ) * f * 2^10 + 2^15 ) >> 16 is that same ( ( b - a ) * f + 16 ) >> 5. Exact
+// whenever b - a fits in int16 (samples of up to 15 bits): the result is then at most 31/32 of it, never saturated.
+// Each width W gets a row loop with a fixed trip count, so the compiler unrolls it.
+template<int W>
+static inline void intraPredAngleChromaRows_neon( Pel* pDst, const ptrdiff_t dstStride, const Pel* pBorder, int height,
+                                                  int deltaPos, int intraPredAngle )
+{
+  for( int y = 0; y < height; y++, pDst += dstStride, deltaPos += intraPredAngle )
+  {
+    const int16_t c   = int16_t( ( deltaPos & 31 ) << 10 );
+    const Pel*    ref = pBorder + ( deltaPos >> 5 ) + 1;
+    for( int x = 0; x < W; x += 8 )
+    {
+      const int16x8_t a = vld1q_s16( ref + x );
+      const int16x8_t b = vld1q_s16( ref + x + 1 );
+      vst1q_s16( pDst + x, vaddq_s16( a, vqrdmulhq_n_s16( vsubq_s16( b, a ), c ) ) );
+    }
+  }
+}
+
+// Width 4 takes one 64-bit vector per row; width 2 (and any other) the C core.
+static void IntraPredAngleChroma_neon( Pel* pDst, const ptrdiff_t dstStride, Pel* pBorder, int width, int height,
+                                       int deltaPos, int intraPredAngle )
+{
+  switch( width )
+  {
+  case 4:
+    for( int y = 0; y < height; y++, pDst += dstStride, deltaPos += intraPredAngle )
+    {
+      const int16_t   c   = int16_t( ( deltaPos & 31 ) << 10 );
+      const Pel*      ref = pBorder + ( deltaPos >> 5 ) + 1;
+      const int16x4_t a   = vld1_s16( ref );
+      const int16x4_t b   = vld1_s16( ref + 1 );
+      vst1_s16( pDst, vadd_s16( a, vqrdmulh_n_s16( vsub_s16( b, a ), c ) ) );
+    }
+    break;
+  case 8:
+    intraPredAngleChromaRows_neon<8>( pDst, dstStride, pBorder, height, deltaPos, intraPredAngle );
+    break;
+  case 16:
+    intraPredAngleChromaRows_neon<16>( pDst, dstStride, pBorder, height, deltaPos, intraPredAngle );
+    break;
+  case 32:
+    intraPredAngleChromaRows_neon<32>( pDst, dstStride, pBorder, height, deltaPos, intraPredAngle );
+    break;
+  case 64:
+    intraPredAngleChromaRows_neon<64>( pDst, dstStride, pBorder, height, deltaPos, intraPredAngle );
+    break;
+  default:
+    IntraPredAngleChroma_Core( pDst, dstStride, pBorder, width, height, deltaPos, intraPredAngle );
+  }
+}
+
 template<>
 void IntraPrediction::_initIntraPredictionARM<NEON>()
 {
@@ -697,6 +787,8 @@ void IntraPrediction::_initIntraPredictionARM<NEON>()
   IntraPredSampleFilter = IntraPredSampleFilter_neon;
   IntraHorVerPDPC       = IntraHorVerPDPC_neon;
   LMLumaDownsample420   = LMLumaDownsample420_neon;
+  IntraPredAngleChroma  = IntraPredAngleChroma_neon;
+  IntraFilterRefSamples = IntraFilterRefSamples_neon;
 }
 
 } // namespace vvenc

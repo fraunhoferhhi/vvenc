@@ -1031,6 +1031,53 @@ static void fillIntraSamples( Pel* buf, size_t n, int bd, int kind )
   }
 }
 
+// IntraPredAngleChroma for every chroma block size and fractional angle (positive and negative, so deltaPos goes
+// negative), 10-bit borders (the SSE kernel computes in 16 bits), padded on both sides; every fourth case alternates 0
+// and 1023 (the largest neighbour difference); the whole destination is compared.
+static bool check_IntraPredAngleChroma( IntraPrediction* ref, IntraPrediction* opt, unsigned num_cases )
+{
+  printf( "Testing IntraPrediction::IntraPredAngleChroma\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 10, /*is_signed=*/false };
+  const int           pad = 16;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width  = rng.getOneOf<int>( { 2, 4, 8, 16, 32, 64 } );
+    const int height = rng.getOneOf<int>( { 2, 4, 8, 16, 32 } );
+    int       angle  = 0;
+    while( angle % 32 == 0 )
+    {
+      angle = INTRA_ANG_TABLE[rng.get( 1, 31 )];
+    }
+    angle *= rng.get( 0, 1 ) ? -1 : 1;
+    const int lowInt  = std::min( angle, angle * height ) >> 5;
+    const int highInt = std::max( angle, angle * height ) >> 5;
+    std::vector<Pel> border( ( highInt - lowInt ) + width + 2 + 2 * pad );
+    std::generate( border.begin(), border.end(), pixels );
+    if( i % 4 == 0 )
+    {
+      for( size_t k = 0; k < border.size(); k++ )
+      {
+        border[k] = ( k & 1 ) ? 1023 : 0;
+      }
+    }
+    Pel* const       pBorder = border.data() + pad - lowInt;
+    const int        stride  = width + rng.get( 0, 8 );
+    std::vector<Pel> dstRef( stride * height, 0x5a5a ), dstOpt( stride * height, 0x5a5a );
+    ref->IntraPredAngleChroma( dstRef.data(), stride, pBorder, width, height, angle, angle );
+    opt->IntraPredAngleChroma( dstOpt.data(), stride, pBorder, width, height, angle, angle );
+
+    std::ostringstream sstm;
+    sstm << "IntraPredAngleChroma " << width << "x" << height << " angle=" << angle;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // IntraAnglePDPC for every luma block size and mode 2 .. 66 that applies it, with the parameters of initPredIntraParams
 // and xPredIntraAng: wide-angle mapping, positive angles only, scale from the side (height, or width for horizontal
 // modes) and the block passed transposed for horizontal modes. The reference samples after the last one the scalar code
@@ -1354,6 +1401,7 @@ static bool test_IntraPred()
   passed = check_IntraPredAngleLuma( &ref, &opt, num_cases ) && passed;
   passed = check_LMLumaDownsample420( &ref, &opt, num_cases ) && passed;
   passed = check_IntraFilterRefSamples( &ref, &opt, num_cases ) && passed;
+  passed = check_IntraPredAngleChroma( &ref, &opt, num_cases ) && passed;
   passed = check_IntraAnglePDPC( &ref, &opt ) && passed;
   passed = check_IntraHorVerPDPC( &ref, &opt ) && passed;
   passed = check_IntraPlanarAndSampleFilter( &ref, &opt ) && passed;
