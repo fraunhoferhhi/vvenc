@@ -320,7 +320,11 @@ bool EncGOP::waitForFreeEncoders()
     return false;
   }
   CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-  m_gopEncCond.wait( lock );
+  // Return as soon as a picture finished since the last return. A finish after the GOP pass released the lock and
+  // before this wait notifies nobody; without the predicate the main thread would sleep until the next finish while
+  // the freed encoder and the pictures waiting for that one stay idle.
+  m_gopEncCond.wait( lock, [this] { return m_numPicsFinished != m_numPicsFinishedWaited; } );
+  m_numPicsFinishedWaited = m_numPicsFinished;
   return true;
 }
 
@@ -402,7 +406,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
         {
           // non-blocking stage: wait on top level, let other stages do their jobs
           // in non-lockstep mode, check if next picture can be output
-          if( isNonBlocking() || ( ! lockStepMode && m_gopEncListOutput.front()->isReconstructed ) )
+          if( isNonBlocking() || ( ! lockStepMode && m_gopEncListOutput.front()->isEncoded ) )
           {
             break;
           }
@@ -462,7 +466,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
   // the output of a picture is connected to evaluation of the lock-step-chunk
   // if the next picture to output belongs to the current chunk, do output (evaluation) when all pictures of the chunk are finished
 
-  if( m_gopEncListOutput.empty() || !m_gopEncListOutput.front()->isReconstructed ||
+  if( m_gopEncListOutput.empty() || !m_gopEncListOutput.front()->isEncoded ||
     ( lockStepMode && !m_pcEncCfg->m_ifpLines && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xLockStepPicsFinished() ) )
   {
     return;
@@ -600,6 +604,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   if( ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && pic->gopEntry->m_skipFirstPass )
   {
     pic->isReconstructed = true;
+    pic->isEncoded       = true;
     m_freePicEncoderList.push_back( picEncoder );
     return;
   }
@@ -643,13 +648,25 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
     static auto finishTask = []( int, void* task_param )
     {
       FinishTaskParam* param = static_cast<FinishTaskParam*>( task_param );
-      param->picEncoder->finalizePicture( *param->pic );
+      // The pictures that reference this one may start as soon as what they read is final: the reconstruction and
+      // motion (done by the CTU tasks) and the ALF APSs. Writing the slice data, the distortion and the cleanup run on
+      // this one thread after that and do not change the reconstruction, motion or APSs.
+      param->picEncoder->finalizeReference( *param->pic );
       {
         std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
         param->pic->isReconstructed = true;
         if( param->pic->picApsGlobal )
           param->pic->picApsGlobal->initalized = true;
+        // counted like a finish, so that waitForFreeEncoders returns for it: the pictures referencing this one may start
+        param->gopEncoder->m_numPicsFinished++;
+        param->gopEncoder->m_gopEncCond.notify_one();
+      }
+      param->picEncoder->finalizePicture( *param->pic );
+      {
+        std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
+        param->pic->isEncoded = true;
         param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
+        param->gopEncoder->m_numPicsFinished++;
         param->gopEncoder->m_gopEncCond.notify_one();
       }
       delete param;
@@ -660,8 +677,10 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   }
   else
   {
+    picEncoder->finalizeReference( *pic );
     picEncoder->finalizePicture( *pic );
     pic->isReconstructed = true;
+    pic->isEncoded       = true;
     if( pic->picApsGlobal ) pic->picApsGlobal->initalized = true;
     m_freePicEncoderList.push_back( picEncoder );
   }
@@ -681,7 +700,7 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
       {
         if( pic->poc != m_pocRecOut )
           continue;
-        if( ! pic->isReconstructed )
+        if( ! pic->isEncoded )
           return;
 
         const PPS& pps = *(pic->cs->pps);
@@ -703,7 +722,7 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
     // no output needed, simply unmark pictures
     for( auto pic : picList )
     {
-      if( pic->isReconstructed && pic->isNeededForOutput )
+      if( pic->isEncoded && pic->isNeededForOutput )
         pic->isNeededForOutput = false;
     }
   }
@@ -726,7 +745,7 @@ void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
       pic->releaseEncodingBuffers();
       freeList.push_back( pic );
     }
-    else if( pic->isReconstructed && isUnused && ! writeReadsReco )
+    else if( pic->isEncoded && isUnused && ! writeReadsReco )
     {
       pic->releaseEncodingBuffers();
     }
@@ -1392,9 +1411,9 @@ void EncGOP::xSetupPicAps( Picture* pic )
 
   // The list is kept near this size; the +2 covers up to two GOPs of processing delay (Threads=1 mode). The pictures in
   // flight are not bounded by this size (GOP read-ahead, look-ahead stages), so an entry is deleted only after its last
-  // use: no picture set up later references it, and its own picture is finished (initalized), as finalizePicture still
-  // writes into it. (Pictures skipped in a first pass never finish, but they have no entry: the first pass runs without
-  // ALF.)
+  // use: no picture set up later references it, and its own picture has filled it (initalized: finalizeReference wrote
+  // it before, nothing writes it after). (Pictures skipped in a first pass never finish, but they have no entry: the
+  // first pass runs without ALF.)
   const size_t maxListSize = std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 2 );
   if( m_globalApsList.size() > maxListSize )
   {
@@ -1611,13 +1630,13 @@ void EncGOP::xUpdateRcIfp()
   // non-deterministic behavior: RC update on any finished frame
 
 #if IFP_RC_DETERMINISTIC
-  if( m_rcUpdateList.front()->isReconstructed && m_rcUpdateList.back()->encRCPic && ( m_rcUpdateList.front()->isFlush || m_rcUpdateList.size() == m_pcEncCfg->m_maxParallelFrames ) )
+  if( m_rcUpdateList.front()->isEncoded && m_rcUpdateList.back()->encRCPic && ( m_rcUpdateList.front()->isFlush || m_rcUpdateList.size() == m_pcEncCfg->m_maxParallelFrames ) )
   {   
 #endif
     for( auto it = m_rcUpdateList.begin(); it != m_rcUpdateList.end(); )
     {
       auto pic = *it;
-      if( pic->isReconstructed )
+      if( pic->isEncoded )
       {
         pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
         pic->refCounter--;
@@ -1777,7 +1796,7 @@ void EncGOP::xUpdateRateCap()
   for( auto it = m_rcUpdateList.begin(); it != m_rcUpdateList.end(); )
   {
     auto pic = *it;
-    if( pic->isReconstructed )
+    if( pic->isEncoded )
     {
       const unsigned uibits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
 
