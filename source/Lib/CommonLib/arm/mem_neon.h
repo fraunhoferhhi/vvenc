@@ -171,6 +171,51 @@ static inline void store_s16x2x2( int16_t* dst, int16x4_t src, ptrdiff_t stride 
   memcpy( dst + 1 * stride, &tmp1, 4 );
 }
 
+// Loads src[0..n-1] (n = 0..4) into the low n lanes, the other lanes zero; reads nothing past src[n - 1].
+static inline int32x4_t load_s32x4_n( const int32_t* src, int n )
+{
+  const int32x2_t zero = vdup_n_s32( 0 );
+  switch( n )
+  {
+  case 4:
+    return vld1q_s32( src );
+  case 3:
+  {
+    const int32x4_t lo = vcombine_s32( vld1_s32( src ), zero );
+    return vld1q_lane_s32( src + 2, lo, 2 );
+  }
+  case 2:
+    return vcombine_s32( vld1_s32( src ), zero );
+  case 1:
+    return vcombine_s32( vld1_lane_s32( src, zero, 0 ), zero );
+  default:
+    return vcombine_s32( zero, zero );
+  }
+}
+
+// Stores the low n lanes (n = 0..4) of v to dst[0..n-1]; writes nothing past dst[n - 1].
+static inline void store_s32x4_n( int32_t* dst, const int32x4_t v, int n )
+{
+  switch( n )
+  {
+  case 4:
+    vst1q_s32( dst, v );
+    break;
+  case 3:
+    vst1_s32( dst, vget_low_s32( v ) );
+    vst1q_lane_s32( dst + 2, v, 2 );
+    break;
+  case 2:
+    vst1_s32( dst, vget_low_s32( v ) );
+    break;
+  case 1:
+    vst1q_lane_s32( dst, v, 0 );
+    break;
+  default:
+    break;
+  }
+}
+
 } // namespace vvenc
 
 #endif
