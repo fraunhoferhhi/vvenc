@@ -5413,6 +5413,112 @@ static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* op
   return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h + blkDst.y, w, dstStride );
 }
 
+template<typename G>
+static bool check_one_filter5x5Blk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, int srcStride, int dstStride,
+                                    unsigned int w, unsigned int h, int bitDepth, G input_generator,
+                                    unsigned int linearIndex )
+{
+  CHECK( srcStride < w, "SrcStride must be greater than or equal to width." );
+  CHECK( dstStride < w, "DstStride must be greater than or equal to width." );
+
+  DimensionGenerator rng;
+
+  // Chroma CTU heights of 128 and 64 luma CTUs in 4:2:0; every block of 32 or more rows crosses a VB, and a block
+  // starting 4 rows above the end of a CTU has its first 4 rows on the rows folded at the VB.
+  const int vbCTUHeight = rng.getOneOf<int>( { 32, 64 } );
+  const int vbPos = vbCTUHeight - ALF_VB_POS_ABOVE_CTUROW_CHMA;
+  const int dstX = rng.get( 0, MAX_CU_SIZE, 8 );
+  const int dstY = rng.getOneOf<int>( { vbCTUHeight - 4, int( rng.get( 0, MAX_CU_SIZE, 4 ) ) } );
+
+  std::ostringstream sstm;
+  sstm << "filter5x5Blk linearIndex=" << linearIndex << " bitDepth=" << bitDepth << " srcStride=" << srcStride
+       << " dstStride=" << dstStride << " w=" << w << " h=" << h << " dstY=" << dstY << " vbCTUHeight=" << vbCTUHeight;
+
+  ClpRng clpRng{ bitDepth };
+
+  const Area blk{ 0, 0, w, h };
+  const Area blkDst{ dstX, dstY, w, h };
+
+  // Padding to src memory so that the filter can safely index [-2,+2] rows and read 16 samples (AVX2) from the last
+  // columns. dst ends after the block: a store past it is caught by the sanitizers, one into the stride by the compare
+  // of the whole buffer.
+  constexpr int pad = 2;
+  std::vector<Pel> src( ( blk.y + h + 2 * pad ) * srcStride + blk.x + 2 * pad + 16 );
+  std::vector<Pel> dst_ref( ( blkDst.y + h - 1 ) * dstStride + blkDst.x + w );
+  std::vector<Pel> dst_opt( ( blkDst.y + h - 1 ) * dstStride + blkDst.x + w );
+  std::generate( src.begin(), src.end(), input_generator );
+
+  Size sz{ w, h };
+  AreaBuf<const Pel> areaBufSrc{ src.data() + pad * srcStride + pad, srcStride, sz };
+  AreaBuf<Pel> areaBufDst_ref{ dst_ref.data(), dstStride, sz };
+  AreaBuf<Pel> areaBufDst_opt{ dst_opt.data(), dstStride, sz };
+
+  XUCache xuCache;
+  std::mutex csMutex;
+  CodingStructure cs{ xuCache, &csMutex }; // Dummy CodingStructure for filterBlk (unused).
+
+  const ComponentID compId = rng.getOneOf<ComponentID>( { COMP_Cb, COMP_Cr } );
+  const ChromaFormat chromaFormat = CHROMA_444;
+
+  // Give all three planes same buffer, as only one of them is active in filterBlk.
+  PelUnitBuf dstUnitBuf_ref{ chromaFormat, areaBufDst_ref, areaBufDst_ref, areaBufDst_ref };
+  PelUnitBuf dstUnitBuf_opt{ chromaFormat, areaBufDst_opt, areaBufDst_opt, areaBufDst_opt };
+  CPelUnitBuf srcUnitBuf{ chromaFormat, areaBufSrc, areaBufSrc, areaBufSrc };
+
+  // Coefficients in the range of the bitstream, one more than MAX_NUM_ALF_CHROMA_COEFF as the SIMD versions load 8.
+  InputGenerator<short> coeffGenerator{ 8, /*is_signed=*/true };
+  std::vector<short> coeffChroma( MAX_NUM_ALF_CHROMA_COEFF + 1 );
+  std::vector<short> clipChroma( MAX_NUM_ALF_CHROMA_COEFF + 1 );
+  for( unsigned i = 0; i < MAX_NUM_ALF_CHROMA_COEFF + 1; ++i )
+  {
+    coeffChroma[i] = coeffGenerator();
+    // In optimized versions, clipping is used only when isNonLinear is true.
+    if( linearIndex == 1 )
+    {
+      clipChroma[i] = rng.getOneOf<short>( { short( 1 << bitDepth ), short( 1 << ( bitDepth - 3 ) ),
+                                             short( 1 << ( bitDepth - 4 ) ), short( 1 << ( bitDepth - 5 ) ) } );
+    }
+    else
+    {
+      clipChroma[i] = INT16_MAX;
+    }
+  }
+
+  ref->m_filter5x5Blk[linearIndex]( nullptr, dstUnitBuf_ref, srcUnitBuf, blkDst, blk, compId, coeffChroma.data(),
+                                    clipChroma.data(), clpRng, cs, vbCTUHeight, vbPos );
+  opt->m_filter5x5Blk[linearIndex]( nullptr, dstUnitBuf_opt, srcUnitBuf, blkDst, blk, compId, coeffChroma.data(),
+                                    clipChroma.data(), clpRng, cs, vbCTUHeight, vbPos );
+
+  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h + blkDst.y, w, dstStride ) &&
+         compare_values_1d( sstm.str() + " (whole buffer)", dst_ref.data(), dst_opt.data(), unsigned( dst_ref.size() ) );
+}
+
+static bool check_filter5x5Blk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, unsigned num_cases, int w, int h )
+{
+  printf( "Testing AdaptiveLoopFilter::filter5x5Blk w=%d h=%d\n", w, h );
+
+  DimensionGenerator rng;
+
+  for( unsigned linearIndex : { 0, 1 } )
+  {
+    for( int bitDepth : { 8, 10 } )
+    {
+      InputGenerator<Pel> g{ unsigned( bitDepth ), /*is_signed=*/false };
+      for( unsigned i = 0; i < num_cases; ++i )
+      {
+        unsigned srcStride = rng.get( w + 16, g_fastUnitTest ? 512 : 8192 );
+        unsigned dstStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
+
+        if( !check_one_filter5x5Blk( ref, opt, srcStride, dstStride, w, h, bitDepth, g, linearIndex ) )
+        {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 static bool check_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, unsigned num_cases, int w, int h )
 {
   printf( "Testing AdaptiveLoopFilter::filterBlk w=%d h=%d\n", w, h );
@@ -5786,6 +5892,14 @@ static bool test_AdaptiveLoopFilter()
     for( unsigned h : { 8, 16, 24, 32, 64, 112, 128 } )
     {
       passed = check_filterBlk( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+
+  for( unsigned w : { 4, 8, 12, 16, 32, 64 } )
+  {
+    for( unsigned h : { 4, 8, 16, 32, 64 } )
+    {
+      passed = check_filter5x5Blk( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
 
