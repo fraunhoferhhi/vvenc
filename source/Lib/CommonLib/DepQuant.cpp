@@ -1101,7 +1101,7 @@ namespace DQIntern
   }
 }; // namespace DQIntern
 
-// The per-coefficient kernels through DepQuant's function pointers: the scalar ones, or Arm's
+// The per-coefficient kernels through DepQuant's function pointers: the scalar trellis, and every scaling-list trellis
 struct DepQuant::PointerKernels
 {
   static void checkAllRdCosts( const DepQuant& dq, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )

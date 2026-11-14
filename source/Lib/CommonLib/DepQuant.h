@@ -497,7 +497,7 @@ public:
 private:
   void    xQuantDQ          ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff );
   void    xDequantDQ        ( const TransformUnit& tu, CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP, bool enableScalingLists, int* quantCoeff );
-  // DepQuantDecide.h: templates on the set of per-coefficient kernels (PointerKernels in DepQuant.cpp, one per x86 SIMD level)
+  // DepQuantDecide.h: templates on the set of per-coefficient kernels (PointerKernels in DepQuant.cpp, one per SIMD translation unit)
   template<class Kernels>
   void    xDecideAndUpdate  ( const TCoeff absCoeff, const DQIntern::ScanInfo& scanInfo, bool zeroOut, int quantCoeff);
   template<class Kernels>
