@@ -161,6 +161,18 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
       std::string key = std::get<0>(d);
       std::string value = std::get<1>(d);
       msgApp( nullptr, VVENC_DETAILS, "additional params: set option key:'%s' value:'%s'\n", key.c_str(), value.c_str() );
+      std::string lowerKey = key;
+      std::transform( lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower );
+      if( lowerKey == "simd" )
+      {
+        // the SIMD extension is a library setting, not part of the encoder configuration (vvenc_set_param drops it)
+        const char* simd = vvenc_set_SIMD_extension( value.c_str() );
+        if( simd )
+          msgApp( nullptr, VVENC_INFO, "additional params: SIMD extension %s\n", simd );
+        else
+          ret = false;   // the library has logged the error
+        continue;
+      }
       int parse_ret = vvenc_set_param( &vvenccfg, key.c_str(), value.c_str() );
       switch (parse_ret)
       {
