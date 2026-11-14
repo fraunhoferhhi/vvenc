@@ -266,6 +266,56 @@ static void roundIntVector_neon( int* v, int size, unsigned int nShift, const in
   }
 }
 
+// dst[0 .. n-1] = value. A run of 4 and more not covered by whole stores ends with one that overlaps the one before
+// (same value).
+static inline void fillRun_neon( Pel* dst, const int n, const Pel value )
+{
+  const int16x8_t v = vdupq_n_s16( value );
+  if( n >= 8 )
+  {
+    int x = 0;
+    for( ; x + 16 <= n; x += 16 )
+    {
+      vst1q_s16( dst + x,     v );
+      vst1q_s16( dst + x + 8, v );
+    }
+    if( x + 8 < n )
+    {
+      vst1q_s16( dst + x, v );
+    }
+    if( x < n )
+    {
+      vst1q_s16( dst + n - 8, v );
+    }
+  }
+  else if( n >= 4 )
+  {
+    vst1_s16( dst,         vget_low_s16( v ) );
+    vst1_s16( dst + n - 4, vget_low_s16( v ) );
+  }
+  else
+  {
+    for( int x = 0; x < n; x++ )
+    {
+      dst[x] = value;
+    }
+  }
+}
+
+// padHorizontalCore: each row's first and last sample repeated over the left and right margins
+static void padHorizontal_neon( Pel* src, const ptrdiff_t stride, const int width, const int height, const int marginLeft,
+                                const int marginRight )
+{
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    // both edge samples read before the left fill (its stores may alias src[width - 1] for the compiler)
+    const Pel lftPel = src[0];
+    const Pel rgtPel = src[width - 1];
+    fillRun_neon( src - marginLeft, marginLeft, lftPel );
+    fillRun_neon( src + width, marginRight, rgtPel );
+  }
+}
+
 template<int W>
 void addAvg_strided_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
                           int width, int height, unsigned rshift, int offset, const ClpRng& clpRng );
@@ -589,6 +639,7 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   weightCiip     = weightCiip_neon;
   roundGeo       = roundGeo_neon;
   roundIntVector = roundIntVector_neon;
+  padHorizontal  = padHorizontal_neon;
   addAvg4  = addAvg_strided_neon<4>;
   addAvg8  = addAvg_strided_neon<8>;
   sub2      = sub2_neon;
