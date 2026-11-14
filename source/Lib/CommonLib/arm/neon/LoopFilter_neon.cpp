@@ -49,6 +49,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDefARM.h"
 #include "CommonLib/LoopFilter.h"
 #include "CommonLib/Rom.h"
+#include "sum_neon.h"
+#include "transpose_neon.h"
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_DBLF
 
@@ -282,6 +284,149 @@ static void xFilteringPandQNeon( Pel* src, ptrdiff_t step, const ptrdiff_t offse
 }
 
 // ====================================================================================================================
+// Short (strong and weak) filter of 4 luma lines
+// ====================================================================================================================
+
+// Clips each lane of f to x - range .. x + range, as Clip3( x - range, x + range, f ).
+static inline int16x8_t clipAround_s16( const int16x8_t f, const int16x8_t x, const int16x8_t range )
+{
+  return vminq_s16( vmaxq_s16( f, vsubq_s16( x, range ) ), vaddq_s16( x, range ) );
+}
+
+// The 4 lines are held in pairs: x0 = [ p0 | q0 ], x1 = [ p1 | q1 ], x2 = [ p2 | q2 ], x3 = [ p3 | q3 ], the P side in
+// the low half and the Q side in the high half, one lane per line. The formulas of the two sides are mirror images
+// (p_i <-> q_i), so each vector operation filters both sides, and vextq_s16( x, x, 4 ) is the other side of the edge.
+// The sums stay below 8 * 4095 for samples of up to 12 bits, so 16-bit lanes are exact.
+static inline void xPelFilterLumaStrong_neon( int16x8_t& x0, int16x8_t& x1, int16x8_t& x2, const int16x8_t x3,
+                                              const int tc )
+{
+  const int16x8_t y0 = vextq_s16( x0, x0, 4 );
+  const int16x8_t y1 = vextq_s16( x1, x1, 4 );
+  const int16x8_t s  = vaddq_s16( vaddq_s16( x1, x0 ), y0 );   // p1 + p0 + q0
+
+  // ( p2 + 2 p1 + 2 p0 + 2 q0 + q1 + 4 ) >> 3, ( p2 + p1 + p0 + q0 + 2 ) >> 2, ( 2 p3 + 3 p2 + p1 + p0 + q0 + 4 ) >> 3
+  const int16x8_t f0 = vrshrq_n_s16( vaddq_s16( vaddq_s16( x2, y1 ), vshlq_n_s16( s, 1 ) ), 3 );
+  const int16x8_t f1 = vrshrq_n_s16( vaddq_s16( x2, s ), 2 );
+  const int16x8_t f2 = vrshrq_n_s16( vmlaq_n_s16( vaddq_s16( x2, s ), vaddq_s16( x3, x2 ), 2 ), 3 );
+
+  // each output stays within 3, 2 and 1 times tc of the sample it replaces
+  x0 = clipAround_s16( f0, x0, vdupq_n_s16( 3 * tc ) );
+  x1 = clipAround_s16( f1, x1, vdupq_n_s16( 2 * tc ) );
+  x2 = clipAround_s16( f2, x2, vdupq_n_s16( tc ) );
+}
+
+// The weak filter of the pairs above: delta = ( 9 ( q0 - p0 ) - 3 ( q1 - p1 ) + 8 ) >> 4 per line, applied where
+// | delta | < thrCut, clamped to +-tc, added to p0 and subtracted from q0. p1 and q1, if their flags are set, move by
+// ( ( ( p2 + p0 + 1 ) >> 1 ) - p1 + delta ) >> 1 clamped to +-( tc >> 1 ), the Q side with -delta. A line that is not
+// filtered adds 0, which leaves its samples as they are; vvenc_vsqaddq_u16 clips the sums at 0, vminq_u16 at the
+// maximum.
+static inline void xPelFilterLumaWeak_neon( int16x8_t& x0, int16x8_t& x1, const int16x8_t x2, const int tc,
+                                            const int thrCut, const bool secondP, const bool secondQ,
+                                            const ClpRng& clpRng )
+{
+  const int16x4_t  d0       = vsub_s16( vget_high_s16( x0 ), vget_low_s16( x0 ) );   // q0 - p0
+  const int16x4_t  d1       = vsub_s16( vget_high_s16( x1 ), vget_low_s16( x1 ) );   // q1 - p1
+  const int32x4_t  sum      = vmlsl_n_s16( vmull_n_s16( d0, 9 ), d1, 3 );
+  int16x4_t        delta    = vrshrn_n_s32( sum, 4 );
+  const uint16x4_t passMask = vclt_s16( vabs_s16( delta ), vdup_n_s16( thrCut ) );
+  delta                     = vmin_s16( vmax_s16( delta, vdup_n_s16( -tc ) ), vdup_n_s16( tc ) );
+  delta                     = vand_s16( delta, vreinterpret_s16_u16( passMask ) );
+
+  const int16x8_t  deltaPQ = vcombine_s16( delta, vneg_s16( delta ) );   // [ delta | -delta ]
+  const uint16x8_t maxVal  = vdupq_n_u16( clpRng.max() );
+
+  if( secondP || secondQ )
+  {
+    const int16x8_t  tcHalf     = vdupq_n_s16( tc >> 1 );
+    const int16x8_t  mid        = vsubq_s16( vrhaddq_s16( x2, x0 ), x1 );   // ( ( p2 + p0 + 1 ) >> 1 ) - p1
+    const int16x8_t  stepAll    = vminq_s16( vmaxq_s16( vhaddq_s16( mid, deltaPQ ), vnegq_s16( tcHalf ) ), tcHalf );
+    const uint16x4_t passP      = vand_u16( passMask, vdup_n_u16( secondP ? 0xffff : 0 ) );
+    const uint16x4_t passQ      = vand_u16( passMask, vdup_n_u16( secondQ ? 0xffff : 0 ) );
+    const int16x8_t  step       = vandq_s16( stepAll, vreinterpretq_s16_u16( vcombine_u16( passP, passQ ) ) );
+    x1 = vreinterpretq_s16_u16( vminq_u16( vvenc_vsqaddq_u16( vreinterpretq_u16_s16( x1 ), step ), maxVal ) );
+  }
+  x0 = vreinterpretq_s16_u16( vminq_u16( vvenc_vsqaddq_u16( vreinterpretq_u16_s16( x0 ), deltaPQ ), maxVal ) );
+}
+
+// A horizontal edge: the lines are the 4 columns from piSrc on, and p_k, q_k are rows -1 - k and k.
+static void xPelFilterLumaHor_neon( Pel* piSrc, const ptrdiff_t offset, const int tc, const bool sw, const int thrCut,
+                                    const bool secondP, const bool secondQ, const ClpRng& clpRng )
+{
+  const int16x4_t p2 = vld1_s16( piSrc - 3 * offset );
+  const int16x4_t p1 = vld1_s16( piSrc - 2 * offset );
+  const int16x4_t p0 = vld1_s16( piSrc - 1 * offset );
+  const int16x4_t q0 = vld1_s16( piSrc );
+  const int16x4_t q1 = vld1_s16( piSrc + 1 * offset );
+  const int16x4_t q2 = vld1_s16( piSrc + 2 * offset );
+  int16x8_t       x0 = vcombine_s16( p0, q0 );
+  int16x8_t       x1 = vcombine_s16( p1, q1 );
+  int16x8_t       x2 = vcombine_s16( p2, q2 );
+
+  if( sw )
+  {
+    const int16x4_t p3 = vld1_s16( piSrc - 4 * offset );
+    const int16x4_t q3 = vld1_s16( piSrc + 3 * offset );
+    xPelFilterLumaStrong_neon( x0, x1, x2, vcombine_s16( p3, q3 ), tc );
+    vst1_s16( piSrc - 3 * offset, vget_low_s16( x2 ) );
+    vst1_s16( piSrc + 2 * offset, vget_high_s16( x2 ) );
+  }
+  else
+  {
+    xPelFilterLumaWeak_neon( x0, x1, x2, tc, thrCut, secondP, secondQ, clpRng );
+  }
+  vst1_s16( piSrc - 2 * offset, vget_low_s16( x1 ) );
+  vst1_s16( piSrc - 1 * offset, vget_low_s16( x0 ) );
+  vst1_s16( piSrc,              vget_high_s16( x0 ) );
+  vst1_s16( piSrc + 1 * offset, vget_high_s16( x1 ) );
+}
+
+// A vertical edge: the lines are the 4 rows from piSrc on, each [ p3 p2 p1 p0 q0 q1 q2 q3 ] around piSrc. Transposing
+// both halves gives a0 = [ p3 | q0 ], a1 = [ p2 | q1 ], a2 = [ p1 | q2 ], a3 = [ p0 | q3 ], and x_k takes the low half
+// of a_3-k and the high half of a_k. That map and the transpose are their own inverses, so the same steps write back
+// the 8 samples of each line (those the filter does not change with the values they had).
+static void xPelFilterLumaVer_neon( Pel* piSrc, const ptrdiff_t step, const int tc, const bool sw, const int thrCut,
+                                    const bool secondP, const bool secondQ, const ClpRng& clpRng )
+{
+  int16x8_t a0 = vld1q_s16( piSrc - 4 );
+  int16x8_t a1 = vld1q_s16( piSrc - 4 + step );
+  int16x8_t a2 = vld1q_s16( piSrc - 4 + 2 * step );
+  int16x8_t a3 = vld1q_s16( piSrc - 4 + 3 * step );
+  transpose_4x4_s16_halves( a0, a1, a2, a3 );
+
+  int16x8_t       x0 = vcombine_s16( vget_low_s16( a3 ), vget_high_s16( a0 ) );
+  int16x8_t       x1 = vcombine_s16( vget_low_s16( a2 ), vget_high_s16( a1 ) );
+  int16x8_t       x2 = vcombine_s16( vget_low_s16( a1 ), vget_high_s16( a2 ) );
+  const int16x8_t x3 = vcombine_s16( vget_low_s16( a0 ), vget_high_s16( a3 ) );
+
+  if( sw )
+    xPelFilterLumaStrong_neon( x0, x1, x2, x3, tc );
+  else
+    xPelFilterLumaWeak_neon( x0, x1, x2, tc, thrCut, secondP, secondQ, clpRng );
+
+  a0 = vcombine_s16( vget_low_s16( x3 ), vget_high_s16( x0 ) );
+  a1 = vcombine_s16( vget_low_s16( x2 ), vget_high_s16( x1 ) );
+  a2 = vcombine_s16( vget_low_s16( x1 ), vget_high_s16( x2 ) );
+  a3 = vcombine_s16( vget_low_s16( x0 ), vget_high_s16( x3 ) );
+  transpose_4x4_s16_halves( a0, a1, a2, a3 );
+  vst1q_s16( piSrc - 4,            a0 );
+  vst1q_s16( piSrc - 4 + step,     a1 );
+  vst1q_s16( piSrc - 4 + 2 * step, a2 );
+  vst1q_s16( piSrc - 4 + 3 * step, a3 );
+}
+
+static void xPelFilterLumaNeon( Pel* piSrc, const ptrdiff_t step, const ptrdiff_t offset, const int tc, const bool sw,
+                                const int iThrCut, const bool bFilterSecondP, const bool bFilterSecondQ,
+                                const ClpRng& clpRng )
+{
+  CHECKD( clpRng.bd > 12, "the 16-bit sums need samples of at most 12 bits" );
+
+  if( offset == 1 )
+    xPelFilterLumaVer_neon( piSrc, step, tc, sw, iThrCut, bFilterSecondP, bFilterSecondQ, clpRng );
+  else
+    xPelFilterLumaHor_neon( piSrc, offset, tc, sw, iThrCut, bFilterSecondP, bFilterSecondQ, clpRng );
+}
+
+// ====================================================================================================================
 // Init
 // ====================================================================================================================
 
@@ -289,6 +434,7 @@ template <ARM_VEXT vext>
 void LoopFilter::_initLoopFilterARM()
 {
   xFilteringPandQ = xFilteringPandQNeon;
+  xPelFilterLuma  = xPelFilterLumaNeon;
 }
 
 template void LoopFilter::_initLoopFilterARM<NEON>();
