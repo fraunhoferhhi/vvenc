@@ -443,13 +443,13 @@ bool EncGOP::xIsLockStep() const
 // Whether new pictures join the processing list on every pass and start by temporal layer (findNextPicToStart), so that
 // the long key pictures of the next GOP overlap the current GOP. Otherwise the list is refilled when empty and pictures
 // start in list order: with one picture encoder (its start order is the coding order, which AMaxBT follows), lock-step
-// RC, rate cap, IFP coding one GOP at a time (NumParallelGOPs 0), and the I pictures' temporal pumping reduction, whose
-// CTU QP memory (sized only then) the key pictures fill and the next I picture reads.
+// RC, rate cap, and the I pictures' temporal pumping reduction, whose CTU QP memory (sized only then) the key pictures
+// fill and the next I picture reads. With IFP and NumParallelGOPs 0 the list still takes one GOP at a time
+// (xGetProcessingLists), so the next GOP's key pictures start early only from the pictures already held.
 bool EncGOP::xFetchOnEveryPass( bool lockStepMode ) const
 {
   const bool ctuQpMemory = m_globalCtuQpVector.size() > 1;
-  return m_pcEncCfg->m_maxParallelFrames > 0 && ! lockStepMode && ! m_pcEncCfg->m_rateCap
-         && ! ( m_pcEncCfg->m_ifpLines && ! m_pcEncCfg->m_numParallelGOPs ) && ! ctuQpMemory;
+  return m_pcEncCfg->m_maxParallelFrames > 0 && ! lockStepMode && ! m_pcEncCfg->m_rateCap && ! ctuQpMemory;
 }
 
 // Starts ready pictures of the processing list while picture encoders are free, at most maxStarts of them (0: no limit).
@@ -902,14 +902,34 @@ void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
   // picture that no other picture references and that is not waiting for reconstruction output needs
   // neither its reconstruction nor its motion field once it is reconstructed.
   const bool writeReadsReco = m_pcEncCfg->m_decodedPictureHashSEIType != VVENC_HASHTYPE_NONE;
+  // Once encoded, a picture of the final encoder (the last stage; never the pre-analysis encoder, whose pictures the
+  // final pass reads again) no longer reads its source: finalizePicture computes PSNR before isEncoded is set (while
+  // isReconstructed is set before it, see xEncodePicture). It may then lend the source buffer
+  // to new input (EncLib::xGetFreePicShared). Its temporally filtered copy and its links to the two previous source
+  // pictures (QPA, read only while it is coded) are released here instead of at output, so those pictures can lend their
+  // source buffers sooner. Not with rate control or rate cap, whose updates after reconstruction are kept as they are,
+  // and not before the picture's film grain analysis has read its source.
+  const bool lendSources = ! m_isPreAnalysis && m_pcEncCfg->m_RCTargetBitrate == 0 && ! m_pcEncCfg->m_rateCap;
   for( auto pic : picList )
   {
+    if( lendSources && pic->isEncoded && pic->m_picShared && ! pic->m_picShared->isSourceDone()
+        && ! ( m_pcEncCfg->m_fga && xFgaReadsSource( *pic ) ) )
+    {
+      pic->m_picShared->setSourceDone();
+      pic->getFilteredOrigBuffer().destroy();
+      pic->m_picShared->releasePrevBuffers( pic );
+    }
     const bool isUnused = ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0;
     if( ( pic->isFinished && isUnused ) || allPicsDone )
     {
       // Nothing reads a released picture any more. Its buffers are allocated again when the
       // picture object is reused and its next picture starts encoding.
       pic->releaseEncodingBuffers();
+      if( pic->m_picShared )
+      {
+        // a later picture's QPA reference may still hold the source: it must not be lent any more
+        pic->m_picShared->clearSourceDone();
+      }
       freeList.push_back( pic );
     }
     else if( pic->isEncoded && isUnused && ! writeReadsReco )
@@ -1703,6 +1723,19 @@ void EncGOP::xRunFgaTask( FgaTask& task )
     fgaBuf.destroy();
   }
   task.result = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );
+}
+
+// Whether a film grain analysis of the picture may still read its source.
+bool EncGOP::xFgaReadsSource( const Picture& pic ) const
+{
+  for( const auto& task : m_fgaTasks )
+  {
+    if( task->pic == &pic && task->counter.isBlocked() )
+    {
+      return true;
+    }
+  }
+  return false;
 }
 
 void EncGOP::xWaitFgaTasks()
