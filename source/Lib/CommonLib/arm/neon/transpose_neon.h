@@ -55,6 +55,63 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+static inline uint16x8x2_t vvenc_vtrnq_u64_to_u16( uint32x4_t a0, uint32x4_t a1 )
+{
+  uint16x8x2_t b0;
+#if REAL_TARGET_AARCH64
+  b0.val[0] = vreinterpretq_u16_u64( vtrn1q_u64( vreinterpretq_u64_u32( a0 ), vreinterpretq_u64_u32( a1 ) ) );
+  b0.val[1] = vreinterpretq_u16_u64( vtrn2q_u64( vreinterpretq_u64_u32( a0 ), vreinterpretq_u64_u32( a1 ) ) );
+#else
+  b0.val[0] = vreinterpretq_u16_u32( vcombine_u32( vget_low_u32( a0 ), vget_low_u32( a1 ) ) );
+  b0.val[1] = vreinterpretq_u16_u32( vcombine_u32( vget_high_u32( a0 ), vget_high_u32( a1 ) ) );
+#endif
+  return b0;
+}
+
+// Transposes rows[r][c] (8 x 8 16-bit values) into columns[c][r]: the 16-bit vtrn pairs rows 0-1, 2-3, ..., the
+// 32-bit vtrn those pairs within rows 0-3 and 4-7, and the 64-bit halves of rows 0-3 and 4-7 then combine into one
+// column each.
+static inline void transpose_8x8_u16( const uint16x8_t* rows, uint16x8_t* columns )
+{
+  const uint16x8x2_t r01 = vtrnq_u16( rows[0], rows[1] );
+  const uint16x8x2_t r23 = vtrnq_u16( rows[2], rows[3] );
+  const uint16x8x2_t r45 = vtrnq_u16( rows[4], rows[5] );
+  const uint16x8x2_t r67 = vtrnq_u16( rows[6], rows[7] );
+
+  // e.g. top02.val[0] holds column 0 (rows 0-3) then column 4 (rows 0-3), top02.val[1] columns 2 and 6
+  const uint32x4x2_t top02    = vtrnq_u32( vreinterpretq_u32_u16( r01.val[0] ), vreinterpretq_u32_u16( r23.val[0] ) );
+  const uint32x4x2_t top13    = vtrnq_u32( vreinterpretq_u32_u16( r01.val[1] ), vreinterpretq_u32_u16( r23.val[1] ) );
+  const uint32x4x2_t bottom02 = vtrnq_u32( vreinterpretq_u32_u16( r45.val[0] ), vreinterpretq_u32_u16( r67.val[0] ) );
+  const uint32x4x2_t bottom13 = vtrnq_u32( vreinterpretq_u32_u16( r45.val[1] ), vreinterpretq_u32_u16( r67.val[1] ) );
+
+  const uint16x8x2_t c04 = vvenc_vtrnq_u64_to_u16( top02.val[0], bottom02.val[0] );
+  const uint16x8x2_t c15 = vvenc_vtrnq_u64_to_u16( top13.val[0], bottom13.val[0] );
+  const uint16x8x2_t c26 = vvenc_vtrnq_u64_to_u16( top02.val[1], bottom02.val[1] );
+  const uint16x8x2_t c37 = vvenc_vtrnq_u64_to_u16( top13.val[1], bottom13.val[1] );
+
+  columns[0] = c04.val[0];
+  columns[1] = c15.val[0];
+  columns[2] = c26.val[0];
+  columns[3] = c37.val[0];
+  columns[4] = c04.val[1];
+  columns[5] = c15.val[1];
+  columns[6] = c26.val[1];
+  columns[7] = c37.val[1];
+}
+
+// Transpose 32-bit 4x4 in place: a0 becomes the old a0[0] a1[0] a2[0] a3[0], a1 the old lanes 1, and so on.
+static inline void transpose_4x4_u32( uint32x4_t& a0, uint32x4_t& a1, uint32x4_t& a2, uint32x4_t& a3 )
+{
+  // a01.val[0]: a0[0] a1[0] a0[2] a1[2], a01.val[1]: a0[1] a1[1] a0[3] a1[3]; a23 alike
+  const uint32x4x2_t a01 = vtrnq_u32( a0, a1 );
+  const uint32x4x2_t a23 = vtrnq_u32( a2, a3 );
+
+  a0 = vcombine_u32( vget_low_u32( a01.val[0] ), vget_low_u32( a23.val[0] ) );
+  a1 = vcombine_u32( vget_low_u32( a01.val[1] ), vget_low_u32( a23.val[1] ) );
+  a2 = vcombine_u32( vget_high_u32( a01.val[0] ), vget_high_u32( a23.val[0] ) );
+  a3 = vcombine_u32( vget_high_u32( a01.val[1] ), vget_high_u32( a23.val[1] ) );
+}
+
 static inline void transpose_concat_8x4_s16( int16x8_t a0, int16x8_t a1, int16x8_t a2, int16x8_t a3,
                                              int16x8_t& b0, int16x8_t& b1, int16x8_t& b2, int16x8_t& b3 )
 {
