@@ -689,15 +689,23 @@ namespace DQIntern
     }
   }
 
-  // The coefficient rows dequantBlock and DepQuant::xQuantDQ clear. A block of 64 rows has coefficients only in its first
-  // 32 (JVET-C0024 zero-out), and nothing reads the rows past them. For the dequantized buffer: neither the inverse
-  // transform (TrQuant::xIT) nor the encoder's next forward transform and quantization of the buffer. For the quantized
-  // levels: the dequantization and the residual coding read only scan positions, which lie in the first 32 rows. The LFNST
-  // cut (xIT reads 4 or 8 rows) can't be used the same way: the encoder reuses the dequantized buffer in its next forward
-  // LFNST pass, and the streams change without the full clear there.
+  // The rows of the dequantized buffer dequantBlock clears. A block of 64 rows has coefficients only in its first 32
+  // (JVET-C0024 zero-out), and nothing reads the dequantized rows past them: neither the inverse transform (TrQuant::xIT)
+  // nor the encoder's next forward transform and quantization of the buffer. The LFNST cut (xIT reads 4 or 8 rows) can't
+  // be used the same way: the encoder reuses the dequantized buffer in its next forward LFNST pass, and the streams change
+  // without the full clear there.
   static int rowsToClear( const int height )
   {
     return std::min( height, JVET_C0024_ZERO_OUT_TH );
+  }
+
+  // The rows of the level buffer DepQuant::xQuantDQ clears: the 32 that can hold levels, plus the 2 below them. The
+  // residual coder's Rice parameter template (CoeffCodingContext::templateAbsSum) reads the levels one and two rows below
+  // a coefficient up to the block's full height, so for the last coded rows it reads rows 32 and 33. The decoder sees
+  // zeros there; levels left over from an earlier block would give a different Rice parameter and a stream it can't parse.
+  static int levelRowsToClear( const int height )
+  {
+    return std::min( height, JVET_C0024_ZERO_OUT_TH + 2 );
   }
 
   void Quantizer::initQuantBlock(const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, int gValue)
@@ -1303,7 +1311,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   m_quant.initQuantBlock    ( tu, compID, cQP, lambda );
   TCoeffSig*    qCoeff      = tu.getCoeffs( compID ).buf;
   const TCoeff* tCoeff      = srcCoeff.buf;
-  ::memset( qCoeff, 0x00, rowsToClear( tu.blocks[compID].height ) * tu.blocks[compID].width * sizeof( TCoeffSig ) );
+  ::memset( qCoeff, 0x00, levelRowsToClear( tu.blocks[compID].height ) * tu.blocks[compID].width * sizeof( TCoeffSig ) );
   absSum                    = 0;
 
   const CompArea& area      = tu.blocks[ compID ];
