@@ -4033,6 +4033,54 @@ static bool check_reco( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases
   return passed;
 }
 
+// reco4, reco8, copyClip4 and copyClip8 with any Pel values (the SIMD versions saturate the sum, which keeps C's clip
+// result) for the widths AreaBuf::reconstruct and copyClip pass them (multiples of 8 to the 8 versions, other multiples
+// of 4 to the 4 versions), heights 1 to 64, padded strides, bit depths 8 to 12, also in place (dest = src0); the whole
+// destination is compared, so that writes beyond the block and samples left out are found
+static bool check_recoCopyClip4And8( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::reco4, reco8, copyClip4, copyClip8\n" );
+  DimensionGenerator rng;
+  auto anyPel = []()
+  {
+    const int r = rand() & 15;   // the extremes one time in eight
+    return Pel( r == 0 ? -32768 : r == 1 ? 32767 : int( ( unsigned( rand() ) << 8 ) ^ unsigned( rand() ) ) );
+  };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int    width   = rng.getOneOf<int>( { 4, 12, 20, 28, 8, 16, 24, 32, 64 } );
+    const int    height  = rng.get( 1, 64 );
+    const int    stride  = width + rng.get( 0, 9 );
+    const bool   inPlace = rng.get( 0, 3 ) == 0;
+    const ClpRng clpRng{ int( rng.getOneOf<unsigned>( { 8, 10, 12 } ) ) };
+    std::vector<Pel> src0( stride * height ), src1( stride * height );
+    std::generate( src0.begin(), src0.end(), anyPel );
+    std::generate( src1.begin(), src1.end(), anyPel );
+    std::vector<Pel> dstRef = inPlace ? src0 : std::vector<Pel>( stride * height, 0x5a5a );
+    std::vector<Pel> dstOpt = dstRef;
+    const Pel* src0Ref = inPlace ? dstRef.data() : src0.data();
+    const Pel* src0Opt = inPlace ? dstOpt.data() : src0.data();
+
+    std::ostringstream sstm;
+    sstm << " " << width << "x" << height << " stride=" << stride << " bd=" << clpRng.bd << " inPlace=" << inPlace;
+    const auto reco     = ( width & 7 ) ? &PelBufferOps::reco4 : &PelBufferOps::reco8;
+    const auto copyClip = ( width & 7 ) ? &PelBufferOps::copyClip4 : &PelBufferOps::copyClip8;
+    ( ref->*reco )( src0Ref, stride, src1.data(), stride, dstRef.data(), stride, width, height, clpRng );
+    ( opt->*reco )( src0Opt, stride, src1.data(), stride, dstOpt.data(), stride, width, height, clpRng );
+    bool ok = compare_values_1d( "reco" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+
+    ( ref->*copyClip )( src1.data(), stride, dstRef.data(), stride, width, height, clpRng );
+    ( opt->*copyClip )( src1.data(), stride, dstOpt.data(), stride, width, height, clpRng );
+    ok = ok && compare_values_1d( "copyClip" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // The plane checksum of the decoded picture hash SEI: widths and heights beyond 256, where the high bytes of the
 // positions enter the mask, any Pel values (the arithmetic shift of negative values) and both sample sizes.
 static bool check_pictureChecksum( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -4566,6 +4614,7 @@ static bool test_PelBufferOps()
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
+  passed = check_recoCopyClip4And8( &ref, &opt, num_cases ) && passed;
   passed = check_geoSads( &ref, &opt, num_cases ) && passed;
   passed = check_copyClip( &ref, &opt, num_cases ) && passed;
   passed = check_copyClipScalarTail( &ref, num_cases ) && passed;
