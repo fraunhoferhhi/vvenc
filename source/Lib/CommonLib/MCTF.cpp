@@ -1578,6 +1578,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
 
       m_threadPool->addBarrierTask( task, &cEstParams, &taskCounter);
     }
+    pollStartStage();
     taskCounter.wait();
   }
   else
@@ -1734,6 +1735,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
 
       m_threadPool->addBarrierTask( task, &cFltParams, &taskCounter );
     }
+    pollStartStage();
     taskCounter.wait();
   }
   else

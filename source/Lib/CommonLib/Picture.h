@@ -219,7 +219,8 @@ public:
   std::vector<OutputBitstream>  sliceDataStreams;
 
   bool                          isInitDone;
-  std::atomic_bool              isReconstructed;
+  std::atomic_bool              isReconstructed;    // usable as a reference: reconstruction, motion and ALF APSs final
+  std::atomic_bool              isEncoded;          // finalizePicture done too: slice data written, picture encoder free
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
@@ -242,6 +243,7 @@ public:
   int64_t                       picsInMissing;      // summed up missing frames on input
   int64_t                       picOutOffset;       // signalization of pic offset to re-calc dts
   bool                          isPreAnalysis;
+  int64_t                       encStartOrder;      // 1, 2, ...: the order in which the pictures got a picture encoder (per EncGOP)
 
   PicShared*                    m_picShared;
 

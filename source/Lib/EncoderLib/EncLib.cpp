@@ -288,6 +288,12 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_gopEncoder->init( m_encCfg, m_preProcess->getGOPCfg(), *m_rateCtrl, m_threadPool, false );
   m_encStages.push_back( m_gopEncoder );
   m_maxNumPicShared += minQueueSize;
+  // the stages that wait for their own pool tasks start the GOP encoder's ready pictures meanwhile
+  if( m_encCfg.m_stageParallelProc )
+  {
+    if( m_MCTF )   m_MCTF  ->setStartStage( m_gopEncoder );
+    if( m_cuTree ) m_cuTree->setStartStage( m_gopEncoder );
+  }
 
   // additional pictures due to structural delay
   m_maxNumPicShared += m_preProcess->getGOPCfg()->getNumReorderPics()[ m_encCfg.m_maxTLayer ];
@@ -589,28 +595,61 @@ int EncLib::getCurPass() const
 // Protected member functions
 // ====================================================================================================================
 
+// The stage-parallel limit counts source buffers, not PicShared objects: a picture the GOP encoder has reconstructed
+// lends its source buffer to new input (PicShared::canLendSource), so that the next GOP's pictures can enter MCTF while
+// the current GOP's pictures wait for their output (they keep their metadata, which later pictures and the output read).
+// Each reconstructed picture that cannot lend yet (a later picture's QPA or its film grain analysis still reads the
+// source) raises the limit by one: when no picture can lend, new input gets a new source buffer.
 PicShared* EncLib::xGetFreePicShared()
 {
-  PicShared* picShared = nullptr;
+  PicShared* unusedWithoutSource = nullptr;
+  PicShared* lender              = nullptr;
+  size_t     numSources          = 0;
   for( auto itr : m_picSharedList )
   {
     if( ! itr->isUsed() )
     {
-      picShared = itr;
-      break;
+      if( itr->hasSource() )
+      {
+        return itr;
+      }
+      if( ! unusedWithoutSource )
+      {
+        unusedWithoutSource = itr;
+      }
     }
+    else if( ! lender && itr->canLendSource() )
+    {
+      lender = itr;
+    }
+    numSources += itr->hasSource() ? 1 : 0;
   }
 
+  const bool atLimit = m_encCfg.m_stageParallelProc && numSources >= (size_t)m_maxNumPicShared;
+  const bool lend    = atLimit && lender;
+  const bool noRoom  = atLimit && ! lender
+                       && numSources >= (size_t)m_maxNumPicShared + (size_t)m_gopEncoder->numEncodedWithSource();
+  if( noRoom )
+  {
+    return nullptr;
+  }
+
+  PicShared* picShared = unusedWithoutSource;
   if( ! picShared )
   {
-    if( m_encCfg.m_stageParallelProc && ( m_picSharedList.size() >= m_maxNumPicShared ) )
-      return nullptr;
-
     picShared = new PicShared();
-    picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA );
+    picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA, ! lend );
     m_picSharedList.push_back( picShared );
   }
-  CHECK( picShared == nullptr, "out of memory" );
+  else if( ! lend )
+  {
+    picShared->createSource();
+  }
+  if( lend )
+  {
+    picShared->takeSourceFrom( *lender );
+  }
+  CHECK( ! picShared->hasSource(), "out of memory" );
 
   return picShared;
 }

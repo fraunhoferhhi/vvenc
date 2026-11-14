@@ -874,6 +874,8 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   // process ctu's until last ctu is done
   if( m_pcEncCfg->m_numThreads > 0 )
   {
+    // the picture started first gets free threads first: it frees its picture encoder soonest for the next ready picture
+    const int64_t taskPriority = 1 + pic->encStartOrder;
     for( auto& ctuEncParam : ctuEncParams )
     {
       m_threadPool->addBarrierTask( EncSlice::xProcessCtuTask<false>,
@@ -881,7 +883,8 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
                                     m_ctuTasksDoneCounter,
                                     nullptr,
                                     {},
-                                    EncSlice::xProcessCtuTask<true> );
+                                    EncSlice::xProcessCtuTask<true>,
+                                    taskPriority );
     }
   }
   else

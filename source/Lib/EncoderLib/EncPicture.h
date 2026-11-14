@@ -92,7 +92,8 @@ class EncPicture
                                   NoMallocThreadPool* threadPool,
                                   ThreadRsrcPool& threadRsrc );
     void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
-    void finalizePicture        ( Picture& pic );
+    void finalizeReference      ( Picture& pic );   // first: what the referencing pictures read (then isReconstructed)
+    void finalizePicture        ( Picture& pic );   // then: slice data, distortion, cleanup (then isEncoded)
 
   protected:
     void xInitPicEncoder        ( Picture& pic );

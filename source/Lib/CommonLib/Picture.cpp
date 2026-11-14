@@ -155,6 +155,7 @@ Picture::Picture()
     , picApsMap           ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
     , isInitDone          ( false )
     , isReconstructed     ( false )
+    , isEncoded           ( false )
     , isBorderExtended    ( false )
     , isReferenced        ( false )
     , isNeededForOutput   ( false )
@@ -175,6 +176,7 @@ Picture::Picture()
     , picsInMissing       ( 0 )
     , picOutOffset        ( 0 )
     , isPreAnalysis       ( false )
+    , encStartOrder       ( 0 )
     , m_picShared         ( nullptr )
     , gopAdaptedQP        ( 0 )
     , force2ndOrder       ( false )
@@ -224,6 +226,7 @@ void Picture::reset()
   // reset picture
   isInitDone           = false;
   isReconstructed      = false;
+  isEncoded            = false;
   isBorderExtended     = false;
   isReferenced         = true;
   isNeededForOutput    = true;
