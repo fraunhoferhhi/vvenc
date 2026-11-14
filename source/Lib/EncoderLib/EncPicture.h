@@ -72,6 +72,7 @@ class EncPicture
     CABACWriter              m_CABACEstimator;
     CtxCache                 m_CtxCache;
     RateCtrl*                m_pcRateCtrl;
+    bool                     m_apsCopiedEarly;   // IFP: the APSs went to the global list at the ALF derivation
 
   public:
     WaitCounter              m_ctuTasksDoneCounter;
@@ -81,6 +82,7 @@ class EncPicture
       : m_pcEncCfg      ( nullptr )
       , m_CABACEstimator( m_BitEstimator )
       , m_pcRateCtrl    ( nullptr )
+      , m_apsCopiedEarly( false )
     {}
     virtual ~EncPicture() {}
 
@@ -90,11 +92,13 @@ class EncPicture
                                   const PPS& pps,
                                   RateCtrl& rateCtrl,
                                   NoMallocThreadPool* threadPool,
-                                  ThreadRsrcPool& threadRsrc );
+                                  ThreadRsrcPool& threadRsrc,
+                                  std::function<void( Picture& )> apsReady );
     void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
     void finalizePicture        ( Picture& pic );
 
   protected:
+    void xCopyApsToGlobal       ( Picture& pic );
     void xInitPicEncoder        ( Picture& pic );
     void xWriteSliceData        ( Picture& pic );
     void xCalcDistortion        ( Picture& pic, const SPS& sps );
