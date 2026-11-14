@@ -323,6 +323,10 @@ int testLibParameterRanges()
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 1 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 0,2 }, true );
 
+  // MCTF level tilt: 0 (off) or 1 (on)
+  testParamList( "MCTFLevelTilt",                          vvencParams.m_vvencMCTF.MCTFLevelTilt,    vvencParams, { 0,1 } );
+  testParamList( "MCTFLevelTilt",                          vvencParams.m_vvencMCTF.MCTFLevelTilt,    vvencParams, { -1,2 }, true );
+
   // block importance mapping: 0 (off), 1 (CU-tree) or 2 (from MCTF)
   testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { 0,1,2 } );
   testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { -1,3 }, true );

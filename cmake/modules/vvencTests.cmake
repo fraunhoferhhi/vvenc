@@ -77,6 +77,9 @@ add_vvenc_test( vvencapp-medium_noqpa_0thr       30 OUT_VVC   ""                
 add_vvenc_test( vvencFFapp-medium_noqpa_0thr     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -qpa 0 --WppBitEqual=0 --Threads=0 -f 5 -b OUTPUT )
 add_vvenc_test( compare_output-medium_noqpa_0thr 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
+# MCTF level tilt (on by default): switched off.
+add_vvenc_test( vvencapp-fast_mctfleveltilt_off 30 OUT_VVC ""               vvencapp --preset fast -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -t 4 --additional MCTFLevelTilt=0 -o OUTPUT )
+
 add_vvenc_test( vvencFFapp-lowdelay_medium 30 OUTF_VVC  ""            vvencFFapp -c ${CFG_DIR}/experimental/lowdelay_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} --IntraPeriod=-1 -dph 1 -f 8 --Threads=-1 -b OUTPUT )
 
 # Film grain analysis used to crash when a luma or chroma plane is smaller than its 64x64 analysis window, and on
