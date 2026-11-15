@@ -1027,6 +1027,76 @@ Distortion xGetHADs_fast_neon( const DistParam& rcDtParam )
   return uiSum;
 }
 
+// DMVR's SADs of an 8xN block at the five horizontal offsets -2 .. 2 (as xGetSADX5_16xN_neon_impl for 16 wide): cost[k]
+// pairs org + k with cur - k, so the loads cover org[0 .. 11] and cur[-4 .. 7] of each row, as the SSE kernel's. Every
+// other row (subShift 1): at most 8 rows of differences below 2^10 at 10 bits, so the 16-bit sums cannot overflow.
+template<bool isCalCentrePos>
+void xGetSADX5_8xN_neon_impl( const DistParam& rcDtParam, Distortion* cost )
+{
+  const Pel*      piOrg      = rcDtParam.org.buf;
+  const Pel*      piCur      = rcDtParam.cur.buf - 4;
+  int             height     = rcDtParam.org.height;
+  constexpr int   iSubShift  = 1;
+  constexpr int   iSubStep   = 1 << iSubShift;
+  const ptrdiff_t iStrideCur = rcDtParam.cur.stride * iSubStep;
+  const ptrdiff_t iStrideOrg = rcDtParam.org.stride * iSubStep;
+
+  CHECKD( rcDtParam.subShift != 1, "Only SubShift = 1 is supported!" );
+  CHECKD( rcDtParam.bitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
+  CHECKD( height <= 0 || height > 16, "Height must be 1 to 16!" );
+
+  int16x8_t sum0 = vdupq_n_s16( 0 );
+  int16x8_t sum1 = vdupq_n_s16( 0 );
+  int16x8_t sum2 = vdupq_n_s16( 0 );
+  int16x8_t sum3 = vdupq_n_s16( 0 );
+  int16x8_t sum4 = vdupq_n_s16( 0 );
+
+  do
+  {
+    sum0 = vabaq_s16( sum0, vld1q_s16( piOrg + 0 ), vld1q_s16( piCur + 4 ) );
+    sum1 = vabaq_s16( sum1, vld1q_s16( piOrg + 1 ), vld1q_s16( piCur + 3 ) );
+    if( isCalCentrePos )
+    {
+      sum2 = vabaq_s16( sum2, vld1q_s16( piOrg + 2 ), vld1q_s16( piCur + 2 ) );
+    }
+    sum3 = vabaq_s16( sum3, vld1q_s16( piOrg + 3 ), vld1q_s16( piCur + 1 ) );
+    sum4 = vabaq_s16( sum4, vld1q_s16( piOrg + 4 ), vld1q_s16( piCur + 0 ) );
+
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+    height -= iSubStep;
+  } while( height > 0 );
+
+  const int32x4_t sum = horizontal_add_long_4d_s16x8( sum0, sum1, sum3, sum4 );
+
+  cost[0] = vgetq_lane_s32( sum, 0 );
+  cost[1] = vgetq_lane_s32( sum, 1 );
+  if( isCalCentrePos )
+  {
+    cost[2] = horizontal_add_long_s16x8( sum2 );
+  }
+  cost[3] = vgetq_lane_s32( sum, 2 );
+  cost[4] = vgetq_lane_s32( sum, 3 );
+}
+
+void xGetSADX5_8xN_neon( const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos )
+{
+  if( rcDtParam.bitDepth > 10 )
+  {
+    RdCost::xGetSAD8X5( rcDtParam, cost, isCalCentrePos );
+    return;
+  }
+
+  if( isCalCentrePos )
+  {
+    xGetSADX5_8xN_neon_impl<true>( rcDtParam, cost );
+  }
+  else
+  {
+    xGetSADX5_8xN_neon_impl<false>( rcDtParam, cost );
+  }
+}
+
 template<bool isCalCentrePos>
 void xGetSADX5_16xN_neon_impl( const DistParam& rcDtParam, Distortion* cost )
 {
@@ -1601,6 +1671,7 @@ Distortion fixWeightedSSE_neon( const DistParam& rcDtParam, uint32_t fixedPTweig
 template<>
 void RdCost::_initRdCostARM<NEON>()
 {
+  m_afpDistortFuncX5[0] = xGetSADX5_8xN_neon;
   m_afpDistortFuncX5[1] = xGetSADX5_16xN_neon;
 
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_neon;
