@@ -48,6 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "PreProcess.h"
 #include "BitAllocation.h"
+#include "CommonLib/RdCost.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -125,6 +126,11 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
       if( m_encCfg->m_fga )
       {
         xDetectFgaSceneCut( pic );
+      }
+
+      if( m_encCfg->m_psyRdStrengthVal > 0 )
+      {
+        xGetPsyStableShare( pic, picList );
       }
 
       // slice type adaptation
@@ -531,6 +537,58 @@ void PreProcess::xDisableTempDown( Picture* pic, const PicList& picList, const i
 #pragma GCC diagnostic ignored "-Wstrict-overflow"
 #endif
 
+
+// psy-rd's lost-grain term must act on grain only. Grain changes from picture to picture also where nothing moves;
+// the fine band of animation, graphics and repeated pictures does not. Over a grid of 8x8 luma blocks whose fine band is
+// not empty, a block is stable when the band of its difference to a neighbouring source picture is under half its own
+// band. The share of stable blocks, the larger of the shares against the previous and the next picture (a scene's first
+// picture differs from the previous one whatever the content), goes with the picture (Picture::psyStableShare;
+// RdCost::buildPsyOrgEnergies turns it into the term's weight). The next picture usually arrives after this one was
+// processed, so each picture also raises the share of the picture before it, which the encoder reads later (the
+// tune's look-ahead keeps it back for a GOP). No neighbour at all: 0.
+static float psyStableShare( const CPelBuf& cur, const CPelBuf& ref, int shift )
+{
+  const int     step    = 32;                          // one 8x8 block per 32x32 samples
+  const int64_t minBand = int64_t( 2 * 8 ) << shift;   // band energy 2 in the units of RdCost's tables: not an empty block
+  int numBlocks = 0, numStable = 0;
+  Pel diff[64];
+  for( int y = 0; y + 8 <= int( cur.height ); y += step )
+    for( int x = 0; x + 8 <= int( cur.width ); x += step )
+    {
+      const Pel*    a    = cur.bufAt( x, y );
+      const Pel*    b    = ref.bufAt( x, y );
+      const int64_t band = RdCost::xPsyBandL1( a, cur.stride, 8 );
+      if( band < minBand )
+      {
+        continue;
+      }
+      for( int j = 0; j < 8; j++ )
+        for( int i = 0; i < 8; i++ )
+          diff[j * 8 + i] = Pel( a[j * cur.stride + i] - b[j * ref.stride + i] );
+      numBlocks++;
+      numStable += 2 * RdCost::xPsyBandL1( diff, 8, 8 ) < band;
+    }
+  return numBlocks ? float( numStable ) / float( numBlocks ) : 0.f;
+}
+
+void PreProcess::xGetPsyStableShare( Picture* pic, const PicList& picList ) const
+{
+  const int shift = m_encCfg->m_internalBitDepth[CH_L] - 8;
+  float     share = 0.f;
+  for( const Picture* p : picList )
+  {
+    if( p->poc == pic->poc - 1 || p->poc == pic->poc + 1 )
+    {
+      share = std::max( share, psyStableShare( pic->getOrigBuf( COMP_Y ), p->getOrigBuf( COMP_Y ), shift ) );
+    }
+    if( p->poc == pic->poc - 1 )
+    {
+      float& before = p->m_picShared->m_psyStableShare;
+      before = std::max( before, psyStableShare( p->getOrigBuf( COMP_Y ), pic->getOrigBuf( COMP_Y ), shift ) );
+    }
+  }
+  pic->m_picShared->m_psyStableShare = std::max( pic->m_picShared->m_psyStableShare, share );
+}
 
 void PreProcess::xDetectScc( Picture* pic ) const
 {

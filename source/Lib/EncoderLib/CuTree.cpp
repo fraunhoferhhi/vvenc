@@ -76,6 +76,14 @@ static constexpr int LOWRES_PAD   = 32;
 // Cap of log2( 1 + alpha ) for CuTreePicStrength's picture offsets, i.e. at most -8 * strength QP. The key pictures
 // that most of the look-ahead copies from reach about 7.
 static constexpr double MAX_LOG2_PIC_DEP = 8.0;
+// With FlatInterQP, CuTreePicStrength only lowers the flat QP of pictures whose log2( 1 + alpha ) exceeds this dead
+// zone, by strength * ( log2( 1 + alpha ) - dead zone ). Film grain's key pictures reach 1.0 to 3.6 (nocturne, gangster,
+// wrath, crowd_run at the grain tune's rates; wrath's I picture up to 4.3 at low rates) and gain nothing from a finer QP:
+// they would pulse against the flat inter pictures; clean or static content reaches 4.2 to 5.5 (detective_conan,
+// big_buck_bunny, baseball, old_town). At strength 2 (preset fast, equal size against the flat QPs): detective_conan
+// +1.1 dB luma PSNR at an equal picture-to-picture swing, big_buck_bunny +0.3 dB; 10 of the 15 test clips keep the flat
+// QPs. A dead zone of 3 gains more on clean content but pulses (baseball: twice the swing).
+static constexpr double FLAT_PIC_DEAD_ZONE = 4.0;
 // CuTreePicStrength's noise floor: a picture MCTF does not filter is coded no finer than where the quantiser step is
 // this many sigmas of the noise MCTF removes from the temporal-layer-2 pictures (the RMS of the filter's change, not the
 // true noise; it grows with the filter strength). Below it the bits of grainy pictures explode for little gain: the
@@ -1397,11 +1405,12 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
   {
     // picture smaller than one analysis block, or not analysed: with CuTreePicStrength, which codes from the coding QP
     // (EncSlice::xGetQPForPicture), code it at the QP cascade's QP for the configured QP (without MCTF's picture
-    // offset)
+    // offset); with FlatInterQP the picture QP already is the flat level, so no offset
     if( m_encCfg->m_cuTreePicScale > 0.0 )
     {
       const GOPEntry& gopEntry = *pic->gopEntry;
-      picShared->m_picAuxQpOffset = EncSlice::getCascadeQP( *m_encCfg, gopEntry, gopEntry.m_sliceType == 'I', m_encCfg->m_configuredQP, m_qpBDOffset ) - m_encCfg->m_QP;
+      picShared->m_picAuxQpOffset = m_encCfg->m_flatInterQP ? 0
+        : EncSlice::getCascadeQP( *m_encCfg, gopEntry, gopEntry.m_sliceType == 'I', m_encCfg->m_configuredQP, m_qpBDOffset ) - m_encCfg->m_QP;
     }
     return;
   }
@@ -1417,7 +1426,9 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
   const double alphaPic = picDep / std::max( picDist, 1.0 );
   if( m_encCfg->m_cuTreePicScale > 0.0 )
   {
-    const int tplOffset = int( std::lround( -m_encCfg->m_cuTreePicScale * std::min( MAX_LOG2_PIC_DEP, std::log2( 1.0 + alphaPic ) ) ) );
+    const double picDepLog2 = std::min( MAX_LOG2_PIC_DEP, std::log2( 1.0 + alphaPic ) );
+    const double deadZone   = m_encCfg->m_flatInterQP ? FLAT_PIC_DEAD_ZONE : 0.0;
+    const int    tplOffset  = int( std::lround( -m_encCfg->m_cuTreePicScale * std::max( 0.0, picDepLog2 - deadZone ) ) );
     picShared->m_picAuxQpOffset = tplOffset;
     // only at a change of content: elsewhere the model's coarser I picture is right, as little of it carries over; and
     // not on the sequence's last picture, as nothing predicts from it later

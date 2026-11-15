@@ -79,6 +79,7 @@ EncRCSeq::EncRCSeq()
   lastIntraQP         = 0;
   lastIntraSM         = 0.0;
   scRelax             = false;
+  flatInterQP         = false;
   bitDepth            = 0;
 }
 
@@ -193,7 +194,8 @@ void EncRCPic::clipTargetQP (std::list<std::shared_ptr<EncRCPic>>& listPreviousP
     }
     if ((*it)->frameLevel == frameLevel - 1 && (*it)->picQP >= 0) // last temporal level
     {
-      lastPrevTLQP = (frameLevel == 1 ? ((*it)->picQP * 3) >> 2 : std::max<int> (encRCSeq->lastIntraQP, (*it)->picQP));
+      // FlatInterQP codes every inter picture at one QP: no level is held above the I picture's QP
+      lastPrevTLQP = (frameLevel == 1 ? ((*it)->picQP * 3) >> 2 : (encRCSeq->flatInterQP ? (*it)->picQP : std::max<int> (encRCSeq->lastIntraQP, (*it)->picQP)));
     }
     if ((*it)->frameLevel == 1 && frameLevel == 0 && refreshParams && lastCurrTLQP < 0)
     {
@@ -221,9 +223,9 @@ void EncRCPic::clipTargetQP (std::list<std::shared_ptr<EncRCPic>>& listPreviousP
 
     qp = Clip3 (lastCurrTLQP - clipRange, std::min (MAX_QP, lastCurrTLQP + (refreshParams ? (refrIncrFac * clipRange) >> 1 : clipRange)), qp);
   }
-  if (lastPrevTLQP >= 0) // prevent QP from being lower than QPs at lower temporal level
+  if (lastPrevTLQP >= 0) // prevent QP from being lower than QPs at lower temporal level (FlatInterQP: equal is allowed)
   {
-    qp = Clip3 (std::min (MAX_QP, lastPrevTLQP + 1), MAX_QP, qp);
+    qp = Clip3 (std::min (MAX_QP, lastPrevTLQP + (encRCSeq->flatInterQP && frameLevel >= 2 ? 0 : 1)), MAX_QP, qp);
   }
   else if (encRCSeq->lastIntraQP >= -1 && (frameLevel == 1 || frameLevel == 2))
   {
@@ -325,6 +327,7 @@ void RateCtrl::init( const VVEncCfg& encCfg )
   encRCSeq = new EncRCSeq;
   encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead == 1, m_pcEncCfg->m_RCTargetBitrate, m_pcEncCfg->m_RCMaxBitrate, (double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale,
                     m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
+  encRCSeq->flatInterQP = m_pcEncCfg->m_flatInterQP;
 }
 
 int RateCtrl::getBaseQP()

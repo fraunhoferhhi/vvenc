@@ -64,6 +64,7 @@ public:
   GOPEntry         m_gopEntry;
   PicVisAct        m_picVA;
   bool             m_isSccWeak;
+  float            m_psyStableShare = 0.f;   // psy-rd: see PreProcess::xGetPsyStableShare
   bool             m_isSccStrong;
   bool             m_forceSCC;
   int              m_picMemorySTA;
@@ -166,6 +167,7 @@ public:
     m_isSccStrong  = false;
     m_forceSCC     = false;
     m_picMemorySTA = 0;
+    m_psyStableShare = 0.f;
     m_cts          = yuvInBuf->cts;
     m_poc          = poc;
     m_refCount     = 0;
@@ -194,6 +196,7 @@ public:
     pic->linkSharedBuffers( &m_origBuf, &m_filteredBuf, prevOrigBufs, this );
     pic->picVA          = m_picVA;
     pic->isSccWeak      = m_isSccWeak;
+    pic->psyStableShare = m_psyStableShare;
     pic->isSccStrong    = m_isSccStrong;
     pic->picMemorySTA   = m_picMemorySTA;
     pic->poc            = m_poc;

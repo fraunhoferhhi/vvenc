@@ -110,6 +110,10 @@ struct VVEncCfg : public vvenc_config
   int       m_configuredQP;     // the QP as configured; m_QP is the coding QP (getCodingQp)
   double    m_QPFraction;       // m_QPFraction in QP units (0 <= value < 1)
   double    m_fgaStrength;      // Film grain strength as the fraction of the analysed strength (0 <= value <  4)
+  double    m_psyRdStrength;    // psy-rd's strength in the RD cost, decoded from the multiplier m_psyRdStrengthVal (0: off)
+  double    psyRdStrength( double pictureScale ) const;   // the same for a picture whose strength is scaled (EncSlice::getPsyRdStrength)
+  double    psyRdoqStrength( double pictureScale ) const;   // psy-rdoq's (EncSlice::getPsyRdoqStrength)
+  double    m_psyRdoqStrength;  // psy-rdoq's strength in DepQuant, decoded from the multiplier m_psyRdoqStrengthVal (0: off)
 
 
 private:

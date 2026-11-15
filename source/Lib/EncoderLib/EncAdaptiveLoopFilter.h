@@ -403,7 +403,7 @@ private:
   std::vector<int>       m_apsIdsChroma;
   std::vector<int>       m_apsIdsCcAlf[2];
   uint8_t                m_mapFilterIdxToFilterIdc[MAX_NUM_CC_ALF_FILTERS + 1];
-  int                    m_newApsIdLuma;
+  int                    m_newApsIdLuma;   // the APS id for a new filter set of this picture (with CCALFOnly: the CCALF one)
   double                 m_lambdaChromaWeight;
 
   int m_apsIdCcAlfStart[2];
@@ -459,6 +459,7 @@ public:
   void initDerivation               ( Slice& slice );
   void resetFrameStats              ( bool ccAlfEnabled );
   bool isSkipAlfForFrame            ( const Picture& pic ) const;
+  bool isCcAlfOnly                  ( const Picture& pic ) const;
   int  getAsuHeightInCtus           () { return m_numCtusInAsuHeight; }
 
   void ( *m_getPreBlkStatsAccum )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
@@ -479,6 +480,7 @@ public:
                                      const Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16], const Pel yLocal[2][4][4] );
 
                                            private:
+  void xSetCcAlfOnlySlice           ( CodingStructure& cs );
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
   void initEncAdaptiveLoopFilter_X86();
   template<X86_VEXT vext>

@@ -97,7 +97,8 @@ public:
              const bool scalingListsEnabled,
              const bool bEnc,
              const int  thrValue,
-             const bool keepHighBand
+             const bool keepHighBand,
+             const double levelLambdaScale
            );
 
 public:
@@ -118,6 +119,8 @@ public:
   void   scaleLambda ( const double scale)                    { m_quant->scaleLambda(scale);}
 
   DepQuant* getQuant ()                                       { return m_quant; }
+  // quantises once more, without psy-rdoq, the luma coefficients the last transformNxN call (same loadTr) transformed
+  void requantLumaWithoutPsyRdoq( TransformUnit& tu, const QpParam& cQP, TCoeff& uiAbsSum, const Ctx& ctx, const bool loadTr );
 
   // joint Cb-Cr residual transforms, indexed by the ICT mode -3..3 (public for the unit test)
   static const int maxAbsIctMode = 3;

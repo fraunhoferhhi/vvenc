@@ -4227,6 +4227,144 @@ static bool check_bvBitsLineIBC( RdCost* ref, RdCost* opt, unsigned num_cases )
   return true;
 }
 
+// psy-rd's n x n Walsh-Hadamard fine-band kernels (n = 8 or 4). Besides random 10-bit samples: the unclipped prediction +
+// residual sums the transform decisions pass (-1023 ... 2046, here the whole signed 12-bit range), any int16 value (the
+// 4x4 kernel gets the int16-wrapped sums of the C path), a flat block (all AC 0), the largest sample everywhere and a
+// 0 / 1023 checkerboard (all energy in one AC coefficient, inside the band).
+static bool check_psyBand( RdCost* ref, RdCost* opt, int n, unsigned num_cases )
+{
+  const std::string name = n == 8 ? "RdCost::m_psyBand8x8" : "RdCost::m_psyBand4x4";
+  printf( "Testing %s\n", name.c_str() );
+  auto kernel = [n]( RdCost* rdCost ) { return n == 8 ? rdCost->m_psyBand8x8 : rdCost->m_psyBand4x4; };
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+  InputGenerator<Pel> g12{ 12, /*is_signed=*/true };
+  auto                any16 = []() { return Pel( ( rand() << 8 ) ^ rand() ); };   // any int16 value (RAND_MAX may be only 2^15 - 1)
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases + 3; i++ )
+  {
+    const int        stride = rng.get( n, 64 );
+    std::vector<Pel> buf( stride * n );
+    if( i < num_cases )
+    {
+      if( i % 3 == 2 )
+        std::generate( buf.begin(), buf.end(), any16 );
+      else
+        std::generate( buf.begin(), buf.end(), i & 1 ? g12 : g10 );
+    }
+    else
+    {
+      for( int y = 0; y < n; y++ )
+        for( int x = 0; x < stride; x++ )
+          buf[y * stride + x] = i == num_cases ? 512 : i == num_cases + 1 ? 1023 : ( ( x + y ) & 1 ) * 1023;
+    }
+    passed = compare_value( name, kernel( ref )( buf.data(), stride ), kernel( opt )( buf.data(), stride ) ) && passed;
+  }
+  return passed;
+}
+
+// psy-rd's group sums of an 8x8 block: a 10-bit block alone, with an 11-bit signed residual, and with any 16-bit second
+// block (the sum then wraps as Pel in every version)
+static bool check_psyGroupSums( RdCost* ref, RdCost* opt, int n, unsigned num_cases )
+{
+  const std::string name      = n == 8 ? "RdCost::m_psyGroupSums8x8" : "RdCost::m_psyGroupSums4x4";
+  const int         numGroups = n == 8 ? PSY_NUM_GROUPS : PSY_NUM_GROUPS_4x4;
+  const auto        refFunc   = n == 8 ? ref->m_psyGroupSums8x8 : ref->m_psyGroupSums4x4;
+  const auto        optFunc   = n == 8 ? opt->m_psyGroupSums8x8 : opt->m_psyGroupSums4x4;
+  printf( "Testing %s\n", name.c_str() );
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+  InputGenerator<Pel> g11{ 11, /*is_signed=*/true };
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int        strideA = rng.get( n, 64 ), strideB = rng.get( n, 64 );
+    std::vector<Pel> a( strideA * n ), b( strideB * n );
+    std::generate( a.begin(), a.end(), g10 );
+    if( i % 3 == 2 )
+    {
+      std::generate( b.begin(), b.end(), []() { return Pel( ( rand() << 8 ) ^ rand() ); } );
+    }
+    else
+    {
+      std::generate( b.begin(), b.end(), g11 );
+    }
+    const Pel* bPtr = ( i % 3 ) ? b.data() : nullptr;
+    int64_t    sumsRef[PSY_NUM_GROUPS], sumsOpt[PSY_NUM_GROUPS];
+    refFunc( a.data(), strideA, bPtr, strideB, sumsRef );
+    optFunc( a.data(), strideA, bPtr, strideB, sumsOpt );
+    for( int g = 0; g < numGroups; g++ )
+    {
+      passed = compare_value( name, sumsRef[g], sumsOpt[g] ) && passed;
+    }
+
+    // the grouped difference of the same block against random source sums of the size of a random 10-bit block's
+    // (the differences take both signs), in a table exactly as long as the block's groups (no read past its end)
+    std::vector<int32_t> orgGroups( numGroups );
+    std::generate( orgGroups.begin(), orgGroups.end(), []() { return int32_t( rand() % 32768 ); } );
+    const auto diffRef = n == 8 ? ref->m_psyGroupDiff8x8 : ref->m_psyGroupDiff4x4;
+    const auto diffOpt = n == 8 ? opt->m_psyGroupDiff8x8 : opt->m_psyGroupDiff4x4;
+    int64_t    recL1Ref, recL1Opt;
+    passed = compare_value( name + " diff", diffRef( a.data(), strideA, bPtr, strideB, orgGroups.data(), &recL1Ref ),
+                            diffOpt( a.data(), strideA, bPtr, strideB, orgGroups.data(), &recL1Opt ) ) && passed;
+    passed = compare_value( name + " band L1", recL1Ref, recL1Opt ) && passed;
+  }
+  return passed;
+}
+
+// psy-rd's picture tables from 4x4 transforms: the group sums of the 8x8 and 4x4 blocks of a 12x8 source area (two
+// rows of three 4x4 blocks: an odd count) through the tile kernels against the direct group sums of the C version
+static bool check_psyTiles( RdCost* ref, RdCost* opt, unsigned num_cases )
+{
+  printf( "Testing RdCost::m_psyTransform4x4Tiles, m_psyTileGroupSums4x4, m_psyTileGroupSums8x8\n" );
+  DimensionGenerator  rng;
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+  bool                passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int        stride = rng.get( 12, 64 );
+    std::vector<Pel> src( stride * 8 );
+    std::generate( src.begin(), src.end(), g10 );
+    int32_t tilesRef[2][3 * 16], tilesOpt[2][3 * 16];
+    for( int row = 0; row < 2; row++ )
+    {
+      ref->m_psyTransform4x4Tiles( src.data() + 4 * row * stride, stride, 3, tilesRef[row] );
+      opt->m_psyTransform4x4Tiles( src.data() + 4 * row * stride, stride, 3, tilesOpt[row] );
+      for( int c = 0; c < 3 * 16; c++ )
+      {
+        passed = compare_value( "RdCost::m_psyTransform4x4Tiles", tilesRef[row][c], tilesOpt[row][c] ) && passed;
+      }
+      for( int t = 0; t < 3; t++ )
+      {
+        int64_t direct[PSY_NUM_GROUPS_4x4];
+        int32_t sums[PSY_NUM_GROUPS_4x4];
+        ref->m_psyGroupSums4x4( src.data() + 4 * row * stride + 4 * t, stride, nullptr, 0, direct );
+        opt->m_psyTileGroupSums4x4( tilesOpt[row] + 16 * t, sums );
+        for( int g = 0; g < PSY_NUM_GROUPS_4x4; g++ )
+        {
+          passed = compare_value( "RdCost::m_psyTileGroupSums4x4", direct[g], int64_t( sums[g] ) ) && passed;
+        }
+      }
+    }
+    for( int t = 0; t < 2; t++ )
+    {
+      int64_t direct[PSY_NUM_GROUPS];
+      int32_t sums[PSY_NUM_GROUPS];
+      ref->m_psyGroupSums8x8( src.data() + 4 * t, stride, nullptr, 0, direct );
+      opt->m_psyTileGroupSums8x8( tilesOpt[0] + 16 * t, tilesOpt[0] + 16 * ( t + 1 ), tilesOpt[1] + 16 * t, tilesOpt[1] + 16 * ( t + 1 ), sums );
+      for( int g = 0; g < PSY_NUM_GROUPS; g++ )
+      {
+        passed = compare_value( "RdCost::m_psyTileGroupSums8x8", direct[g], int64_t( sums[g] ) ) && passed;
+      }
+    }
+  }
+  return passed;
+}
+
 static bool test_RdCost()
 {
   RdCost ref;
@@ -4237,6 +4375,12 @@ static bool test_RdCost()
   unsigned num_cases = NUM_CASES;
   bool passed = true;
   passed = check_bvBitsLineIBC( &ref, &opt, 10 * num_cases ) && passed;
+  for( int n : { 8, 4 } )
+  {
+    passed = check_psyGroupSums( &ref, &opt, n, 10 * num_cases ) && passed;
+    passed = check_psyBand( &ref, &opt, n, 10 * num_cases ) && passed;
+  }
+  passed = check_psyTiles( &ref, &opt, 10 * num_cases ) && passed;
   std::array<int, 8> widths = { 1, 2, 4, 8, 16, 32, 64, 128 };
   std::array<int, 7> heights = { 2, 4, 8, 16, 32, 64, 128 };
 

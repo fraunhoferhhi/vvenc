@@ -272,17 +272,20 @@ namespace DQIntern
     int64_t           m_DistAdd;
     int64_t           m_DistStepAdd;
     int64_t           m_DistOrgFact;
+    // psy-rdoq (I-slice luma, see Quantizer::usesPsyRdoq): the block's distortion credit per qIdx unit (0: off)
+    int64_t           m_psyBonus = 0;
   };
 
   // The memo of Quantizer::initQuantBlock with no gValue. With the transform skip path excluded, the result depends
-  // only on the channel type, the block size, QP and lambda, and on values fixed for the sequence, and those four rarely
-  // change from one block of a size to the next. Log2( width ) + Log2( height ) is enough for the size: it gives the transform
-  // shift and whether the sqrt(2) adjustment applies.
+  // only on the channel type, the block size, QP, lambda and the psy-rdoq strength acting on the block, and on values
+  // fixed for the sequence, and those five rarely change from one block of a size to the next. Log2( width ) +
+  // Log2( height ) is enough for the size: it gives the transform shift and whether the sqrt(2) adjustment applies.
   struct QuantBlockMemo
   {
     struct Entry
     {
       double           lambda = 0;
+      double           psyRdoqStrength = 0;   // 0 where psy-rdoq does not act on the block
       int              qpDQ   = std::numeric_limits<int>::min();
       QuantBlockParams params;
     };
@@ -326,9 +329,15 @@ namespace DQIntern
       m_DistStepAdd = weight.stepAdd;
       m_DistOrgFact = weight.orgFact;
     }
+    void   setPsyRdoqStrength( double strength ) { m_psyRdoqStrength = strength; }
+    double getPsyRdoqStrength() const { return m_psyRdoqStrength; }
+    bool   usesPsyRdoq     ( const TransformUnit& tu, const ComponentID compID ) const;
+    // psy-rdoq's distortion credit of a level qIdx (in qIdx units) at a source amplitude of org16 / 16 qIdx units
+    int64_t psyCredit      ( int64_t qIdx, int64_t org16 ) const { return ( m_psyBonus * std::min<int64_t>( qIdx << 4, org16 ) ) >> 4; }
 
-    // quantization
     int               m_DqThrVal;
+    // psy-rdoq's strength (0: off); where it acts, see usesPsyRdoq
+    double            m_psyRdoqStrength = 0.0;
   };
 
 #define RICEMAX 32
@@ -518,6 +527,11 @@ public:
   virtual void dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const ComponentID compID, const QpParam& cQP );
   
   virtual void init   ( int rdoq = 0, bool useRDOQTS = false, int dqThrVal = 8, bool keepHighBand = false );
+  // LevelLambda: the scale of the lambda in the luma level decisions
+  void setLevelLambdaScale( double scale ) { m_levelLambdaScale = scale; }
+  // psy-rdoq strength (0: off), see DQIntern::Quantizer::usesPsyRdoq
+  void setPsyRdoqStrength ( double strength ) { m_quant.setPsyRdoqStrength( strength ); }
+  double getPsyRdoqStrength() const { return m_quant.getPsyRdoqStrength(); }
 
 private:
   void    xQuantDQ          ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff );
@@ -529,7 +543,6 @@ private:
   std::shared_ptr<DQIntern::Rom>
                       m_scansRom;
   DQIntern::Quantizer m_quant;
-  bool                m_keepHighBand = false;
 
   DQIntern::Decisions m_trellis[MAX_TB_SIZEY * MAX_TB_SIZEY][2];
   DQIntern::StateMem  m_state_curr;
@@ -537,6 +550,8 @@ private:
   DQIntern::RateTablesMemo m_rateTablesMemo;   // after the trellis and state arrays: see RateTablesMemo
   DQIntern::QuantBlockMemo m_quantBlockMemo;
   int                 m_firstScanIdx = 0;   // the scan position the current block's trellis starts at
+  double              m_levelLambdaScale = 1.0;
+  bool                m_keepHighBand = false;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   void initDepQuantX86();

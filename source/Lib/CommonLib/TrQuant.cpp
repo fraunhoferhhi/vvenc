@@ -311,7 +311,8 @@ void TrQuant::init( const Quant* otherQuant,
                     const bool scalingListsEnabled,
                     const bool bEnc,
                     const int  thrVal,
-                    const bool keepHighBand
+                    const bool keepHighBand,
+                    const double levelLambdaScale
 )
 {
   m_bEnc = bEnc;
@@ -322,6 +323,7 @@ void TrQuant::init( const Quant* otherQuant,
   m_quant = new(std::nothrow) DepQuant( otherQuant, bEnc, scalingListsEnabled );
   CHECK( !m_quant, "allocation failed" );
   m_quant->init( rdoq, bUseRDOQTS, thrVal, keepHighBand );
+  m_quant->setLevelLambdaScale( levelLambdaScale );
 }
 
 
@@ -830,6 +832,18 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
 
   // set coded block flag (CBF)
   TU::setCbfAtDepth (tu, compID, tu.depth, uiAbsSum > 0);
+}
+
+void TrQuant::requantLumaWithoutPsyRdoq( TransformUnit& tu, const QpParam& cQP, TCoeff& uiAbsSum, const Ctx& ctx, const bool loadTr )
+{
+  const CompArea& rect = tu.blocks[COMP_Y];
+  CoeffBuf tempCoeff( loadTr ? m_mtsCoeffs[tu.mtsIdx[COMP_Y]] : m_plTempCoeff, rect );   // as transformNxN left it
+  const double strength = m_quant->getPsyRdoqStrength();
+  m_quant->setPsyRdoqStrength( 0.0 );
+  uiAbsSum = 0;
+  xQuant( tu, COMP_Y, tempCoeff, uiAbsSum, cQP, ctx );
+  m_quant->setPsyRdoqStrength( strength );
+  TU::setCbfAtDepth( tu, COMP_Y, tu.depth, uiAbsSum > 0 );
 }
 
 void TrQuant::keepPrimaryCoeffs( const bool keep )

@@ -148,6 +148,38 @@ struct LostGrainSpectrum
 
 struct Picture : public UnitArea
 {
+  // psy-rd: the source's luma texture energies of the 8x8 [0] and 4x4 [1] blocks at every 4-sample grid position
+  // (psyGridW per row), built by RdCost::buildPsyOrgEnergies before the picture's CTUs are coded; empty when psy is off
+  std::vector<int32_t> psyOrgEnergy[2];
+  // psy-rd: the source's group sums (RdCost.h: PSY_NUM_GROUPS per position) of the 8x8 block at every 4-sample grid position
+  std::vector<int32_t> psyOrgGroups;
+  // the same of the 4x4 block (PSY_NUM_GROUPS_4x4 per position)
+  std::vector<int32_t> psyOrgGroups4x4;
+  int                  psyGridW = 0;
+  // psy-rd: the convexity of the lost-grain term for this picture (RdCost.h: PSY_DEFICIT_CONVEXITY x its grain share)
+  double               psyDeficitConvexity = 0.0;
+  // psy-rd: how much of the lost-grain term this picture gets, 0 (no grain) to 1 (RdCost::buildPsyOrgEnergies); it
+  // also sets the picture's psy-rd and psy-rdoq strength (EncSlice::getPsyRdStrength, getPsyRdoqStrength)
+  double               psyGrainShare = 0.0;
+  // psy-rd: the source's grain level, the median of its 8x8 band energies (RdCost::buildPsyOrgEnergies; 0: no block
+  // with energy), and the factor on the picture's psy-rd and psy-rdoq strengths at medium and low rates
+  // (RdCost.h: PSY_RATE_QP_FULL; 1: whole strength)
+  double               psyGrainLevel = 0.0;
+  double               psyRateStrength = 1.0;
+  // psy-rd: the QP offset (0 or negative) the picture is coded with where the rate ramp lowers the strength
+  // (RdCost.h: PSY_RATE_QP_GAIN); the psy strengths read the picture's QP without it
+  double               psyRateQpOffset = 0.0;
+  // psy-rd: the share of the source's band energy this picture's final reconstruction lost (-1: not measured yet), and
+  // the loss the lost-grain term treats as usual while this picture is coded (from its nearest reference picture)
+  double               psyLostShare = -1.0;
+  double               psyUsualLoss = 0.0;
+  // psy-rd: the share of the source's fine-band blocks that did not change against the neighbouring source picture
+  // (PreProcess::xGetPsyStableShare): animation, graphics and repeated pictures are stable, camera grain is not
+  float                psyStableShare = 0.f;
+  // psy-rd: 1 at a 4-sample grid position (psyGridW per row) whose 16x16 tile lies within 16 samples of a source edge
+  // (RdCost::buildPsyEdgeGate); empty when psy is off
+  std::vector<uint8_t> psyEdgeGate;
+
   uint32_t margin;
   Picture();
 
@@ -280,6 +312,7 @@ public:
   int                           picInitialQP;
   double                        picInitialLambda;
   double                        picQPFraction; // fractional part of the picture QP with a fractional --qp, applied by QPA
+  double                        lambdaQP;      // the QP the slice lambda belongs to (fractional with a fractional --qp, QPA off)
   int16_t                       picMemorySTA;
   PicVisAct                     picVA;
   std::vector<LostGrainSpectrum> lostGrainSpectra[ MAX_NUM_COMP ];   // ascending mean8; from the picture's end to its SEI

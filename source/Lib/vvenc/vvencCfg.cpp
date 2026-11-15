@@ -705,6 +705,13 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_fga                                     = 0;
   c->m_fgaStrengthVal                          = VVENC_SET_FGA_STRENGTH(1.0);
 
+  c->m_psyRdStrengthVal                        = 0;
+  c->m_psyRdoqStrengthVal                      = 0;
+  c->m_flatInterQP                             = 0;
+
+  c->m_ccalfOnly                               = 0;
+  c->m_levelLambdaVal                          = VVENC_SET_LEVEL_LAMBDA(1.0);
+
   c->m_reservedInt32 = 0;
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
   memset( c->m_reservedInt8_3, 0, sizeof(c->m_reservedInt8_3) );
@@ -861,6 +868,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == VVENC_RC_OFF && ( c->m_QP < 0 || c->m_QP > vvenc::MAX_QP ), "QP exceeds supported range (0 to 63)" );
   vvenc_confirmParameter( c, c->m_QPFractionVal > 0 && c->m_QP >= vvenc::MAX_QP, "Fractional QP exceeds supported range (0 to 63)" );
+  vvenc_confirmParameter( c, c->m_flatInterQP < 0 || c->m_flatInterQP > 1, "FlatInterQP must be 0 or 1" );
+  vvenc_confirmParameter( c, c->m_flatInterQP && c->m_usePerceptQPA, "FlatInterQP needs QPA off (--qpa 0): QPA sets its own QP per temporal layer" );
+  vvenc_confirmParameter( c, c->m_ccalfOnly < 0 || c->m_ccalfOnly > 1, "CCALFOnly must be 0 or 1" );
+  vvenc_confirmParameter( c, c->m_levelLambdaVal == 0, "LevelLambda must be above 0 (up to 3.98)" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
@@ -1890,6 +1901,16 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
+  vvenc_confirmParameter( c, c->m_ccalfOnly && !( c->m_alf && c->m_ccalf ), "CCALFOnly needs ALF and CCALF on (or set CCALFOnly 0)" );
+  if( c->m_ccalfOnly && c->m_internChromaFormat == VVENC_CHROMA_400 )
+  {
+    // like the other chroma tools, CCALF is off without chroma; ALF is on only for CCALF, so no ALF filter is left
+    msg.log( VVENC_WARNING, "Configuration warning: CCALFOnly without chroma (4:0:0), disabling ALF\n\n" );
+    c->m_alf       = false;
+    c->m_ccalf     = false;
+    c->m_ccalfOnly = 0;
+  }
+
   // GOP parallel processing with IFP stays off by default. Without IFP, read two GOPs ahead
   // by default where frame parallel encoding can start later GOPs early.
   if( c->m_numParallelGOPs == -1 )
@@ -2191,8 +2212,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_cuTreeBlockSize != 16 && c->m_cuTreeBlockSize != 32,                            "CuTreeBlockSize must be 16, 32 or -1 (automatic)" );
   vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && c->m_blockImportanceMapping != 1,                      "CuTreePicStrength needs the CU tree (BIM 1)" );
   vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && ( c->m_IntraPeriod == 1 || ! c->m_picReordering ),   "CuTreePicStrength needs random access (picture reordering, not all intra)" );
-  vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && ( c->m_RCTargetBitrate > 0 || ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX ) ),
-                                                                                                                  "CuTreePicStrength supports constant QP only, without rate control or a maximum rate" );
+  vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && c->m_RCTargetBitrate == 0 && c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX,
+                                                                                                                  "CuTreePicStrength is not available with a maximum rate without a target rate (capped CQF)" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
@@ -3439,6 +3460,11 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       if( c->m_cuTreePicStrength > 0 ) css << ", picture strength " << c->m_cuTreePicStrength / 32.0 << ", coded at QP " << vvenc::getCodingQp( *c );
       css << ") ";
     }
+    css << "PsyRD:" << c->m_psyRdStrengthVal / 64.0 << " ";
+    css << "PsyRDOQ:" << c->m_psyRdoqStrengthVal / 64.0 << " ";
+    css << "FlatInterQP:" << (int)c->m_flatInterQP << " ";
+    css << "CCALFOnly:" << (int)c->m_ccalfOnly << " ";
+    css << "LevelLambda:" << c->m_levelLambdaVal / 64.0 << " ";
 
     css << "\n" << loglvl << "PRE-ANALYSIS CFG: ";
     css << "STA:" << (int)c->m_sliceTypeAdapt << " ";

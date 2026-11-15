@@ -765,6 +765,30 @@ namespace DQIntern
     m_DistAdd                   = (int64_t(1) << m_DistShift) >> 1;
     m_DistStepAdd               = ((m_DistShift+m_QShift)>=64 ? (int64_t)( nomDistFactor * pow(2,m_DistShift+m_QShift) + .5 ) : (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+m_QShift)) + .5 ));
     m_DistOrgFact               = (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+1       )) + .5 );
+    m_psyBonus                  = 0;
+    if( usesPsyRdoq( tu, compID ) )
+    {
+      // psy-rdoq (as x265's psy-rdoq, which lowers a level's cost in proportion to its energy): every non-DC level is
+      // credited psi x sqrt( D1 x 2^15 ) per qIdx unit, D1 = the distortion cost of qIdx 1 at a zero coefficient; the
+      // credit stops at the source coefficient's amplitude (DepQuant::xDecide), so the grain's energy survives the
+      // quantization without levels above the source
+      const double d1 = double( ( m_DistStepAdd + m_DistAdd ) >> m_DistShift );
+      if( d1 > 0.0 )
+      {
+        m_psyBonus = (int64_t) ( m_psyRdoqStrength * std::sqrt( d1 * double( 1 << 15 ) ) + 0.5 );
+        // the zero / one crossover moves down by bonus / ( 2 D1 ) qIdx units: lower the last-position threshold with it
+        const double shiftQIdx = double( m_psyBonus ) / ( 2.0 * d1 );
+        const double thres     = double( m_thresLast ) - shiftQIdx * double( int64_t( 1 ) << ( m_QShift + 2 ) );
+        m_thresLast            = TCoeff( std::max( 1.0, thres ) );
+      }
+    }
+  }
+
+  // psy-rdoq acts on the luma of I slices only, not on transform skip: there it gives the I picture back the grain energy
+  // its inter neighbours keep (less pulsing at each I picture); in all slices it added flicker and lost top-band energy
+  bool Quantizer::usesPsyRdoq( const TransformUnit& tu, const ComponentID compID ) const
+  {
+    return m_psyRdoqStrength > 0.0 && isLuma( compID ) && tu.mtsIdx[ compID ] != MTS_SKIP && tu.cs->slice->isIntra();
   }
 
   void Quantizer::initQuantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, QuantBlockMemo& memo )
@@ -774,7 +798,10 @@ namespace DQIntern
     const int       qpDQ = cQP.Qp( false ) + 1;
     const CompArea& area = tu.blocks[compID];
     QuantBlockMemo::Entry& kept = memo.entry[toChannelType( compID )][Log2( area.width ) + Log2( area.height )];
-    if( kept.qpDQ == qpDQ && kept.lambda == lambda )
+    // psy-rdoq changes the parameters where it acts (I-slice luma), and its strength changes from picture to picture
+    // and within a block (TrQuant::requantLumaWithoutPsyRdoq)
+    const double psyRdoqStrength = usesPsyRdoq( tu, compID ) ? m_psyRdoqStrength : 0.0;
+    if( kept.qpDQ == qpDQ && kept.lambda == lambda && kept.psyRdoqStrength == psyRdoqStrength )
     {
       static_cast<QuantBlockParams&>( *this ) = kept.params;
       return;
@@ -783,6 +810,7 @@ namespace DQIntern
     m_thresDefault = TCoeff( m_thresLast / ( TCoeff( m_QScale ) << 2 ) );
     kept.qpDQ      = qpDQ;
     kept.lambda    = lambda;
+    kept.psyRdoqStrength = psyRdoqStrength;
     kept.params    = *this;
   }
 
@@ -1546,6 +1574,12 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
     int64_t pq_a_dist = ( ( scaledAdd + 0 * m_quant.m_DistStepAdd ) * 1 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
     int64_t pq_b_dist = ( ( scaledAdd + 1 * m_quant.m_DistStepAdd ) * 2 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
     /// stop inline prequant
+    if( m_quant.m_psyBonus && scanInfo.rasterPos )   // psy-rdoq (Quantizer::initQuantBlock), not on DC
+    {
+      const int64_t org16 = scaledOrg >> ( m_quant.m_QShift - 4 );   // the source amplitude in 1/16 qIdx units
+      pq_a_dist -= m_quant.psyCredit( 1, org16 );
+      pq_b_dist -= m_quant.psyCredit( 2, org16 );
+    }
 
     if( prev.anyRemRegBinsLt4 )
     {
@@ -1602,6 +1636,14 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
     pq_d.deltaDist = ( ( scaledAdd + 3 * m_quant.m_DistStepAdd ) * ( qIdx + 3 ) + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
     pq_d.absLevel = ( qIdx + 4 ) >> 1;
     /// stop inline prequant
+    if( m_quant.m_psyBonus && scanInfo.rasterPos )   // psy-rdoq (Quantizer::initQuantBlock), not on DC
+    {
+      const int64_t org16 = scaledOrg >> ( m_quant.m_QShift - 4 );   // the source amplitude in 1/16 qIdx units
+      pq_a.deltaDist -= m_quant.psyCredit( qIdx + 0, org16 );
+      pq_b.deltaDist -= m_quant.psyCredit( qIdx + 1, org16 );
+      pq_c.deltaDist -= m_quant.psyCredit( qIdx + 2, org16 );
+      pq_d.deltaDist -= m_quant.psyCredit( qIdx + 3, org16 );
+    }
 
     bool cff02ge4 = pqData[0].absLevel >= 4/* || pqData[2].absLevel >= 4 */;
     bool cff13ge4 = /* pqData[1].absLevel >= 4 || */ pqData[3].absLevel >= 4;
@@ -1727,7 +1769,9 @@ DepQuant::~DepQuant()
 
 void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff& uiAbsSum, const QpParam& cQP, const Ctx& ctx )
 {
-  if( tu.cs->picture->useSelectiveRdoq && !xNeedRDOQ( tu, compID, pSrc, cQP ) )
+  // selective RDOQ zeroes a block whose coefficients all lie below the plain dead zone; psy-rdoq's credit can keep such
+  // coefficients, so its blocks always go through the quantizer
+  if( tu.cs->picture->useSelectiveRdoq && !m_quant.usesPsyRdoq( tu, compID ) && !xNeedRDOQ( tu, compID, pSrc, cQP ) )
   {
     tu.lastPos[compID] = -1;
     uiAbsSum           =  0;
@@ -1754,7 +1798,11 @@ void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffB
       enableScalingLists                = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
       quantCoeff                        = Quant::getQuantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight);
     }
-    xQuantDQ( tu, pSrc, compID, cQP, Quant::m_dLambda, ctx, uiAbsSum, enableScalingLists, quantCoeff );
+    // LevelLambda scales the lambda of the luma level decisions only: below 1.0 a small coefficient survives more often
+    // (a smaller deadzone, as x264's --tune grain lowers its trellis deadzones); mode decisions, chroma and transform
+    // skip (RDOQ) keep theirs
+    const double dqLambda = isLuma( compID ) ? Quant::m_dLambda * m_levelLambdaScale : Quant::m_dLambda;
+    xQuantDQ( tu, pSrc, compID, cQP, dqLambda, ctx, uiAbsSum, enableScalingLists, quantCoeff );
   }
   else
   {

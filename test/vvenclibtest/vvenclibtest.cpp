@@ -357,8 +357,7 @@ int testLibParameterRanges()
   vvencParams = savedParams;
   vvencParams.m_blockImportanceMapping = 1;
   vvencParams.m_RCTargetBitrate        = 1000000;
-  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
-  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0, picStrength } );
   vvencParams = savedParams;
   vvencParams.m_blockImportanceMapping = 1;
   vvencParams.m_RCMaxBitrate           = 2000000;

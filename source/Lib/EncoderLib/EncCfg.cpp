@@ -60,6 +60,8 @@ VVEncCfg::VVEncCfg()
   , m_configuredQP( 0 )
   , m_QPFraction( 0.0 )
   , m_fgaStrength( 0.0 )
+  , m_psyRdStrength( 0.0 )
+  , m_psyRdoqStrength( 0.0 )
 {
   m_fg.m_fgcSEIEnabled = false;
   m_fg.m_fgcSEICompModelPresent[0] = false;
@@ -111,10 +113,29 @@ static unsigned getMaxTlVal( unsigned perTlVal )
   return maxVal;
 }
 
+// The strengths behind the psy multipliers' 1.0 (--Tune grain): psy-rd's weight of the energy change against sqrt(lambda)
+// x SSE units, and psy-rdoq's level credit, 0.3 of it, the values the tune was measured with.
+static constexpr double PSY_RD_UNIT   = 20.0;
+static constexpr double PSY_RDOQ_UNIT = 0.3 * PSY_RD_UNIT;
+
 int getCodingQp( const vvenc_config& c )
 {
-  const int offset = c.m_cuTreePicStrength > 0 ? int( 3.0 + 2.0 * c.m_cuTreePicStrength / 32.0 + 0.5 ) : 0;
+  // the picture QPs from the dependency model replace the QP cascade and lower the referenced pictures' QPs: code from
+  // a higher QP to keep about the cascade's rate; with FlatInterQP they only lower the flat levels, which keep their own
+  // offset (EncSlice::getCascadeQP)
+  const int offset = c.m_cuTreePicStrength > 0 && ! c.m_flatInterQP ? int( 3.0 + 2.0 * c.m_cuTreePicStrength / 32.0 + 0.5 ) : 0;
   return std::min( c.m_QP + offset, MAX_QP );
+}
+
+// ( multiplier x scale ) first: a scale that gives a multiplier --PsyRD can take gives exactly that option's strength
+double VVEncCfg::psyRdStrength( double pictureScale ) const
+{
+  return PSY_RD_UNIT * ( m_psyRdStrengthVal * pictureScale ) / 64.0;
+}
+
+double VVEncCfg::psyRdoqStrength( double pictureScale ) const
+{
+  return PSY_RDOQ_UNIT * ( m_psyRdoqStrengthVal * pictureScale ) / 64.0;
 }
 
 void VVEncCfg::xInitCfgMembers()
@@ -127,6 +148,8 @@ void VVEncCfg::xInitCfgMembers()
   m_bimCtuSize          = m_CTUSize;
   m_QPFraction          = m_QPFractionVal / 256.0;
   m_fgaStrength         = m_fgaStrengthVal / 64.0;
+  m_psyRdStrength       = psyRdStrength( 1.0 );
+  m_psyRdoqStrength     = psyRdoqStrength( 1.0 );
   m_MaxQT[0]            =
   m_MaxQT[1]            = 
   m_MaxQT[2]            = m_CTUSize;
