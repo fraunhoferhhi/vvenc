@@ -8385,6 +8385,9 @@ static bool test_CuTree()
 #if defined( TARGET_SIMD_X86 )
   cuTree.initCuTree_X86();
 #endif
+#if defined( TARGET_SIMD_ARM )
+  cuTree.initCuTreeARM();
+#endif
   unsigned num_cases = NUM_CASES;
   bool passed = true;
   passed = check_tplCodeBlock<8> ( cuTree.m_codeBlock[TPL_BLK_8],  num_cases, InputGenerator<int>( 11 ) ) && passed;

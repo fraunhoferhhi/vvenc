@@ -436,6 +436,9 @@ void CuTree::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
   initCuTree_X86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT
+  initCuTreeARM();
+#endif
   m_rdCost.create();
   // the Hadamard SATD of the block size; setDistParam picks it by the block width
   const CPelBuf blk( nullptr, m_blkSize, m_blkSize );

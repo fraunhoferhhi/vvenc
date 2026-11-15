@@ -62,6 +62,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/SampleAdaptiveOffset.h"
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
 #include "EncoderLib/SEIFilmGrainAnalyzer.h"
+#include "EncoderLib/CuTree.h"
 
 namespace vvenc
 {
@@ -279,6 +280,17 @@ void LoopFilter::initLoopFilterARM()
   }
 }
 #endif  // ENABLE_SIMD_DBLF
+
+#if ENABLE_SIMD_OPT
+void CuTree::initCuTreeARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initCuTreeARM<NEON>();
+  }
+}
+#endif
 
 #endif  // TARGET_SIMD_ARM
 
