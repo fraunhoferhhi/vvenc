@@ -12,6 +12,7 @@ import numpy as np
 from .codec import NativeEpisode
 from .data import atomic_json, digest
 from .method import FRAME_BYTES, observation
+from .qg_audit import verify_qg_requests
 
 
 def make_fixture(path, frames):
@@ -63,9 +64,11 @@ def run(encoder, output, ffmpeg, *, frames=32, source=None, threads=2, decoder=N
     pattern = np.tile(np.repeat([-8., 8.], 15), (20, 1))
     reports = {}
     first_surfaces={}
-    for name, mode in (("anchor", "anchor"), ("zero", "zero"), ("pattern", "live"), ("probe_minus","live"), ("probe_plus","live")):
+    for name, mode in (("anchor", "anchor"), ("zero", "zero"), ("pattern", "live"), ("probe_minus","live"), ("probe_plus","live"),
+                       ("qg_minus_one","live"), ("qg_plus_one","live"), ("qg_zero_children","live")):
+        audit_actions={}
         with NativeEpisode(encoder, source, output / name, frames, 120, mode=mode,
-                           threads=threads, trace_cus=True) as native:
+                           threads=threads, trace_cus=True, trace_qgs=True) as native:
             while native.current is not None:
                 observation(native.current, frames)
                 action=pattern
@@ -73,6 +76,12 @@ def run(encoder, output, ffmpeg, *, frames=32, source=None, threads=2, decoder=N
                     probe=reports["zero"]["decision_pocs"][-1]
                     value=(-8. if name=="probe_minus" else 8.) if native.current["poc"]==probe else 0.
                     action=np.full((20,30),value)
+                elif name.startswith("qg_"):
+                    action=np.zeros((20,30))
+                    if native.current["poc"]==reports["zero"]["decision_pocs"][-1]:
+                        if name=="qg_zero_children":action[::2,::2]=4.
+                        else:action.fill(-1. if name=="qg_minus_one" else 1.)
+                audit_actions[native.current["poc"]]=action
                 native.step(action if mode == "live" else None)
             for index,state in enumerate(native.states):
                 if not index:continue
@@ -101,6 +110,9 @@ def run(encoder, output, ffmpeg, *, frames=32, source=None, threads=2, decoder=N
                              "decoded_sha256": byte_hash, "stream_sha256": digest(native.output / "stream.266"),
                              "decision_pocs": [row["poc"] for row in native.states], "final_qps": per_poc,
                              "mean_qps":{str(row["poc"]):row["mean_qp"] for row in native.posts}}
+            if mode=="live":
+                qgs=[json.loads(line) for line in (native.output/"qgs.jsonl").read_text().splitlines()]
+                reports[name]["qg_audit"]=verify_qg_requests(qgs,audit_actions)
     if reports["anchor"]["stream_sha256"] != reports["zero"]["stream_sha256"]:
         raise ValueError("Zero delta-QP must be bit-exact with the matched native-QPA anchor")
     if reports["anchor"]["final_qps"] != reports["zero"]["final_qps"]:
@@ -116,7 +128,13 @@ def run(encoder, output, ffmpeg, *, frames=32, source=None, threads=2, decoder=N
     probe=str(reports["zero"]["decision_pocs"][-1])
     if plus[probe]<=minus[probe] or any(abs(plus[p]-minus[p])>1e-8 for p in plus if p!=probe):
         raise ValueError("Isolated POC action changed the wrong picture or had no effect")
-    report = {"schema":"vvenc-rcdot-vvc-adapter/3","gate": "REAL_VVC_STATE_ACTION_AU_DECODE_PASS", "encoder_sha256": digest(encoder),
+    for name in ("qg_minus_one","qg_plus_one","qg_zero_children"):
+        if not reports[name]["qg_audit"]["inter_child_qgs"]:
+            raise ValueError("QG regression did not exercise inter descendants")
+    if not reports["qg_zero_children"]["qg_audit"]["zero_child_restorations"]:
+        raise ValueError("QG regression did not exercise a zero child after a nonzero parent")
+    report = {"schema":"vvenc-rcdot-vvc-adapter/3","qg_action_contract":"native-qpa-single-delta/2",
+              "gate": "REAL_VVC_STATE_ACTION_AU_DECODE_PASS", "encoder_sha256": digest(encoder),
               "fixture": source.name, "runs": reports}
     atomic_json(output / "PREFLIGHT.json", report)
     return report

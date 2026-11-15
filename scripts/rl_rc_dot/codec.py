@@ -22,7 +22,7 @@ def command(encoder, source, stream, frames, rate_kbps, threads=2):
 
 
 class NativeEpisode:
-    def __init__(self, encoder, source, output, frames, rate_kbps, *, mode="live", threads=2, timeout=300, trace_cus=False):
+    def __init__(self, encoder, source, output, frames, rate_kbps, *, mode="live", threads=2, timeout=300, trace_cus=False, trace_qgs=False):
         self.output = Path(output).resolve()
         self.output.mkdir(parents=True, exist_ok=False)
         self.actions = self.output / "actions"
@@ -47,6 +47,8 @@ class NativeEpisode:
                    VVENC_RCDOT_RECON_DIR=str(self.recon), VVENC_RCDOT_ACTION_DIR=str(self.actions))
         if trace_cus:
             env["VVENC_RCDOT_CU_FILE"] = str(self.output / "cus.jsonl")
+        if trace_qgs:
+            env["VVENC_RCDOT_QG_FILE"] = str(self.output / "qgs.jsonl")
         self.log = (self.output / "encoder.log").open("wb")
         args = command(Path(encoder).resolve(), Path(source).resolve(), self.output / "stream.266",
                        frames, rate_kbps, threads)

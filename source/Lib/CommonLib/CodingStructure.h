@@ -92,6 +92,10 @@ public:
   UnitScale        unitScale[MAX_NUM_COMP];
 
   int         baseQP;
+  // Native QPA base travels separately from the RL-adjusted candidate QP.
+  // Inter QG children inherit this value, never an ancestor's applied delta.
+  int         rcDotNativeQP = 0;
+  bool        rcDotNativeQPValid = false;
   int         prevQP[MAX_NUM_CH];
   int         currQP[MAX_NUM_CH];
   int         chromaQpAdj; //th this seems to belong to CUCtx rather than to cs

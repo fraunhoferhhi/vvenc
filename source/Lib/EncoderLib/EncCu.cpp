@@ -847,20 +847,37 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     }
   }
 
-  if( rcdot::controlsQp() && !slice.pic->isPreAnalysis && pps.useDQP &&
+  if( rcdot::hasQpAction(slice) && !slice.pic->isPreAnalysis && pps.useDQP &&
       isLuma(partitioner.chType) && partitioner.currQgEnable() )
   {
     Picture* const pic = bestCS->picture;
     const uint32_t ctu = getCtuAddr(partitioner.currQgPos,*pps.pcv);
-    const int nativeQpaQp = tempCS->baseQP;
-    const int qp = rcdot::requestedQp(slice,lumaArea,nativeQpaQp);
-    // Preserve both native QPA quantization and lambda for zero delta.
-    if( qp != nativeQpaQp )
+    const int inheritedQp = tempCS->baseQP;
+    // Native QPA establishes a fresh base at the CTU root and at intra
+    // sub-QGs. Inter children instead inherit the parent's UNMODIFIED base.
+    // baseQP itself already includes the parent's spatial RL delta.
+    const bool freshNativeQpa = partitioner.currSubdiv == 0 || slice.isIntra();
+    if( freshNativeQpa )
     {
-      tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-      bestCS->currQP[partitioner.chType] = bestCS->baseQP = qp;
+      tempCS->rcDotNativeQP = bestCS->rcDotNativeQP = inheritedQp;
+      tempCS->rcDotNativeQPValid = bestCS->rcDotNativeQPValid = true;
+    }
+    CHECK( !tempCS->rcDotNativeQPValid, "RL-RC-DoT: missing native QPA base" );
+    const int nativeQpaQp = tempCS->rcDotNativeQP;
+    const int qp = rcdot::requestedQp(slice,lumaArea,nativeQpaQp);
+    tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+    bestCS->currQP[partitioner.chType] = bestCS->baseQP = qp;
+    // Every inter sub-QG starts from its own requested QP/lambda, including
+    // zero-delta children after a nonzero parent/sibling. Fresh zero-action
+    // native QPA paths are deliberately left untouched.
+    if( !freshNativeQpa && qp == pic->ctuAdaptedQP[ctu] )
+      setUpLambda(slice,pic->ctuQpaLambda[ctu],qp,false,true);
+    else if( !freshNativeQpa || qp != nativeQpaQp )
+    {
       updateLambda(slice,pic->ctuQpaLambda[ctu],pic->ctuAdaptedQP[ctu],qp,true);
     }
+    rcdot::recordQgDecision(slice,lumaArea,partitioner.currSubdiv,inheritedQp,
+        nativeQpaQp,qp,pic->ctuAdaptedQP[ctu],pic->ctuQpaLambda[ctu],m_cRdCost.getLambda(true));
   }
 
   // Research extension: one fixed PPO-QP action map per POC (first-stage integration).
@@ -2003,6 +2020,13 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
       bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3( 0, MAX_QP, tempCS->baseQP - pumpReducQP );
 
       updateLambda( slice, pic->ctuQpaLambda[rsAddr], pic->ctuAdaptedQP[rsAddr], tempCS->baseQP, true );
+      if( rcdot::hasQpAction(slice) && tempCS->rcDotNativeQPValid )
+      {
+        // Native pumping correction is part of the base inherited by QGs;
+        // it must not carry the parent's RL delta into the child either.
+        tempCS->rcDotNativeQP = bestCS->rcDotNativeQP =
+            Clip3(0,MAX_QP,tempCS->rcDotNativeQP - pumpReducQP);
+      }
     }
   }
 

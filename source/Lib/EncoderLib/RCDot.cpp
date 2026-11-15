@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iomanip>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -30,11 +31,12 @@ struct Session
   std::map<int, PreState> pre;
   std::map<int, FrameStats> frames;
   std::map<int, Map> actions;
+  std::set<int> activeActions;
   FrameStats last;
   int historyPoc = -1, decisions = 0, outputs = 0, total = 0, bitDepth = 10;
   uint64_t bits = 0;
   double qpSum = 0, qpArea = 0, fps = 30, target = 0;
-  std::ofstream events, cuLog;
+  std::ofstream events, cuLog, qgLog;
 };
 
 Session& session() { static Session state; return state; }
@@ -140,6 +142,10 @@ double ssim( const CPelBuf& raw, const CPelBuf& recon, int bitDepth )
 
 bool enabled() { return setting("VVENC_RCDOT_MODE") != nullptr; }
 bool controlsQp() { return enabled() && mode() != "anchor"; }
+bool hasQpAction( const Slice& slice )
+{
+  return controlsQp() && session().activeActions.count(slice.poc) != 0;
+}
 
 void reset( const VVEncCfg& cfg )
 {
@@ -159,7 +165,7 @@ void reset( const VVEncCfg& cfg )
   if( !setting("VVENC_RCDOT_STATE_FILE") || !setting("VVENC_RCDOT_RECON_DIR") )
     throw std::runtime_error("RL-RC-DoT: state file and reconstruction directory required");
   Session& s = session();
-  s.pre.clear(); s.frames.clear(); s.actions.clear(); s.last = FrameStats();
+  s.pre.clear(); s.frames.clear(); s.actions.clear(); s.activeActions.clear(); s.last = FrameStats();
   s.historyPoc = -1; s.decisions = s.outputs = 0; s.bits = 0; s.qpSum = s.qpArea = 0;
   s.total = cfg.m_framesToBeEncoded; s.fps = double(cfg.m_FrameRate)/cfg.m_FrameScale;
   s.target = cfg.m_RCTargetBitrate; s.bitDepth = cfg.m_internalBitDepth[CH_L];
@@ -168,6 +174,13 @@ void reset( const VVEncCfg& cfg )
   s.events << std::setprecision(12);
   s.cuLog.close();
   if( setting("VVENC_RCDOT_CU_FILE") ) s.cuLog.open(setting("VVENC_RCDOT_CU_FILE"),std::ios::trunc);
+  s.qgLog.close();
+  if( setting("VVENC_RCDOT_QG_FILE") )
+  {
+    s.qgLog.open(setting("VVENC_RCDOT_QG_FILE"),std::ios::trunc);
+    if( !s.qgLog ) throw std::runtime_error("RL-RC-DoT: cannot open QG audit file");
+    s.qgLog << std::setprecision(17);
+  }
 }
 
 void storeAnalysis( int poc, int lastPoc, const Analysis& analysis, const Map& propagation )
@@ -222,6 +235,10 @@ void emitState( const Slice& slice )
     Map action = readAction(slice.poc);
     std::lock_guard<std::mutex> lock(s.mutex);
     s.actions.emplace(slice.poc,action);
+    // If every cell rounds to zero, every area-pooled QG does too. Preserve
+    // the untouched native QPA/lambda search for these effective-zero maps.
+    if( std::any_of(action.begin(),action.end(),[](double v) { return std::abs(v) >= 0.5; }) )
+      s.activeActions.insert(slice.poc);
   }
 }
 
@@ -242,6 +259,21 @@ int requestedQp( const Slice& slice, const Area& area, int nativeQpaQp )
   // Delta zero must preserve the encoder's existing native QPA QP.
   const int delta = int(std::lround(sum / weight));
   return Clip3(-slice.sps->qpBDOffset[CH_L],MAX_QP,nativeQpaQp + delta);
+}
+
+void recordQgDecision( const Slice& slice, const Area& area, unsigned subdiv,
+    int inheritedQp, int nativeQp, int requestedQp, int ctuQp, double ctuLambda, double rdLambda )
+{
+  Session& s = session();
+  if( !s.qgLog.is_open() ) return;
+  std::lock_guard<std::mutex> lock(s.mutex);
+  s.qgLog << "{\"poc\":" << slice.poc << ",\"intra\":" << (slice.isIntra() ? "true" : "false")
+    << ",\"temporal_layer\":" << slice.TLayer
+    << ",\"subdiv\":" << subdiv << ",\"x\":" << area.x << ",\"y\":" << area.y
+    << ",\"w\":" << area.width << ",\"h\":" << area.height
+    << ",\"inherited_qp\":" << inheritedQp << ",\"native_qp\":" << nativeQp
+    << ",\"requested_qp\":" << requestedQp << ",\"ctu_qp\":" << ctuQp
+    << ",\"ctu_lambda\":" << ctuLambda << ",\"rd_lambda\":" << rdLambda << "}\n";
 }
 
 void recordCu( const CodingUnit& cu )
@@ -324,7 +356,8 @@ void outputPicture( const Picture& pic, const AccessUnitList& au )
   if( controlsQp() ) { s.events << ",\"consumed_action\":"; writeMap(s.events,s.actions.at(pic.poc)); }
   s.events << "}\n" << std::flush;
   if( s.cuLog ) s.cuLog.flush();
-  s.frames.erase(pic.poc); s.actions.erase(pic.poc);
+  if( s.qgLog ) s.qgLog.flush();
+  s.frames.erase(pic.poc); s.actions.erase(pic.poc); s.activeActions.erase(pic.poc);
 }
 
 Analysis LookAhead::analyze( const CPelBuf& source, const std::vector<Pel>& previous )

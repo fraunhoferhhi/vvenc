@@ -3,6 +3,33 @@
 Current method definitions are below; older results are explicitly historical.
 Operational instructions: [project README](../../README_RL_RC_DOT.md).
 
+## QG correctness repair 2026 11 15
+
+Action contract `native-qpa-single-delta/2` replaces the compounded inter-QG
+behavior. `CodingStructure` now carries the unmodified native QPA base
+separately through inter recursion; fresh intra QPA and native pumping
+corrections update that base. Each candidate uses its own pooled delta once.
+Inter children reset lambda even when their delta is zero after a nonzero
+parent/sibling. Effective-zero maps preserve the untouched native search.
+
+This changes environment dynamics and invalidates pre-repair resumes via the
+source/action contract. Start a separate run; retain old results for diagnosis.
+No PPO architecture, normalization, auxiliary target, reward, or learning
+hyperparameter is changed by this repair.
+
+Optional `VVENC_RCDOT_QG_FILE` records candidate native/inherited/requested QP,
+subdivision, temporal layer and RDO lambda. `qg_audit.py` verifies area pooling,
+round-half-away-from-zero, legal clipping and lambda scaling. Non-layer-zero
+inter candidates must retain their original CTU QPA base at every depth;
+layer-zero native pumping corrections are retained separately. Candidate
+requests must not be equated with inferred no-residual final-CU QPs.
+
+Native regressions cover ±1, intra/inter descendants, a nonzero parent with
+zero-delta children, effective-zero maps, and byte-exact zero/anchor behavior.
+Mandatory Kaggle preflight now includes the QG regressions and independent
+decode parity; old preflight certificates are not accepted for the new action
+contract. Local Windows tests do not establish Linux/T4 learning quality.
+
 ## State mapping
 
 | Paper information | VVC adapter measurement |

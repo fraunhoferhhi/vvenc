@@ -10,9 +10,34 @@ Tài liệu RL được gộp còn hai file:
 - [METHOD_MAPPING.md](scripts/rl_rc_dot/METHOD_MAPPING.md): state/action/reward,
   kiến trúc, khác biệt với paper, bằng chứng kiểm tra và lịch sử các Trial
 
+## Sửa lỗi QG ngày 15 11 2026
+
+Hợp đồng action mới: **native-qpa-single-delta/2**. Inter QG con kế thừa
+QP nền QPA riêng, không kế thừa ΔQP của vùng cha. Mỗi QG chỉ cộng một lần
+delta của chính vùng đó; lambda được đặt lại cả khi vùng con có delta bằng 0.
+Bản đồ toàn 0 hoặc có mọi ô nhỏ hơn 0,5 về trị tuyệt đối giữ đường native.
+PPO, state, reward và ngân sách Mini được giữ nguyên trong đợt sửa này.
+
+**Bắt đầu run mới với MODE=new.** Checkpoint/export trước sửa dùng môi trường
+QP khác và không được resume vào bản sửa. Source fingerprint và hợp đồng action
+chặn việc trộn này. Kết quả cũ giữ làm đối chứng chẩn đoán, chưa chứng minh chất
+lượng của bản sửa. Notebook mới dùng thư mục run có hậu tố `qgfix2`.
+
+Preflight bắt buộc bổ sung map ±1 và vùng con 0 sau vùng cha khác 0, kiểm tra
+candidate QP/lambda ở các độ sâu QG, bên cạnh zero-anchor/POC/giải mã hiện có.
+`qgs.jsonl` là trace ứng viên RDO, không phải QP cuối của các CU không residual.
+Kiểm tra local 32 frame xác nhận zero-action trước/sau sửa bit-exact; các test
+codec/PPO dùng detector giả lập. Linux/T4, RGB và giải mã độc lập phải qua
+preflight Kaggle trước training; chưa có bằng chứng bản sửa cho BD-rate tốt hơn.
+
+Bộ kiểm tra local sau sửa: **66 test, 65 đạt, 1 RGB test bỏ qua do thiếu
+shared libswscale/libavutil trên Windows**; có native QG, PPO update, paired
+validation và checkpoint/reload với detector giả lập. Chưa chạy lại giải mã
+độc lập của bản sửa tại máy Windows này; preflight Kaggle vẫn bắt buộc VVdeC.
+
 ## Trạng thái trước khi chạy thử
 
-Adapter/3 đã build và qua native preflight trên Windows: zero action có
+Trước sửa QG, adapter/3 đã build và qua native preflight trên Windows: zero action có
 bitstream giống hệt anchor, action khác 0 tác động đúng vùng/POC, reconstruction
 khớp giải mã. Bộ kiểm tra: **62 test, 61 đạt, 1 RGB test bỏ qua do thiếu thư viện
 dùng chung trên Windows**. Kaggle/Linux vẫn bắt buộc qua RGB gate. Các test

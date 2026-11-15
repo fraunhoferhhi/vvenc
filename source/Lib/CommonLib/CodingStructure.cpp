@@ -705,6 +705,8 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   subStruct.slice     = slice;
   subStruct.baseQP    = baseQP;
+  subStruct.rcDotNativeQP = rcDotNativeQP;
+  subStruct.rcDotNativeQPValid = rcDotNativeQPValid;
   subStruct.prevQP[_chType]
                       = prevQP[_chType];
   subStruct.pcv       = pcv;

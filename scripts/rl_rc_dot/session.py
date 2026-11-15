@@ -166,7 +166,7 @@ def contract_for(spec):
             "encoder_threads":spec["encoder_threads"],"algorithm":"SB3 2.7.0 PPO; isolated actor/critic; per-branch gradient clip; bounded auxiliary reward",
             "ppo":spec["ppo"],
             "reward":"paper=20*confidence_ordered_precision-abs(log(prefix_actual_bps/target_bps)); PPO_learning=0.05*paper",
-            "rate_sampling":"uniform integer kbps [50,200]","action":"Gaussian35;clip10;tanh*12;bilinear20x30;native-QPA-relative QG delta",
+            "rate_sampling":"uniform integer kbps [50,200]","action":"Gaussian35;clip10;tanh*12;bilinear20x30;native-QPA-relative QG delta;single-delta/2",
             "validation":{"videos":spec["validation_videos"],"rates":spec["validation_rates"],"frames":spec["validation_frames"]}}
 
 def parser():
@@ -253,7 +253,8 @@ def main():
     # previous Kaggle compiler. Source/policy/dataset remain pinned in method.
     from .preflight import run as native_preflight
     certificate=output/"preflight/PREFLIGHT.json"
-    if not certificate.exists() or json.loads(certificate.read_text()).get("encoder_sha256")!=digest(a.encoder):
+    prior=json.loads(certificate.read_text()) if certificate.exists() else {}
+    if prior.get("encoder_sha256")!=digest(a.encoder) or prior.get("qg_action_contract")!="native-qpa-single-delta/2":
         preflight_dir=output/("preflight_"+uuid.uuid4().hex[:8])
         result=native_preflight(a.encoder,preflight_dir,a.ffmpeg,frames=32,threads=a.encoder_threads,decoder=a.decoder)
         atomic_json(certificate,result)

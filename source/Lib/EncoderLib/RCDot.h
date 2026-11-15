@@ -24,11 +24,14 @@ void reset( const VVEncCfg& cfg );
 void storeAnalysis( int poc, int lastPoc, const Analysis& analysis, const Map& propagation );
 void emitState( const Slice& slice );
 bool controlsQp();
+bool hasQpAction( const Slice& slice );
 int requestedQp( const Slice& slice, const Area& area, int nativeQpaQp );
 void recordCu( const CodingUnit& cu );
 void finishPicture( const Picture& pic );
 void outputPicture( const Picture& pic, const AccessUnitList& au );
 void addSyntaxBits( int poc, bool motion, unsigned bits );
+void recordQgDecision( const Slice& slice, const Area& area, unsigned subdiv,
+    int inheritedQp, int nativeQp, int requestedQp, int ctuQp, double ctuLambda, double rdLambda );
 
 class SyntaxScope
 {
