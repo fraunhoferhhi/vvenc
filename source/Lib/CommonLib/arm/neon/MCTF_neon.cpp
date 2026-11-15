@@ -207,6 +207,98 @@ static inline auto get_motionErrorLumaFrac2D( FilterCoeffType4 type )
   }
 }
 
+// The 6-tap filter of motionErrorLumaFrac6 on six vectors of 8 samples: taps f[1 .. 6] of the 8-entry table (f[0] and
+// f[7] are 0 and not applied, as in the C code). The sums are 32 bits (exact for any 16-bit input, as the C code's int
+// sums), then ( sum + 32 ) >> 6 clipped to [0, max].
+static inline int16x8_t motionErrorFrac6Filter_neon( const int16x8_t s[6], const int16x4_t f03, const int16x4_t f47,
+                                                     const uint16x8_t vmax )
+{
+  int32x4_t sumLo = vmull_lane_s16( vget_low_s16( s[0] ), f03, 1 );
+  int32x4_t sumHi = vmull_lane_s16( vget_high_s16( s[0] ), f03, 1 );
+  sumLo = vmlal_lane_s16( sumLo, vget_low_s16( s[1] ), f03, 2 );
+  sumHi = vmlal_lane_s16( sumHi, vget_high_s16( s[1] ), f03, 2 );
+  sumLo = vmlal_lane_s16( sumLo, vget_low_s16( s[2] ), f03, 3 );
+  sumHi = vmlal_lane_s16( sumHi, vget_high_s16( s[2] ), f03, 3 );
+  sumLo = vmlal_lane_s16( sumLo, vget_low_s16( s[3] ), f47, 0 );
+  sumHi = vmlal_lane_s16( sumHi, vget_high_s16( s[3] ), f47, 0 );
+  sumLo = vmlal_lane_s16( sumLo, vget_low_s16( s[4] ), f47, 1 );
+  sumHi = vmlal_lane_s16( sumHi, vget_high_s16( s[4] ), f47, 1 );
+  sumLo = vmlal_lane_s16( sumLo, vget_low_s16( s[5] ), f47, 2 );
+  sumHi = vmlal_lane_s16( sumHi, vget_high_s16( s[5] ), f47, 2 );
+  const uint16x8_t v = vminq_u16( vcombine_u16( vqrshrun_n_s32( sumLo, 6 ), vqrshrun_n_s32( sumHi, 6 ) ), vmax );
+  return vreinterpretq_s16_u16( v );
+}
+
+// One row of the horizontal pass for 8 samples: src points at the first tap's column (x - 2).
+static inline int16x8_t motionErrorFrac6Row_neon( const Pel* src, const int16x4_t xf03, const int16x4_t xf47,
+                                                  const uint16x8_t vmax )
+{
+  int16x8_t s[6];
+  load_s16_16x8x6( src, 1, s );
+  return motionErrorFrac6Filter_neon( s, xf03, xf47, vmax );
+}
+
+// MCTF::m_motionErrorLumaFrac8[0] (the 6-tap search, MCTFSpeed 0), as motionErrorLumaFrac6 / motionErrorLumaFrac_SIMD:
+// per column of 8, the horizontal pass of rows y - 2 .. y + 3 kept in a window of six vectors, the vertical 6-tap pass
+// of the window rounded and clipped the same way, and the squared differences with the original. A squared difference
+// is below 2^20 at up to 10 bits, and a lane sums at most 64 of them per column, so the 32-bit lanes are exact. Like
+// every MCTF error kernel it returns the exact error when it is not above besterror and a value above besterror
+// otherwise (the callers only test error < besterror): the running error is checked after every column.
+static int motionErrorLumaFrac6_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
+                                      const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter,
+                                      const int16_t* yFilter, const int bitDepth, const int besterror )
+{
+  CHECKD( w % 8 != 0, "Width must be a multiple of eight" );
+  CHECKD( h <= 0 || h > 64, "Height must be 1 to 64" );
+
+  const int16x4_t  xf03 = vld1_s16( xFilter );
+  const int16x4_t  xf47 = vld1_s16( xFilter + 4 );
+  const int16x4_t  yf03 = vld1_s16( yFilter );
+  const int16x4_t  yf47 = vld1_s16( yFilter + 4 );
+  const uint16x8_t vmax = vdupq_n_u16( ( 1 << bitDepth ) - 1 );
+
+  int error = 0;
+  for( int x = 0; x < w; x += 8 )
+  {
+    const Pel* src     = buf + x - 2 - 2 * buffStride;
+    const Pel* origRow = org + x;
+
+    int16x8_t win[6];
+    win[0] = motionErrorFrac6Row_neon( src, xf03, xf47, vmax );
+    win[1] = motionErrorFrac6Row_neon( src + buffStride, xf03, xf47, vmax );
+    win[2] = motionErrorFrac6Row_neon( src + 2 * buffStride, xf03, xf47, vmax );
+    win[3] = motionErrorFrac6Row_neon( src + 3 * buffStride, xf03, xf47, vmax );
+    win[4] = motionErrorFrac6Row_neon( src + 4 * buffStride, xf03, xf47, vmax );
+    src += 5 * buffStride;
+
+    int32x4_t accLo = vdupq_n_s32( 0 );
+    int32x4_t accHi = vdupq_n_s32( 0 );
+    for( int y = 0; y < h; y++, src += buffStride, origRow += origStride )
+    {
+      win[5] = motionErrorFrac6Row_neon( src, xf03, xf47, vmax );
+
+      const int16x8_t pred = motionErrorFrac6Filter_neon( win, yf03, yf47, vmax );
+      const int16x8_t orig = vld1q_s16( origRow );
+      const int16x8_t diff = vsubq_s16( pred, orig );
+      accLo = vmlal_s16( accLo, vget_low_s16( diff ), vget_low_s16( diff ) );
+      accHi = vmlal_s16( accHi, vget_high_s16( diff ), vget_high_s16( diff ) );
+
+      win[0] = win[1];
+      win[1] = win[2];
+      win[2] = win[3];
+      win[3] = win[4];
+      win[4] = win[5];
+    }
+
+    error += horizontal_add_s32x4( vaddq_s32( accLo, accHi ) );
+    if( error > besterror )
+    {
+      return error;
+    }
+  }
+  return error;
+}
+
 int motionErrorLumaFrac_loRes_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
                                     const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter,
                                     const int16_t* yFilter, const int bitDepth, const int besterror )
@@ -1313,6 +1405,7 @@ double calcVar_neon( const Pel* org, const ptrdiff_t origStride, const int w, co
 template<>
 void MCTF::_initMCTF_ARM<NEON>()
 {
+  m_motionErrorLumaFrac8[0] = motionErrorLumaFrac6_neon;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_neon;
   m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_neon;
   m_motionErrorLumaInt8     = motionErrorLumaInt_neon;
