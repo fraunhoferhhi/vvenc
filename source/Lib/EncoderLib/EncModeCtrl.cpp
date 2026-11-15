@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_next.h"
 
+#include <algorithm>
 #include <cmath>
 
 //! \ingroup EncoderLib
@@ -500,6 +501,50 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice, int tileIdx )
   m_tileIdx = tileIdx;
 }
 
+// KeepHighBand: a 64-point transform zeroes every coefficient above position 32, which is the finest octave of the block,
+// whatever the rate. The finest octave of the source is measured per 8x8 cell as the mean energy of the three detail
+// coefficients of an orthonormal 2x2 Haar transform; the block keeps it only if split, when the median cell's energy is
+// above K^2 quantisation steps^2. K = .1: at .2 film keeps half the gain at QP 20 (detail tests 2026-11-06/07). The
+// step uses the slice QP, not the CU's QP under QPA.
+static bool finestOctaveNeedsSplit( const CodingStructure& cs, const Partitioner& partitioner )
+{
+  static constexpr double K        = 0.1;
+  static constexpr int    cellSize = 8;
+  static constexpr int    maxCells = ( MAX_CU_SIZE / cellSize ) * ( MAX_CU_SIZE / cellSize );
+  const CPelBuf src     = cs.getOrgBuf( partitioner.currArea().block( COMP_Y ) );
+  const int     columns = src.width / cellSize, rows = src.height / cellSize;
+  CHECKD( columns * rows > maxCells, "more 8x8 cells than a CU can hold" );
+  double cells[maxCells];
+  int    cellCount = 0;
+  for( int row = 0; row < rows; row++ )
+  {
+    for( int column = 0; column < columns; column++ )
+    {
+      int64_t energy = 0;
+      for( int y = 0; y < cellSize; y += 2 )
+      {
+        const Pel* top    = src.bufAt( column * cellSize, row * cellSize + y );
+        const Pel* bottom = src.bufAt( column * cellSize, row * cellSize + y + 1 );
+        for( int x = 0; x < cellSize; x += 2 )
+        {
+          const int a = top[x], b = top[x + 1], c = bottom[x], d = bottom[x + 1];
+          const int horizontal = a - b + c - d, vertical = a + b - c - d, diagonal = a - b - c + d;
+          energy += horizontal * horizontal + vertical * vertical + diagonal * diagonal;
+        }
+      }
+      cells[cellCount++] = energy / 4.0 / ( 3 * cellSize * cellSize / 4 );   // the division by 4 makes the transform orthonormal
+    }
+  }
+  if( !cellCount )
+  {
+    return false;
+  }
+  std::nth_element( cells, cells + cellCount / 2, cells + cellCount );
+  const double median = cells[cellCount / 2];
+  const double qStep  = pow( 2.0, ( cs.slice->sliceQp - 4 ) / 6.0 ) * ( 1 << ( cs.sps->bitDepths[CH_L] - 8 ) );
+  return median > K * K * qStep * qStep;
+}
+
 void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag)
 {
   // Min/max depth
@@ -511,6 +556,12 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   }
 
   minDepth = std::max<unsigned>( minDepth, cs.pcv->getMinDepth( cs.slice->sliceType, partitioner.chType ) );
+  // KeepHighBand: a QT split where a 64-point transform would zero the source's finest octave (only square CUs can split by QT)
+  if( m_pcEncCfg->m_keepHighBand && m_pcEncCfg->m_DepQuantEnabled && partitioner.chType == CH_L && cs.slice->sliceQp <= KEEP_HIGH_BAND_MAX_SLICE_QP
+      && partitioner.currArea().lwidth() == partitioner.currArea().lheight() && partitioner.currArea().lwidth() > 32 && partitioner.canSplit( CU_QUAD_SPLIT, cs ) && finestOctaveNeedsSplit( cs, partitioner ) )
+  {
+    minDepth = std::max<unsigned>( minDepth, partitioner.currQtDepth + 1 );
+  }
   maxDepth = std::min<unsigned>( maxDepth, cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType ) );
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );

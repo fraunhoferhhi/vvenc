@@ -310,6 +310,24 @@ namespace DQIntern
 
     int64_t getQScale      () const { return m_QScale; }
 
+    // how much a coefficient's distortion weighs against its bits, as set by initQuantBlock from lambda
+    struct DistWeight
+    {
+      int     shift;
+      int64_t add;
+      int64_t stepAdd;
+      int64_t orgFact;
+    };
+    DistWeight getDistWeight() const { return { m_DistShift, m_DistAdd, m_DistStepAdd, m_DistOrgFact }; }
+    void       setDistWeight( const DistWeight& weight )
+    {
+      m_DistShift   = weight.shift;
+      m_DistAdd     = weight.add;
+      m_DistStepAdd = weight.stepAdd;
+      m_DistOrgFact = weight.orgFact;
+    }
+
+    // quantization
     int               m_DqThrVal;
   };
 
@@ -499,7 +517,7 @@ public:
   virtual void quant  (       TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx );
   virtual void dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const ComponentID compID, const QpParam& cQP );
   
-  virtual void init   ( int rdoq = 0, bool useRDOQTS = false, int dqThrVal = 8 );
+  virtual void init   ( int rdoq = 0, bool useRDOQTS = false, int dqThrVal = 8, bool keepHighBand = false );
 
 private:
   void    xQuantDQ          ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff );
@@ -511,6 +529,7 @@ private:
   std::shared_ptr<DQIntern::Rom>
                       m_scansRom;
   DQIntern::Quantizer m_quant;
+  bool                m_keepHighBand = false;
 
   DQIntern::Decisions m_trellis[MAX_TB_SIZEY * MAX_TB_SIZEY][2];
   DQIntern::StateMem  m_state_curr;

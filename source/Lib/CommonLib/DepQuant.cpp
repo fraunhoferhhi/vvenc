@@ -1347,13 +1347,32 @@ namespace DQIntern
   }
 }; // namespace DQIntern
 
+// Lambda on luma coefficients in the upper half of a transform's frequencies, with KeepHighBand: distortion there weighs more
+// against bits, so the trellis zeroes fewer of them. It only keeps levels of what the source has, so it is not sharpening.
+// x.7 and x.5 fail on pulsing on film, and cost the second octave more.
+static const double KEEP_HIGH_BAND_LAMBDA = 0.85;
+
 void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
 {
   using namespace DQIntern;
   
   //===== reset / pre-init =====
   const TUParameters& tuPars  = *m_scansRom->getTUPars( tu.blocks[compID], compID );
-  m_quant.initQuantBlock    ( tu, compID, cQP, lambda, m_quantBlockMemo );
+  const bool keepHighBand = m_keepHighBand && isLuma( compID ) && !enableScalingLists && tu.cs->slice->sliceQp <= KEEP_HIGH_BAND_MAX_SLICE_QP;
+  DQIntern::Quantizer::DistWeight lowBandWeight{}, highBandWeight{};
+  if( keepHighBand )
+  {
+    // the block's parameters are those of the high band's lambda (as the memo keeps them), the low band's lambda gives
+    // its distortion weight only
+    m_quant.initQuantBlock( tu, compID, cQP, lambda );
+    lowBandWeight = m_quant.getDistWeight();
+    m_quant.initQuantBlock( tu, compID, cQP, lambda * KEEP_HIGH_BAND_LAMBDA, m_quantBlockMemo );
+    highBandWeight = m_quant.getDistWeight();
+  }
+  else
+  {
+    m_quant.initQuantBlock  ( tu, compID, cQP, lambda, m_quantBlockMemo );
+  }
   TCoeffSig*    qCoeff      = tu.getCoeffs( compID ).buf;
   const TCoeff* tCoeff      = srcCoeff.buf;
   ::memset( qCoeff, 0x00, levelRowsToClear( tu.blocks[compID].height ) * tu.blocks[compID].width * sizeof( TCoeffSig ) );
@@ -1446,6 +1465,11 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   for( int scanIdx = firstTestPos; scanIdx >= 0; scanIdx-- )
   {
     const ScanInfo& scanInfo = tuPars.m_scanInfo[ scanIdx ];
+    if( keepHighBand )
+    {
+      const bool highBand = scanInfo.posX >= tuPars.m_width / 2 || scanInfo.posY >= tuPars.m_height / 2;
+      m_quant.setDistWeight( highBand ? highBandWeight : lowBandWeight );
+    }
     if( enableScalingLists )
     {
       m_quant.initQuantBlock( tu, compID, cQP, lambda, quantCoeff[scanInfo.rasterPos] );
@@ -1769,10 +1793,11 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
   }
 }
 
-void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal )
+void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal, bool keepHighBand )
 {
   QuantRDOQ2::init( rdoq, useRDOQTS, thrVal );
   m_quant.init( thrVal );
+  m_keepHighBand = keepHighBand;
   m_quantBlockMemo = DQIntern::QuantBlockMemo();   // the threshold value is part of what it keeps
 }
 

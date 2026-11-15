@@ -222,6 +222,7 @@ void EncLib::initPass( int pass, const char* statsFName )
       const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
       m_rateCtrl->init( m_encCfg );
       const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
+      xDecideVeryLowQP();
     }
     if( m_encCfg.m_RCTargetBitrate > 0 && !m_encCfg.m_LookAhead )
     {
@@ -378,6 +379,44 @@ void EncLib::xUninitLib()
   }
 }
 
+void EncLib::xDecideVeryLowQP()
+{
+  VVEncCfg& cfg = const_cast<VVEncCfg&>(m_encCfg);
+  // the options the config left at 2 (below QP 16). getBaseQP() leans towards a QP from the resolution, so at these
+  // targets the pictures run lower than it says: one higher than constant QP's limit. m_QP here is getBaseQP(), the QP
+  // the pictures are coded at, and m_orgCfg.m_QP is already the coding QP (VVEncCfg::xInitCfgMembers): no getCodingQp()
+  // offset on top of either
+  const bool veryLowQP = m_encCfg.m_QP <= VVENC_VERY_LOW_QP;
+
+  if( cfg.m_MTSImplicit == 2 )
+  {
+    cfg.m_MTSImplicit = veryLowQP ? 0 : 1;
+  }
+  if( cfg.m_veryLowQPSpeedUp == 2 )
+  {
+    cfg.m_veryLowQPSpeedUp = veryLowQP ? 1 : 0;
+    if( veryLowQP )
+    {
+      // after checkCfgParameter, but safe: it only turns tools off and raises MinQT[1] to 8, both valid in any config
+      turnOffToolsForVeryLowQP( cfg );
+    }
+  }
+  if( cfg.m_mctfKeepDetail == 2 )
+  {
+    cfg.m_mctfKeepDetail = veryLowQP ? 1 : 0;
+
+    // Strengths still at what config derived from its guess of the QP, which at high targets is far too low: nothing would be
+    // filtered, so nothing kept. Strengths the user chose differ from these and stay. Config runs twice, so it can't tell them apart.
+    vvencMCTF fromGuess = cfg.m_vvencMCTF;
+    initMCTFStrengths( fromGuess, cfg.m_GOPSize, m_orgCfg.m_QP, cfg.m_QPFractionVal, true );
+    const bool strengthsDerived = fromGuess.numFrames == cfg.m_vvencMCTF.numFrames && std::equal( fromGuess.MCTFStrengths, fromGuess.MCTFStrengths + fromGuess.numFrames, cfg.m_vvencMCTF.MCTFStrengths );
+    if( veryLowQP && strengthsDerived )
+    {
+      initMCTFStrengths( cfg.m_vvencMCTF, cfg.m_GOPSize, cfg.m_QP, cfg.m_QPFractionVal, true );
+    }
+  }
+}
+
 void EncLib::xInitRCCfg()
 {
   // backup original configuration
@@ -389,6 +428,15 @@ void EncLib::xInitRCCfg()
 
   // fixed-QP encoding in first rate control pass
   m_firstPassCfg.m_RCTargetBitrate = 0;
+  // the first pass codes at a fixed QP far above the very-low-QP range; the second pass decides the options left at 2
+  if( m_firstPassCfg.m_mctfKeepDetail == 2 )
+  {
+    m_firstPassCfg.m_mctfKeepDetail = 0;
+  }
+  if( m_firstPassCfg.m_veryLowQPSpeedUp == 2 )
+  {
+    m_firstPassCfg.m_veryLowQPSpeedUp = 0;
+  }
   if( m_firstPassCfg.m_FirstPassMode > 2 )
   {
     m_firstPassCfg.m_SourceWidth  = ( m_encCfg.m_SourceWidth  >> 1 ) & ( ~7 );

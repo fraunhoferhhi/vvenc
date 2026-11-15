@@ -96,7 +96,8 @@ public:
              const bool bUseRDOQTS,
              const bool scalingListsEnabled,
              const bool bEnc,
-             const int  thrValue            
+             const int  thrValue,
+             const bool keepHighBand
            );
 
 public:

@@ -48,6 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencCfg.h"
 
 #define VVENC_MAX_NUM_INTENSITIES             256
+#define VVENC_VERY_LOW_QP                     16   // below it the source's own detail survives quantisation
 #define VVENC_MAX_NUM_MODEL_VALUES            6
 
 namespace vvenc {
@@ -122,6 +123,11 @@ private:
 // at a given QP within about x0.8 to x1.2 of master's (15 clips, QP 22 to 37), like the CRF offset x264 and x265
 // apply for MB-tree (mbtree_offset). Every QP-dependent default and tool uses the coding QP.
 int getCodingQp( const vvenc_config& c );
+// The pictures MCTF filters and how strongly, for a QP. Rate control filters one level more at the same QP.
+void initMCTFStrengths( vvencMCTF& mctf, int GOPSize, int QP, int QPFractionVal, bool rateControl );
+
+// Below QP 16 nearly all the bytes are coefficients of the source's own noise, which these tools can't predict or compact.
+void turnOffToolsForVeryLowQP( vvenc_config& cfg );
 
 }
 

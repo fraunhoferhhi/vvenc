@@ -599,11 +599,15 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toFga                         ( &c->m_fga );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
+  IStreamToInt8                     toKeepHighBand                ( &c->m_keepHighBand );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
   IStreamToInt8                     toCuTreeBlockSize             ( &c->m_cuTreeBlockSize );
   IStreamToFixedPointU8             toCuTreePicStrength           ( &c->m_cuTreePicStrength, 5 );
   IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFractionVal );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
+  IStreamToInt8                     toMTSImplicit                 ( &c->m_MTSImplicit );
+  IStreamToInt8                     toVeryLowQPSpeedUp            ( &c->m_veryLowQPSpeedUp );
+  IStreamToInt8                     toMCTFKeepDetail              ( &c->m_mctfKeepDetail );
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );
   IStreamToEnum<int8_t>             toUseIfp                      ( &c->m_ifp,                         &FlagToIntMap<int8_t> );
@@ -983,10 +987,12 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FastUDIUseMPMEnabled",                            c->m_bFastUDIUseMPMEnabled,                          "If enabled, adapt intra direction search, accounting for MPM")
     ("FastMEForGenBLowDelayEnabled",                    c->m_bFastMEForGenBLowDelayEnabled,                  "If enabled use a fast ME for generalised B Low Delay slices")
 
-    ("MTSImplicit",                                     c->m_MTSImplicit,                                    "Enable implicit MTS when explicit MTS is off\n")
+    ("VeryLowQPSpeedUp",                                toVeryLowQPSpeedUp,                                  "(experimental) Turn off LFNST, BDOF, DMVR, PROF, SbTMVP and quad splits under 8 in B pictures, which save no bytes at very low QP: 0 off (keeps them), 1 on, 2 below QP 16 (with two rate-control passes decided by the second, off with one); 1 and 2 override those tools' own options\n")
+    ("MTSImplicit",                                     toMTSImplicit,                                       "Implicit MTS when explicit MTS is off: 0 off, 1 on, 2 (experimental) off below QP 16 (with two rate-control passes decided by the second, on with one)\n")
     ("TMVPMode",                                        c->m_TMVPModeId,                                     "TMVP mode enable(0: off 1: for all slices 2: for certain slices only)")
     ("DepQuant",                                        c->m_DepQuantEnabled,                                "Enable dependent quantization" )
     ("QuantThrVal",                                     c->m_quantThresholdVal,                              "Quantization threshold value for DQ last coefficient search" )
+    ("KeepHighBand",                                    toKeepHighBand,                                      "(experimental) With DepQuant, keep more fine detail at high rates, on slices up to QP 27: square CUs over 32 whose finest detail a 64-point transform would zero are split, and the trellis drops fewer luma coefficients in the upper half of a transform's frequencies. Costs bytes (0: off, 1: on)" )
     ("SignHideFlag",                                    c->m_SignDataHidingEnabled,                          "Enable sign data hiding" )
     ("MIP",                                             c->m_MIP,                                            "Enable MIP (matrix-based intra prediction)")
     ("FastMIP",                                         c->m_useFastMIP,                                     "Fast encoder search for MIP (matrix-based intra prediction)")
@@ -1124,6 +1130,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MCTFSpeed",                                       c->m_vvencMCTF.MCTFSpeed,                            "MCTF Fast Mode (0:best quality ... 4:fastest operation)")
     ("MCTFLevelTilt",                                   toMCTFLevelTilt,                                     "MCTF filter strength raised for the three upper temporal levels, the pictures the others predict from (-1: auto, on with film grain analysis (fga) in random access; 0: off; 1: on, random access only; also raises explicit MCTFStrength values)")
     ("MCTFUnitSize",                                    c->m_vvencMCTF.MCTFUnitSize,                         "Size of MCTF operation area (block size for motion compensation).")
+    ("MCTFKeepDetail",                                  toMCTFKeepDetail,                                    "(experimental) Keep the fine band of noisy sources on filtered pictures (0:off, 1:on, 2:below QP 16, with two rate-control passes decided by the second, off with one); larger files")
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")

@@ -587,7 +587,7 @@ typedef struct vvenc_config
   bool                m_bFastUDIUseMPMEnabled;
   bool                m_bFastMEForGenBLowDelayEnabled;
 
-  bool                m_MTSImplicit;
+  int8_t              m_MTSImplicit;                                                     // 0: off, 1: on, 2 (experimental): off below QP 16 (with two rate-control passes the second decides; on with one)
   int                 m_TMVPModeId;
   bool                m_DepQuantEnabled;
   bool                m_SignDataHidingEnabled;
@@ -801,14 +801,20 @@ typedef struct vvenc_config
   uint8_t             m_QPFractionVal;                                                   // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
 #define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
   uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
-  int8_t              m_reservedInt8_2[1];
+  int8_t              m_keepHighBand;                                                    // experimental: 1: keep more fine detail at high rates (with DepQuant, on slices up to QP 27): a QT split of square CUs over 32 whose
+                                                                                         // finest detail a 64-point transform would zero, and a trellis that keeps more of a luma transform's upper frequencies (default 0: off)
 #define VVENC_SET_CUTREE_PIC_STRENGTH(s) ((uint8_t)((s)*32+0.5))
   uint8_t             m_cuTreePicStrength;                                               // CU-tree (BIM 1), random access, constant QP: picture QPs from the CU tree's dependency estimate
                                                                                          // in place of the temporal layers' QP offsets, scaled by this 5-bit fixed point value (default 0: off),
                                                                                          // e.g. VVENC_SET_CUTREE_PIC_STRENGTH(2.0); the encoder then codes at QP + round( 3 + 2 * strength ),
                                                                                          // to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32)
   int32_t             m_reservedInt32;
-  double              m_reservedDouble[7];
+  double              m_reservedDouble[6];
+  int8_t              m_veryLowQPSpeedUp;                                                // experimental: turn off tools that save no bytes at very low QPs; 0: off (default), 1: on, 2: below QP 16
+                                                                                         // (with two rate-control passes the second pass decides; off with one)
+  int8_t              m_mctfKeepDetail;                                                  // experimental: MCTF keeps the fine band of noisy sources; 0: off (default), 1: on, 2: below QP 16
+                                                                                         // (with two rate-control passes the second pass decides; off with one)
+  int8_t              m_reservedInt8_3[6];                                               // with the two above in place of a seventh reserved double: the same layout on every ABI
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )

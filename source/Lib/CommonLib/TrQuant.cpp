@@ -310,7 +310,8 @@ void TrQuant::init( const Quant* otherQuant,
                     const bool bUseRDOQTS,
                     const bool scalingListsEnabled,
                     const bool bEnc,
-                    const int  thrVal
+                    const int  thrVal,
+                    const bool keepHighBand
 )
 {
   m_bEnc = bEnc;
@@ -320,7 +321,7 @@ void TrQuant::init( const Quant* otherQuant,
 
   m_quant = new(std::nothrow) DepQuant( otherQuant, bEnc, scalingListsEnabled );
   CHECK( !m_quant, "allocation failed" );
-  m_quant->init( rdoq, bUseRDOQTS, thrVal );
+  m_quant->init( rdoq, bUseRDOQTS, thrVal, keepHighBand );
 }
 
 

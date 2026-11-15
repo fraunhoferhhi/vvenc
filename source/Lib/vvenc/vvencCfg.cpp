@@ -527,7 +527,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bFastUDIUseMPMEnabled                   = true;
   c->m_bFastMEForGenBLowDelayEnabled           = true;
 
-  c->m_MTSImplicit                             = false;
+  c->m_veryLowQPSpeedUp                        = 0;
+  c->m_MTSImplicit                             = 0;
   c->m_TMVPModeId                              = 1;
   c->m_DepQuantEnabled                         = true;
   c->m_SignDataHidingEnabled                   = false;
@@ -640,6 +641,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_alfUnitSize                             = -1;
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
+  c->m_mctfKeepDetail                          = 0;
 
   c->m_blockImportanceMapping                  = 2;
   c->m_cuTreeStrength                         = VVENC_SET_CUTREE_STRENGTH( 2.0 );
@@ -649,6 +651,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_maxDeltaQP                              = -1;
 
   c->m_quantThresholdVal                       = -1;
+  c->m_keepHighBand                            = 0;
   c->m_qtbttSpeedUp                            = 1;
   c->m_qtbttSpeedUpMode                        = 0;
   c->m_fastTTSplit                             = 0;
@@ -702,9 +705,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_fga                                     = 0;
   c->m_fgaStrengthVal                          = VVENC_SET_FGA_STRENGTH(1.0);
 
-  memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
   c->m_reservedInt32 = 0;
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
+  memset( c->m_reservedInt8_3, 0, sizeof(c->m_reservedInt8_3) );
 
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
@@ -1527,18 +1530,33 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vvencMCTF.MCTFUnitSize = std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ? 8 : 16;
   }
 
+  // At very low QP the source's own detail survives quantisation. Value 2 of these experimental options applies them only
+  // there, below QP 16 (the coding QP). Under rate control m_QP is only a guess: with two passes the second one decides, once
+  // the first has shown what QP the target means (EncLib::xDecideVeryLowQP); with one pass value 2 counts as above QP 16.
+  const bool decidedInSecondPass = c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 2;
+  const bool veryLowQP           = c->m_RCTargetBitrate == 0 && vvenc::getCodingQp( *c ) < VVENC_VERY_LOW_QP;
+  if( c->m_mctfKeepDetail == 2 && !( decidedInSecondPass && c->m_vvencMCTF.MCTF ) )
+  {
+    // above this the band costs more than it brings: larger files and visible steps between coded and skipped blocks
+    c->m_mctfKeepDetail = veryLowQP ? 1 : 0;
+  }
+  if( c->m_MTSImplicit == 2 && !decidedInSecondPass )
+  {
+    // Implicit MTS forces DST7 on small intra blocks without testing DCT2. A source that was itself coded with DCT2 (ProRes, HEVC) is sparse in DCT2, and at very low QP that sparsity is worth more than DST7's gain on the prediction residual. Above this, DST7 wins
+    c->m_MTSImplicit = veryLowQP ? 0 : 1;
+  }
+  if( c->m_veryLowQPSpeedUp == 2 && !decidedInSecondPass )
+  {
+    c->m_veryLowQPSpeedUp = veryLowQP ? 1 : 0;
+  }
+  if( c->m_veryLowQPSpeedUp == 1 )
+  {
+    vvenc::turnOffToolsForVeryLowQP( *c );
+  }
+
   if ( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
   {
-    const int log2GopSize = std::min<int>( 6, vvenc::floorLog2( c->m_GOPSize ) );
-
-    c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = std::max( 1, log2GopSize - ( ( vvenc::getCodingQp( *c ) - ( c->m_RCTargetBitrate > 0 ? 1 : 0 ) ) >> 4 ) );
-
-    for ( int i = 0; i < c->m_vvencMCTF.numFrames; i++ )
-    {
-      c->m_vvencMCTF.MCTFFrames[i] = c->m_GOPSize >> ( c->m_vvencMCTF.numFrames - i - 1 );
-      c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( vvenc::getCodingQp( *c ) + c->m_QPFractionVal / 256.0 - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
-    }
-    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( vvenc::getCodingQp( *c ) + c->m_QPFractionVal / 256.0 - 4.0 ) * 3.0 / 32.0 );
+    vvenc::initMCTFStrengths( c->m_vvencMCTF, c->m_GOPSize, vvenc::getCodingQp( *c ), c->m_QPFractionVal, c->m_RCTargetBitrate > 0 );
   }
 
   if( c->m_cuTreeBlockSize == -1 )
@@ -1984,6 +2002,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
   vvenc_confirmParameter( c, c->m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
 
+  vvenc_confirmParameter( c, c->m_keepHighBand < 0 || c->m_keepHighBand > 1, "KeepHighBand must be 0 or 1" );
+  vvenc_confirmParameter( c, c->m_keepHighBand && !c->m_DepQuantEnabled, "KeepHighBand requires DepQuant (its trellis weight lives in dependent quantization)" );
   if( c->m_DepQuantEnabled )
   {
     vvenc_confirmParameter( c, !c->m_RDOQ || !c->m_useRDOQTS, "RDOQ and RDOQTS must be greater 0 if dependent quantization is enabled" );
@@ -2050,6 +2070,9 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFLevelTilt < 0 || c->m_vvencMCTF.MCTFLevelTilt > 1,  "MCTFLevelTilt must be -1 (auto), 0 (off) or 1 (on)" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF && c->m_vvencMCTF.MCTFLevelTilt > 0 && ( c->m_GOPSize == 1 || !c->m_picReordering ),
                                                                                                     "MCTFLevelTilt requires random access (GOPSize > 1 and PicReordering)" );
+  vvenc_confirmParameter( c, c->m_mctfKeepDetail < 0 || c->m_mctfKeepDetail > 2, "MCTFKeepDetail must be 0, 1 or 2" );
+  vvenc_confirmParameter( c, c->m_MTSImplicit < 0 || c->m_MTSImplicit > 2, "MTSImplicit must be 0, 1 or 2" );
+  vvenc_confirmParameter( c, c->m_veryLowQPSpeedUp < 0 || c->m_veryLowQPSpeedUp > 2, "VeryLowQPSpeedUp must be 0, 1 or 2" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize < 8,                                       "MCTFUnitSize is smaller than 8" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize > 32,                                      "MCTFUnitSize is larger than 32" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize & ( c->m_vvencMCTF.MCTFUnitSize - 1 ),     "MCTFUnitSize is not a power of 2" );
@@ -3359,7 +3382,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "CST:" << c->m_dualITree << " ";
     css << "BDOF:" << c->m_BDOF << " ";
     css << "DMVR:" << c->m_DMVR << " ";
-    css << "MTSImplicit:" << c->m_MTSImplicit << " ";
+    css << "MTSImplicit:" << (int)c->m_MTSImplicit << " ";
+    css << "VeryLowQPSpeedUp:" << (int) c->m_veryLowQPSpeedUp << " ";
     css << "SBT:" << c->m_SBT << " ";
     css << "JCbCr:" << c->m_JointCbCrMode << " ";
     css << "CabacInitPresent:" << c->m_cabacInitPresent << " ";
@@ -3465,6 +3489,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << ".5 ";
     else
       css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << " ";
+    css << "KeepHighBand:" << (int) c->m_keepHighBand << " ";
     css << "SelectiveRDQO:" << ( int ) c->m_useSelectiveRDOQ << " ";
 
     css << "\n" << loglvl << "RATE CONTROL CFG: ";

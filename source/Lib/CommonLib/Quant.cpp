@@ -620,7 +620,7 @@ void Quant::dequant(const TransformUnit& tu,
   }
 }
 
-void Quant::init( int rdoq, bool bUseRDOQTS, int thrVal )
+void Quant::init( int rdoq, bool bUseRDOQTS, int thrVal, bool )
 {
 
   // TODO: pass to init() a single variable containing (quantization) flags,
