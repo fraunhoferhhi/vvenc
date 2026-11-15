@@ -97,6 +97,17 @@ static inline int16x4_t load_s16x2x2( const int16_t* src, ptrdiff_t stride )
   return vreinterpret_s16_s32( ret );
 }
 
+// 4 rows of 4 samples: rows 0 and 1 in s[0], rows 2 and 3 in s[1].
+static inline void load_s16x4x4( const int16_t* src, const ptrdiff_t p, int16x8_t s[2] )
+{
+  const int16x4_t row0 = vld1_s16( src );
+  const int16x4_t row1 = vld1_s16( src + p );
+  const int16x4_t row2 = vld1_s16( src + 2 * p );
+  const int16x4_t row3 = vld1_s16( src + 3 * p );
+  s[0] = vcombine_s16( row0, row1 );
+  s[1] = vcombine_s16( row2, row3 );
+}
+
 static inline void load_s16x4x6( const int16_t* src, const ptrdiff_t p, int16x4_t s[6] )
 {
   s[0] = vld1_s16( src );
