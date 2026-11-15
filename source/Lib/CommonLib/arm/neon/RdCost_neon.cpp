@@ -1772,6 +1772,87 @@ Distortion lumaWeightedSSE_neon( const DistParam& rcDtParam, ChromaFormat chmFmt
   return uiSum;
 }
 
+// IBC block vector bits (RdCost::getBitsMultiplePredsIBC) for a line of vectors ( x0 + i * xStep, y ), four per vector.
+// The bits of a vector difference component val are 2 * floorLog2( u ) + 1 with u = val > 0 ? 2 * val : 1 - 2 * val
+// (getIComponentBitsIBC); u >= 1, so floorLog2( u ) = 31 - clz( u ).
+static inline int32x4_t bvComponentBits_neon( const int32x4_t val )
+{
+  const int32x4_t twice = vaddq_s32( val, val );
+  const int32x4_t u     = vbslq_s32( vcgtq_s32( val, vdupq_n_s32( 0 ) ), twice, vsubq_s32( vdupq_n_s32( 1 ), twice ) );
+  const int32x4_t log2  = vsubq_s32( vdupq_n_s32( 31 ), vclzq_s32( u ) );
+  return vaddq_s32( vaddq_s32( log2, log2 ), vdupq_n_s32( 1 ) );
+}
+
+// The vertical difference is the same for every vector of the line: its absolute value and bits per predictor once.
+struct BvVerticalPart_neon
+{
+  int32x4_t absDiff[2];
+  int32x4_t bits[2];
+
+  BvVerticalPart_neon( const int rmvV0, const int rmvV1 )
+  {
+    absDiff[0] = vdupq_n_s32( std::abs( rmvV0 ) );
+    absDiff[1] = vdupq_n_s32( std::abs( rmvV1 ) );
+    bits[0]    = bvComponentBits_neon( vdupq_n_s32( rmvV0 ) );
+    bits[1]    = bvComponentBits_neon( vdupq_n_s32( rmvV1 ) );
+  }
+
+  // the bits with the first predictor where its sum of absolute differences is smaller, else with the second
+  int32x4_t selectBits( const int32x4_t rmvH0, const int32x4_t rmvH1 ) const
+  {
+    const int32x4_t abs0  = vaddq_s32( vabsq_s32( rmvH0 ), absDiff[0] );
+    const int32x4_t abs1  = vaddq_s32( vabsq_s32( rmvH1 ), absDiff[1] );
+    const int32x4_t bits0 = vaddq_s32( bvComponentBits_neon( rmvH0 ), bits[0] );
+    const int32x4_t bits1 = vaddq_s32( bvComponentBits_neon( rmvH1 ), bits[1] );
+    return vbslq_s32( vcltq_s32( abs0, abs1 ), bits0, bits1 );
+  }
+};
+
+static void bvBitsLine_neon( const Mv* predictors, const int x0, const int xStep, const int count, const int y,
+                             const bool useIMV, unsigned* bits )
+{
+  // with useIMV, vectors of whole samples ( x and y multiples of 4 ) may also be coded in sample precision
+  const bool                samplePrecRow = useIMV && ( y & 3 ) == 0;
+  const BvVerticalPart_neon vert( y - predictors[0].ver, y - predictors[1].ver );
+  const BvVerticalPart_neon vertSamplePrec( ( y >> 2 ) - ( ( predictors[0].ver + 2 ) >> 2 ),
+                                            ( y >> 2 ) - ( ( predictors[1].ver + 2 ) >> 2 ) );
+  const int32x4_t predH0       = vdupq_n_s32( predictors[0].hor );
+  const int32x4_t predH1       = vdupq_n_s32( predictors[1].hor );
+  const int32x4_t predH0Sample = vdupq_n_s32( ( predictors[0].hor + 2 ) >> 2 );
+  const int32x4_t predH1Sample = vdupq_n_s32( ( predictors[1].hor + 2 ) >> 2 );
+
+  static const int32_t lanes[4] = { 0, 1, 2, 3 };
+  int32x4_t            xs       = vmlaq_n_s32( vdupq_n_s32( x0 ), vld1q_s32( lanes ), xStep );
+  const int32x4_t      step     = vdupq_n_s32( 4 * xStep );
+
+  for( int i = 0; i < count; i += 4, xs = vaddq_s32( xs, step ) )
+  {
+    uint32x4_t result = vreinterpretq_u32_s32( vert.selectBits( vsubq_s32( xs, predH0 ), vsubq_s32( xs, predH1 ) ) );
+    if( samplePrecRow )
+    {
+      const int32x4_t  xSample    = vshrq_n_s32( xs, 2 );
+      const uint32x4_t sampleBits = vreinterpretq_u32_s32(
+        vertSamplePrec.selectBits( vsubq_s32( xSample, predH0Sample ), vsubq_s32( xSample, predH1Sample ) ) );
+      const uint32x4_t wholeX = vceqq_s32( vandq_s32( xs, vdupq_n_s32( 3 ) ), vdupq_n_s32( 0 ) );
+      result = vbslq_u32( wholeX, vminq_u32( result, sampleBits ), result );
+    }
+
+    if( i + 4 <= count )
+    {
+      vst1q_u32( &bits[i], result );
+    }
+    else
+    {
+      unsigned last[4];
+      vst1q_u32( last, result );
+      for( int k = 0; k < count - i; k++ )
+      {
+        bits[i + k] = last[k];
+      }
+    }
+  }
+}
+
 Distortion fixWeightedSSE_neon( const DistParam& rcDtParam, uint32_t fixedPTweight )
 {
   int iRows = rcDtParam.org.height;
@@ -1977,6 +2058,7 @@ void RdCost::_initRdCostARM<NEON>()
 
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_neon;
   m_afpDistortFunc[0][DF_HAD_2SAD ] = xGetHAD2SADs_neon;
+  m_bvBitsLineIBC = bvBitsLine_neon;
 
   m_afpDistortFunc[0][DF_HAD] = xGetHADs_generic_neon<false>;
   m_afpDistortFunc[0][DF_HAD2] = xGetHADs_neon<2>;
