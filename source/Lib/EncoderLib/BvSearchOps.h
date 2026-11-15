@@ -57,6 +57,9 @@ namespace vvenc {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
 using namespace x86_simd;
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT
+using namespace arm_simd;
+#endif
 
 // the SIMD optimized helpers of the IBC block vector search
 struct BvSearchOps
@@ -72,6 +75,11 @@ struct BvSearchOps
   void initBvSearchOpsX86();
   template<X86_VEXT vext>
   void _initBvSearchOpsX86();
+#endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT
+  void initBvSearchOpsARM();
+  template<ARM_VEXT vext>
+  void _initBvSearchOpsARM();
 #endif
 };
 

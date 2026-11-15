@@ -81,6 +81,12 @@ BvSearchOps::BvSearchOps( bool enableOpt )
     initBvSearchOpsX86();
   }
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT
+  if( enableOpt )
+  {
+    initBvSearchOpsARM();
+  }
+#endif
 }
 
 } // namespace vvenc

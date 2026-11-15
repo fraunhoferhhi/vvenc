@@ -60,6 +60,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "EncoderLib/BvSearchOps.h"
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
 #include "EncoderLib/SEIFilmGrainAnalyzer.h"
 
@@ -101,6 +102,17 @@ void AffineGradientSearch::initAffineGradientSearchARM()
   if( vext >= NEON )
   {
     _initAffineGradientSearchARM<NEON>();
+  }
+}
+#endif
+
+#if ENABLE_SIMD_OPT
+void BvSearchOps::initBvSearchOpsARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initBvSearchOpsARM<NEON>();
   }
 }
 #endif
