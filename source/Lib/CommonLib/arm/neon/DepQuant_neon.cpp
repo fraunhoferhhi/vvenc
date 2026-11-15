@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDefARM.h"
 #include "CommonLib/DepQuant.h"
+#include "CommonLib/DepQuantDecide.h"
 #include "CommonLib/arm/mem_neon.h"
 #include "CommonLib/arm/neon/permute_neon.h"
 #include "CommonLib/arm/neon/sum_neon.h"
@@ -707,6 +708,153 @@ void checkAllRdCostsOdd1_neon( const ScanPosType spt, const int64_t pq_a_dist, c
   store_s8x4( decisions.prevId, prevId );
 }
 
+// checkAllRdCosts of the four states with the data flow of the x86 DQInternSimd::checkAllRdCosts: the same costs, and per
+// decision the same candidates in the same order, each replacing the best only when strictly smaller. Decisions are
+// written, not read. All candidate levels are below 4. Per decision (A: pqData[0] from states 0 and 1,
+// pqData[3] from 2 and 3; B: pqData[2] from 0 and 1, pqData[1] from 2 and 3):
+//   decision 0: Z from 0, A from 0, B from 1    decision 1: Z from 2, A from 2, B from 3
+//   decision 2: B from 0, Z from 1, A from 1    decision 3: B from 2, Z from 3, A from 3
+// Forced inline: xPopulateTrellis calls it for every coefficient
+static ALWAYS_INLINE void checkAllRdCosts_neon( const ScanPosType spt, const PQData* pqData, Decisions& decisions, const StateMem& state )
+{
+  const int64x2_t rdCost01 = vld1q_s64( &state.rdCost[0] );
+  const int64x2_t rdCost23 = vld1q_s64( &state.rdCost[2] );
+
+  int64x2_t rdCostZ01 = rdCost01;
+  int64x2_t rdCostZ23 = rdCost23;
+  int64x2_t rdCostA01 = vaddq_s64( rdCost01, vdupq_n_s64( pqData[0].deltaDist ) );
+  int64x2_t rdCostA23 = vaddq_s64( rdCost23, vdupq_n_s64( pqData[3].deltaDist ) );
+  int64x2_t rdCostB01 = vaddq_s64( rdCost01, vdupq_n_s64( pqData[2].deltaDist ) );
+  int64x2_t rdCostB23 = vaddq_s64( rdCost23, vdupq_n_s64( pqData[1].deltaDist ) );
+
+  // the significance bits of each state's context: intBits[0] for Z, intBits[1] for A and B
+  const uint32x2_t sigBits0  = vld1_u32( state.m_sigFracBitsArray[0][state.ctx.sig[0]].intBits );
+  const uint32x2_t sigBits1  = vld1_u32( state.m_sigFracBitsArray[1][state.ctx.sig[1]].intBits );
+  const uint32x2_t sigBits2  = vld1_u32( state.m_sigFracBitsArray[2][state.ctx.sig[2]].intBits );
+  const uint32x2_t sigBits3  = vld1_u32( state.m_sigFracBitsArray[3][state.ctx.sig[3]].intBits );
+  const uint32x4x2_t sigBits = vtrnq_u32( vcombine_u32( sigBits0, sigBits2 ), vcombine_u32( sigBits1, sigBits3 ) );
+  int32x4_t addZ             = vreinterpretq_s32_u32( sigBits.val[0] );
+  int32x4_t sigBitsNonZero   = vreinterpretq_s32_u32( sigBits.val[1] );
+
+  // the level bits of each state's coefficient context: A of (lvl0, lvl0, lvl3, lvl3), B of (lvl2, lvl2, lvl1, lvl1)
+  const TCoeff lvl0 = pqData[0].absLevel;
+  const TCoeff lvl1 = pqData[1].absLevel;
+  const TCoeff lvl2 = pqData[2].absLevel;
+  const TCoeff lvl3 = pqData[3].absLevel;
+  const CoeffFracBits& cff0 = state.m_gtxFracBitsArray[state.ctx.cff[0]];
+  const CoeffFracBits& cff1 = state.m_gtxFracBitsArray[state.ctx.cff[1]];
+  const CoeffFracBits& cff2 = state.m_gtxFracBitsArray[state.ctx.cff[2]];
+  const CoeffFracBits& cff3 = state.m_gtxFracBitsArray[state.ctx.cff[3]];
+  // each lane straight from its table entry
+  int32x2_t addA01 = vld1_dup_s32( &cff0.bits[lvl0] );
+  int32x2_t addA23 = vld1_dup_s32( &cff2.bits[lvl3] );
+  int32x2_t addB01 = vld1_dup_s32( &cff0.bits[lvl2] );
+  int32x2_t addB23 = vld1_dup_s32( &cff2.bits[lvl1] );
+  addA01 = vld1_lane_s32( &cff1.bits[lvl0], addA01, 1 );
+  addA23 = vld1_lane_s32( &cff3.bits[lvl3], addA23, 1 );
+  addB01 = vld1_lane_s32( &cff1.bits[lvl2], addB01, 1 );
+  addB23 = vld1_lane_s32( &cff3.bits[lvl1], addB23, 1 );
+  int32x4_t addA = vcombine_s32( addA01, addA23 );
+  int32x4_t addB = vcombine_s32( addB01, addB23 );
+
+  if( spt == SCAN_SOCSBB )
+  {
+    const int32x4_t sbbBits = vld1q_s32( state.sbbBits1 );
+    addA = vaddq_s32( addA, sbbBits );
+    addB = vaddq_s32( addB, sbbBits );
+    addZ = vaddq_s32( addZ, sbbBits );
+  }
+  else if( spt == SCAN_EOCSBB )
+  {
+    // a state without significant coefficients: Z costs rdCostInit (plus its significance bits, as in the x86
+    // kernel), A and B have no significance bits; noSig is all ones where numSig is 0, widened by sign extension
+    const uint8x8_t numSig     = load_u8x4( state.numSig );
+    const int8x8_t  noSig8     = vreinterpret_s8_u8( vceq_u8( numSig, vdup_n_u8( 0 ) ) );
+    const int32x4_t noSig      = vmovl_s16( vget_low_s16( vmovl_s8( noSig8 ) ) );
+    const uint64x2_t noSig01   = vreinterpretq_u64_s64( vmovl_s32( vget_low_s32( noSig ) ) );
+    const uint64x2_t noSig23   = vreinterpretq_u64_s64( vmovl_s32( vget_high_s32( noSig ) ) );
+    const int64x2_t rdCostInit = vdupq_n_s64( DQIntern::rdCostInit );
+    sigBitsNonZero = vbicq_s32( sigBitsNonZero, noSig );
+    rdCostZ01      = vbslq_s64( noSig01, rdCostInit, rdCostZ01 );
+    rdCostZ23      = vbslq_s64( noSig23, rdCostInit, rdCostZ23 );
+  }
+
+  addA = vaddq_s32( addA, sigBitsNonZero );
+  addB = vaddq_s32( addB, sigBitsNonZero );
+
+  rdCostZ01 = vaddw_s32( rdCostZ01, vget_low_s32( addZ ) );
+  rdCostZ23 = vaddw_s32( rdCostZ23, vget_high_s32( addZ ) );
+  rdCostA01 = vaddw_s32( rdCostA01, vget_low_s32( addA ) );
+  rdCostA23 = vaddw_s32( rdCostA23, vget_high_s32( addA ) );
+  rdCostB01 = vaddw_s32( rdCostB01, vget_low_s32( addB ) );
+  rdCostB23 = vaddw_s32( rdCostB23, vget_high_s32( addB ) );
+
+  const int64x2_t rdCostZ02 = vcombine_s64( vget_low_s64( rdCostZ01 ), vget_low_s64( rdCostZ23 ) );
+  const int64x2_t rdCostZ13 = vcombine_s64( vget_high_s64( rdCostZ01 ), vget_high_s64( rdCostZ23 ) );
+  const int64x2_t rdCostA02 = vcombine_s64( vget_low_s64( rdCostA01 ), vget_low_s64( rdCostA23 ) );
+  const int64x2_t rdCostA13 = vcombine_s64( vget_high_s64( rdCostA01 ), vget_high_s64( rdCostA23 ) );
+  const int64x2_t rdCostB02 = vcombine_s64( vget_low_s64( rdCostB01 ), vget_low_s64( rdCostB23 ) );
+  const int64x2_t rdCostB13 = vcombine_s64( vget_high_s64( rdCostB01 ), vget_high_s64( rdCostB23 ) );
+
+  // per decision the prevId (lanes 0-3) and absLevel (lanes 4-7) of the best candidate: start (0, 2, 0, 2) and
+  // (0, 0, lvl2, lvl1), first candidates (0, 2, 1, 3) and (lvl0, lvl3, 0, 0), second (1, 3, 1, 3) and (lvl2, lvl1, lvl0, lvl3)
+  int16x4_t lvl03 = vdup_n_s16( int16_t( lvl0 ) );
+  lvl03           = vset_lane_s16( int16_t( lvl3 ), lvl03, 1 );
+  lvl03           = vset_lane_s16( int16_t( lvl2 ), lvl03, 2 );
+  lvl03           = vset_lane_s16( int16_t( lvl1 ), lvl03, 3 );
+  static constexpr int16_t candMaskLut[4] = { -1, -1, 0, 0 };
+  static constexpr int16_t prevIdLut[12]  = { 0, 2, 0, 2, 0, 2, 1, 3, 1, 3, 1, 3 };
+  const int16x4_t candMask = vld1_s16( candMaskLut );
+  const int16x4_t prevId0  = vld1_s16( prevIdLut );
+  const int16x4_t prevId1  = vld1_s16( prevIdLut + 4 );
+  const int16x4_t prevId2  = vld1_s16( prevIdLut + 8 );
+  const int16x8_t cand1    = vcombine_s16( prevId1, vand_s16( lvl03, candMask ) );
+  const int16x8_t cand2    = vcombine_s16( prevId2, vext_s16( lvl03, lvl03, 2 ) );
+  int16x8_t       best     = vcombine_s16( prevId0, vbic_s16( lvl03, candMask ) );
+
+  // first candidates
+  uint64x2_t chng01 = vvenc_vcgtq_s64( rdCostZ02, rdCostA02 );
+  uint64x2_t chng23 = vvenc_vcgtq_s64( rdCostB02, rdCostZ13 );
+  int64x2_t  best01 = vbslq_s64( chng01, rdCostA02, rdCostZ02 );
+  int64x2_t  best23 = vbslq_s64( chng23, rdCostZ13, rdCostB02 );
+  uint16x4_t chng   = vmovn_u32( vcombine_u32( vmovn_u64( chng01 ), vmovn_u64( chng23 ) ) );
+  best              = vbslq_s16( vcombine_u16( chng, chng ), cand1, best );
+
+  // second candidates
+  chng01 = vvenc_vcgtq_s64( best01, rdCostB13 );
+  chng23 = vvenc_vcgtq_s64( best23, rdCostA13 );
+  best01 = vbslq_s64( chng01, rdCostB13, best01 );
+  best23 = vbslq_s64( chng23, rdCostA13, best23 );
+  chng   = vmovn_u32( vcombine_u32( vmovn_u64( chng01 ), vmovn_u64( chng23 ) ) );
+  best   = vbslq_s16( vcombine_u16( chng, chng ), cand2, best );
+
+  vst1q_s64( &decisions.rdCost[0], best01 );
+  vst1q_s64( &decisions.rdCost[2], best23 );
+  vst1_s16( decisions.absLevel, vget_high_s16( best ) );
+  store_s8x4( decisions.prevId, vmovn_s16( best ) );
+}
+
+// The per-coefficient kernels of this file, for DepQuant::xPopulateTrellis to inline (as DQInternSimd::KernelsX86)
+struct KernelsNeon
+{
+  static void checkAllRdCosts( const vvenc::DepQuant&, const ScanPosType spt, const PQData* pqData, Decisions& decisions, const StateMem& state )
+  {
+    checkAllRdCosts_neon( spt, pqData, decisions, state );
+  }
+  static void checkAllRdCostsOdd1( const vvenc::DepQuant&, const ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, Decisions& decisions, const StateMem& state )
+  {
+    checkAllRdCostsOdd1_neon( spt, pq_a_dist, pq_b_dist, decisions, state );
+  }
+  static void updateStates( const vvenc::DepQuant&, const ScanInfo& scanInfo, const Decisions& decisions, StateMem& curr )
+  {
+    updateStates_neon( scanInfo, decisions, curr );
+  }
+  static void updateStatesEOS( const vvenc::DepQuant&, const ScanInfo& scanInfo, const Decisions& decisions, const StateMem& skip, StateMem& curr, CommonCtx& commonCtx )
+  {
+    updateStatesEOS_neon( scanInfo, decisions, skip, curr, commonCtx );
+  }
+};
+
 } // namespace DQInternSimd
 
 template<>
@@ -717,6 +865,8 @@ void DepQuant::_initDepQuantARM<NEON>()
   m_dequantCoeffs = DQInternSimd::dequantCoeffs_neon;
   m_updateStates = DQInternSimd::updateStates_neon;
   m_updateStatesEOS = DQInternSimd::updateStatesEOS_neon;
+  m_checkAllRdCosts = DQInternSimd::checkAllRdCosts_neon;
+  m_populateTrellis = xPopulateTrellis<DQInternSimd::KernelsNeon>;
 }
 
 } // namespace vvenc

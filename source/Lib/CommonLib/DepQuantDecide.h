@@ -42,9 +42,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 // The decisions of the dependent quantization trellis for one coefficient, and the loop over a block's coefficients. Only
-// DepQuant.cpp and x86/DepQuantX86.h include this: DepQuant.cpp instantiates the templates with its function pointers
-// (the scalar kernels, or Arm's), every x86 SIMD translation unit with its own kernels, which then inline. All functions
-// here are templates or have internal linkage, so the copies built with different instruction sets stay apart.
+// DepQuant.cpp, x86/DepQuantX86.h and arm/neon/DepQuant_neon.cpp include this: DepQuant.cpp instantiates the templates
+// with its function pointers (the scalar kernels, and the scaling-list path of every level), every SIMD translation unit
+// with its own kernels, which then inline. All functions here are templates or have internal linkage, so the copies built
+// with different instruction sets stay apart.
 
 #include "DepQuant.h"
 
