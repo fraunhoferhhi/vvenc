@@ -3271,6 +3271,44 @@ static int lostGrainBand( int mean8 )
   return band;
 }
 
+// The power of a 16x16 block in the five lowest AC coefficients of squaredDct16, [u][v] with u + v = 1, 2 (u the
+// horizontal frequency), without computing the other 251. It equals the sum of those five outputs of squaredDct16 bit
+// for bit: a coefficient depends only on its own row of the horizontal stage, and the integer sums, the rounding, the
+// clipping and the order of the five additions are those of fgaSquaredDct16Core, which the SIMD kernels match exactly.
+static double lowFrequencyPower16( const Pel* src, int stride, int maxRange )
+{
+  constexpr int N              = 16;
+  constexpr int NUM_HORIZONTAL = 3;   // the horizontal frequencies 0 .. 2 hold the five coefficients
+  constexpr int LOW[ 5 ][ 2 ]  = { { 0, 1 }, { 0, 2 }, { 1, 0 }, { 1, 1 }, { 2, 0 } };   // (u, v), in squaredDct16's order
+  const TMatrixCoeff* tr = g_trCoreDCT2P16[ TRANSFORM_FORWARD ][ 0 ];
+  int horizontal[ NUM_HORIZONTAL ][ N ];   // [horizontal frequency][row]
+  for( int u = 0; u < NUM_HORIZONTAL; u++ )
+  {
+    for( int y = 0; y < N; y++ )
+    {
+      const Pel* row = src + y * stride;
+      int acc = 0;
+      for( int k = 0; k < N; k++ )
+      {
+        acc += tr[ u * N + k ] * row[ k ];
+      }
+      horizontal[ u ][ y ] = ( acc + 128 ) >> 8;
+    }
+  }
+  double low = 0.0;
+  for( const auto& uv : LOW )
+  {
+    int acc = 0;
+    for( int k = 0; k < N; k++ )
+    {
+      acc += horizontal[ uv[ 0 ] ][ k ] * tr[ uv[ 1 ] * N + k ];
+    }
+    const int64_t c = Clip3( -maxRange, maxRange, ( acc + 128 ) >> 8 );
+    low += (double) ( c * c );
+  }
+  return low;
+}
+
 void FGAnalyzer::lostGrainSpectra( const CPelBuf& org, const CPelBuf& rec, int bitDepth, std::vector<LostGrainSpectrum>& spectra ) const
 {
   constexpr int N = 16;   // squaredDct16's block size
@@ -3302,9 +3340,7 @@ void FGAnalyzer::lostGrainSpectra( const CPelBuf& org, const CPelBuf& rec, int b
       {
         continue;
       }
-      double so[ N * N ] = {};
-      m_kernels.squaredDct16( o, org.stride, maxRange, so );
-      const double low = so[ 1 ] + so[ 2 ] + so[ N ] + so[ N + 1 ] + so[ 2 * N ];   // [u][v] with u + v = 1, 2
+      const double low = lowFrequencyPower16( o, org.stride, maxRange );
       bandBlocks[ band ].push_back( { low, blocks.size() } );
       blocks.push_back( { x, y, mean8 } );
     }
@@ -3458,39 +3494,47 @@ static double lostGrainCost( const FGAnalyzer::LostGrainPower& power, double var
   return cost;
 }
 
-double FGAnalyzer::lostGrainFit( const LostGrainPower& power, int bitDepth, bool chroma420, int log2ScaleFactor, int s0, int h0,
-                                 int w0, int h, int w, int& scale )
+FGAnalyzer::LostGrainShape FGAnalyzer::lostGrainShape( bool chroma420, int h, int w )
 {
   constexpr int N = 16;
-  constexpr int GROUPS = LostGrainPower::GROUPS;
+  const int table = chroma420 ? 1 : 0;
+  h = Clip3( 2, 14, h ); w = Clip3( 2, 14, w );
+  const auto& m = GRAIN_SPECTRUM_MARGINALS[ table ][ h - 2 ][ w - 2 ];
+  double shapeSum = 0.0;
+  for( int k = 1; k < N * N; k++ )
+  {
+    shapeSum += m[ 0 ][ k / N ] * m[ 1 ][ k % N ];
+  }
+  LostGrainShape shape;
+  shape.patternStddev = PATTERN_STDDEV[ table ][ h - 2 ][ w - 2 ];
+  shape.blockShare    = BLOCK_VARIANCE_SHARE[ table ][ h - 2 ][ w - 2 ];
+  // per group and direction: the synthesis's power per unit grain variance
+  const double share = shape.blockShare;
+  for( int k = 1; k < N * N; k++ )
+  {
+    const double p  = N * N * share * m[ 0 ][ k / N ] * m[ 1 ][ k % N ] / shapeSum;
+    const double wx = lostGrainHorizontalShare( k );
+    shape.power[ lostGrainGroup( k ) ][ 0 ] += wx * p;
+    shape.power[ lostGrainGroup( k ) ][ 1 ] += ( 1.0 - wx ) * p;
+  }
+  return shape;
+}
+
+double FGAnalyzer::lostGrainFit( const LostGrainPower& power, int bitDepth, bool chroma420, int log2ScaleFactor, int s0, int h0,
+                                 int w0, const LostGrainShape& shape, int& scale )
+{
   scale = s0;
   if( power.blocks <= 0 || s0 <= 0 )
   {
     return -1.0;
   }
   const int table = chroma420 ? 1 : 0;
-  h0 = Clip3( 2, 14, h0 ); w0 = Clip3( 2, 14, w0 ); h = Clip3( 2, 14, h ); w = Clip3( 2, 14, w );
-  const double unit   = 1.0 / double( 1 << ( log2ScaleFactor + 14 - bitDepth ) );
-  const double sigma0 = s0 * PATTERN_STDDEV[ table ][ h0 - 2 ][ w0 - 2 ] * unit;
-  const double power0 = sigma0 * sigma0 * BLOCK_VARIANCE_SHARE[ table ][ h0 - 2 ][ w0 - 2 ];   // the analyzer's grain
-  const auto&  m      = GRAIN_SPECTRUM_MARGINALS[ table ][ h - 2 ][ w - 2 ];
-  double shapeSum = 0.0;
-  for( int k = 1; k < N * N; k++ )
-  {
-    shapeSum += m[ 0 ][ k / N ] * m[ 1 ][ k % N ];
-  }
-  // per group and direction: the synthesis's power per unit grain variance (the original's and the reconstruction's mean
-  // power: power)
-  double ps[ GROUPS ][ LostGrainPower::DIRECTIONS ] = {};
-  const double share = BLOCK_VARIANCE_SHARE[ table ][ h - 2 ][ w - 2 ];
-  for( int k = 1; k < N * N; k++ )
-  {
-    const double p  = N * N * share * m[ 0 ][ k / N ] * m[ 1 ][ k % N ] / shapeSum;
-    const double wx = lostGrainHorizontalShare( k );
-    ps[ lostGrainGroup( k ) ][ 0 ] += wx * p;
-    ps[ lostGrainGroup( k ) ][ 1 ] += ( 1.0 - wx ) * p;
-  }
-  const double sigmaUnit = PATTERN_STDDEV[ table ][ h - 2 ][ w - 2 ] * unit;
+  h0 = Clip3( 2, 14, h0 ); w0 = Clip3( 2, 14, w0 );
+  const double unit      = 1.0 / double( 1 << ( log2ScaleFactor + 14 - bitDepth ) );
+  const double sigma0    = s0 * PATTERN_STDDEV[ table ][ h0 - 2 ][ w0 - 2 ] * unit;
+  const double power0    = sigma0 * sigma0 * BLOCK_VARIANCE_SHARE[ table ][ h0 - 2 ][ w0 - 2 ];   // the analyzer's grain
+  const double share     = shape.blockShare;
+  const double sigmaUnit = shape.patternStddev * unit;
   double best = -1.0;
   for( int s = 0; s <= MAX_STANDARD_DEVIATION; s++ )
   {
@@ -3499,7 +3543,7 @@ double FGAnalyzer::lostGrainFit( const LostGrainPower& power, int bitDepth, bool
     {
       break;
     }
-    const double cost = lostGrainCost( power, var, ps );
+    const double cost = lostGrainCost( power, var, shape.power );
     if( best < 0 || cost < best )
     {
       best  = cost;

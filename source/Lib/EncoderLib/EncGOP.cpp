@@ -3047,7 +3047,10 @@ void EncGOP::xFitLostGrain( int c, unsigned layer, int bitDepth, bool chroma420,
                             const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm )
 {
   constexpr int MAX_SHIFT         = 12;
-  static constexpr int MAX_CUTOFF = 14;   // static: the lambda below reads it without a capture (MSVC C3493)
+  // static: the lambdas below read them without a capture (MSVC C3493). The cut-offs' range, which
+  // FGAnalyzer::lostGrainShape clips to as well (2 .. 14).
+  static constexpr int MIN_CUTOFF = 2;
+  static constexpr int MAX_CUTOFF = 14;
   const int n = cm.numIntensityIntervals;
   std::vector<int> s0( n ), h0( n ), w0( n );   // the analyzer's values
   for( int i = 0; i < n; i++ )
@@ -3060,7 +3063,43 @@ void EncGOP::xFitLostGrain( int c, unsigned layer, int bitDepth, bool chroma420,
   const bool coarser   = c != COMP_Y;
   const int  numShifts = coarser ? 2 * MAX_SHIFT + 1 : MAX_SHIFT + 1;
   auto shiftAt = [coarser]( int k ) { return coarser ? ( k & 1 ? ( k + 1 ) / 2 : -k / 2 ) : k; };
-  auto cutoff  = [coarser]( int x ) { return coarser ? Clip3( 2, MAX_CUTOFF, x ) : std::min( MAX_CUTOFF, x ); };
+  auto cutoff  = [coarser]( int x ) { return coarser ? Clip3( MIN_CUTOFF, MAX_CUTOFF, x ) : std::min( MAX_CUTOFF, x ); };
+
+  // Many shifts give an interval the same clipped cut-offs, so every interval is fitted once per distinct pair, when a
+  // shift first asks for it, and the grain's shape at a pair is computed once for all intervals.
+  static constexpr int NUM_CUTOFFS = MAX_CUTOFF - MIN_CUTOFF + 1;
+  struct Fit
+  {
+    double cost  = 0.0;
+    int    scale = 0;
+    bool   known = false;
+  };
+  struct IntervalFits
+  {
+    Fit at[ NUM_CUTOFFS ][ NUM_CUTOFFS ];
+  };
+  std::vector<IntervalFits>  intervalFits( n );
+  FGAnalyzer::LostGrainShape shapes    [ NUM_CUTOFFS ][ NUM_CUTOFFS ];
+  bool                       shapeKnown[ NUM_CUTOFFS ][ NUM_CUTOFFS ] = {};
+  auto fitAt = [&]( int i, int h, int w ) -> const Fit&
+  {
+    const int hIdx = Clip3( MIN_CUTOFF, MAX_CUTOFF, h ) - MIN_CUTOFF;
+    const int wIdx = Clip3( MIN_CUTOFF, MAX_CUTOFF, w ) - MIN_CUTOFF;
+    Fit& fit = intervalFits[ i ].at[ hIdx ][ wIdx ];
+    if( !fit.known )
+    {
+      if( !shapeKnown[ hIdx ][ wIdx ] )
+      {
+        shapes    [ hIdx ][ wIdx ] = FGAnalyzer::lostGrainShape( chroma420, hIdx + MIN_CUTOFF, wIdx + MIN_CUTOFF );
+        shapeKnown[ hIdx ][ wIdx ] = true;
+      }
+      fit.cost  = FGAnalyzer::lostGrainFit( power[ i ], bitDepth, chroma420, log2ScaleFactor, s0[ i ], h0[ i ], w0[ i ],
+                                            shapes[ hIdx ][ wIdx ], fit.scale );
+      fit.known = true;
+    }
+    return fit;
+  };
+
   double bestCost = -1.0;
   int    bestH = 0, bestW = 0;
   for( int kh = 0; kh < numShifts; kh++ )
@@ -3077,9 +3116,7 @@ void EncGOP::xFitLostGrain( int c, unsigned layer, int bitDepth, bool chroma420,
         {
           continue;
         }
-        int          scale;
-        const double cost = FGAnalyzer::lostGrainFit( power[ i ], bitDepth, chroma420, log2ScaleFactor, s0[ i ], h0[ i ], w0[ i ],
-                                                      cutoff( h0[ i ] + dh ), cutoff( w0[ i ] + dw ), scale );
+        const double cost = fitAt( i, cutoff( h0[ i ] + dh ), cutoff( w0[ i ] + dw ) ).cost;
         if( cost >= 0 )
         {
           total += cost * power[ i ].blocks;
@@ -3120,11 +3157,11 @@ void EncGOP::xFitLostGrain( int c, unsigned layer, int bitDepth, bool chroma420,
     const bool fitted = last != m_lostGrainFitted.end();
     const int  held   = fitted ? FGAnalyzer::equalPowerScale( last->second.scale, chroma420, last->second.h, last->second.w, h, w ) : analyzerScale;
     int  scale = held;
-    int  fit;
-    const bool fits = power[ i ].blocks >= MIN_POOLED_BLOCKS
-                      && FGAnalyzer::lostGrainFit( power[ i ], bitDepth, chroma420, log2ScaleFactor, s0[ i ], h0[ i ], w0[ i ], h, w, fit ) >= 0;
+    const Fit* lostFit = power[ i ].blocks >= MIN_POOLED_BLOCKS ? &fitAt( i, h, w ) : nullptr;
+    const bool fits    = lostFit && lostFit->cost >= 0;
     if( fits )
     {
+      const int fit  = lostFit->scale;
       const int step = std::max( 1, s0[ i ] / 8 );
       scale = fitted ? std::min( fit, held + step ) : fit;
     }

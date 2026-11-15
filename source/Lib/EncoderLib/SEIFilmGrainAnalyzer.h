@@ -155,12 +155,21 @@ public:
     int    blocks                       = 0;
   };
   static LostGrainPower lostGrainPower( const double orig[ 256 ], const double reco[ 256 ], int blocks );
-  // The scaling factor (0 .. MAX_STANDARD_DEVIATION) at cut-offs (h, w) whose synthesized grain, added to the
+  // What lostGrainFit needs of the grain synthesized at cut-offs (h, w), each clipped to 2 .. 14. It depends on nothing
+  // else, so the caller computes it once per pair of cut-offs and fits every intensity interval with it.
+  struct LostGrainShape
+  {
+    double patternStddev = 0.0;   // the grain pattern's standard deviation
+    double blockShare    = 0.0;   // the share of the grain's variance a 16x16 block keeps
+    double power[ LostGrainPower::GROUPS ][ LostGrainPower::DIRECTIONS ] = {};   // per unit of grain variance
+  };
+  static LostGrainShape lostGrainShape( bool chroma420, int h, int w );
+  // The scaling factor (0 .. MAX_STANDARD_DEVIATION) at the cut-offs of shape whose synthesized grain, added to the
   // reconstruction, best matches the original's power per u + v frequency group and direction (least squares of the log
   // ratio, overshoot weighted); the synthesized power is capped at LOST_GRAIN_CAP_POWER times that of the analyzer's scale s0
-  // at its cut-offs (h0, w0). Returns the cost, -1: nothing to fit.
+  // at its cut-offs (h0, w0). Returns the cost, -1: nothing to fit (scale is then s0).
   static double lostGrainFit( const LostGrainPower& power, int bitDepth, bool chroma420, int log2ScaleFactor, int s0, int h0,
-                              int w0, int h, int w, int& scale );
+                              int w0, const LostGrainShape& shape, int& scale );
   // The scaling factor at cut-offs (h, w) whose synthesized in-block power equals that of scale s at (h0, w0).
   static int equalPowerScale( int s, bool chroma420, int h0, int w0, int h, int w );
   // The lost-grain fit may put back up to this many times the analyzer's grain power: the coding can lose more than that
