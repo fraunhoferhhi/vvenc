@@ -156,7 +156,7 @@ public:
 
   TplCodeBlockFn     m_codeBlock[NUM_TPL_BLK_SIZES];   // kernels per block size, SIMD where available
   TplPredBlockFn     m_predBlock[NUM_TPL_BLK_SIZES];
-  TplPredErrorFn     m_predError[NUM_TPL_BLK_SIZES];   // AVX2 only; elsewhere the search predicts, then measures
+  TplPredErrorFn     m_predError[NUM_TPL_BLK_SIZES];   // AVX2 and Neon only; elsewhere the search predicts, then measures
   TplDownsampleRowFn m_downsampleRow;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
