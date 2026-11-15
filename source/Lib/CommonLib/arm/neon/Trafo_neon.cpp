@@ -513,40 +513,95 @@ static void fastInverseDCT2_B4_neon( const TCoeff* src, TCoeff* dst, int shift, 
   }
 }
 
-// Forward 2-point DCT-II of lines j..j+numLines-1: src = their values line by line, dst[k * line + i] = result k of
-// line j + i; shift6 = 6 - shift
-static ALWAYS_INLINE void fwdDCT2_B2_lines_neon( const TCoeff* src, int numLines, TCoeff* dst, int line,
-                                                 const int32x4_t shift6 )
+// The forward kernels read either the int32 block of a stage, its lines one after another, or the int16 residual itself
+// with its stride (TCoeffOps::fastFwdPel, the first stage without the widening copy). These load their inputs.
+
+// s0 and s1 (the values 0 and 1) of lines 0 .. numLines - 1 (1 to 4), the other lanes zero. The block's lines are 2
+// values apart.
+static ALWAYS_INLINE void loadFwdB2_neon( const TCoeff* src, ptrdiff_t stride, int numLines, int32x4_t& s0, int32x4_t& s1 )
 {
+  CHECKD( stride != 2, "the block's lines are 2 values apart" );
   const int       numValues = 2 * numLines;
   const int32x4_t a         = load_s32x4_n( src, numValues > 4 ? 4 : numValues );
   const int32x4_t b         = load_s32x4_n( src + 4, numValues > 4 ? numValues - 4 : 0 );
 
-  // a and b hold the pairs (s0, s1) of 2 lines each: s.val[0] is s0 of the 4 lines, s.val[1] their s1
+  // a and b hold the pairs (s0, s1) of 2 lines each
   const int32x4x2_t s = vuzpq_s32( a, b );
+  s0 = s.val[0];
+  s1 = s.val[1];
+}
 
-  const int32x4_t E = vaddq_s32( s.val[0], s.val[1] );
-  const int32x4_t O = vsubq_s32( s.val[0], s.val[1] );
+// the same of the residual, 2 or 4 lines
+static ALWAYS_INLINE void loadFwdB2_neon( const Pel* src, ptrdiff_t stride, int numLines, int32x4_t& s0, int32x4_t& s1 )
+{
+  CHECKD( numLines != 2 && numLines != 4, "2 or 4 lines" );
+  const int16x4_t lines01 = load_s16x2x2( src, stride );
+  const int16x4_t lines23 = numLines > 2 ? load_s16x2x2( src + 2 * stride, stride ) : vdup_n_s16( 0 );
+
+  const int16x4x2_t s = vuzp_s16( lines01, lines23 );
+  s0 = vmovl_s16( s.val[0] );
+  s1 = vmovl_s16( s.val[1] );
+}
+
+// the 4 values of a line as int32 (the residual widened)
+static ALWAYS_INLINE int32x4_t loadFwd4_s32( const TCoeff* src )
+{
+  return vld1q_s32( src );
+}
+
+static ALWAYS_INLINE int32x4_t loadFwd4_s32( const Pel* src )
+{
+  return vmovl_s16( vld1_s16( src ) );
+}
+
+// 4 values of a line as int16: the block truncated (vmovn, exact for residuals), as the matrix multiply took them
+static ALWAYS_INLINE int16x4_t loadFwd4_s16( const TCoeff* src )
+{
+  return vmovn_s32( vld1q_s32( src ) );
+}
+
+static ALWAYS_INLINE int16x4_t loadFwd4_s16( const Pel* src )
+{
+  return vld1_s16( src );
+}
+
+// Forward 2-point DCT-II of lines j..j+numLines-1: src = their values, lines stride apart, dst[k * line + i] = result k
+// of line j + i; shift6 = 6 - shift
+template<typename T>
+static ALWAYS_INLINE void fwdDCT2_B2_lines_neon( const T* src, ptrdiff_t stride, int numLines, TCoeff* dst, int line,
+                                                 const int32x4_t shift6 )
+{
+  int32x4_t s0, s1;
+  loadFwdB2_neon( src, stride, numLines, s0, s1 );
+
+  const int32x4_t E = vaddq_s32( s0, s1 );
+  const int32x4_t O = vsubq_s32( s0, s1 );
   store_s32x4_n( dst, vrshlq_s32( E, shift6 ), numLines );
   store_s32x4_n( dst + line, vrshlq_s32( O, shift6 ), numLines );
 }
 
-static void fastForwardDCT2_B2_neon( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 )
+template<typename T>
+static void fwdDCT2_B2_neon( const T* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int reducedLine )
 {
   CHECKD( g_trCoreDCT2P2[TRANSFORM_FORWARD][0][0] != 64 || g_trCoreDCT2P2[TRANSFORM_FORWARD][1][0] != 64,
           "unexpected DCT-II coefficients" );
-  const int32x4_t vshift6     = vdupq_n_s32( 6 - shift );
-  const int       reducedLine = line - iSkipLine;
+  const int32x4_t vshift6 = vdupq_n_s32( 6 - shift );
 
   int j = 0;
   for( ; j + 4 <= reducedLine; j += 4 )
   {
-    fwdDCT2_B2_lines_neon( src + 2 * j, 4, dst + j, line, vshift6 );
+    fwdDCT2_B2_lines_neon( src + stride * j, stride, 4, dst + j, line, vshift6 );
   }
   if( j < reducedLine )
   {
-    fwdDCT2_B2_lines_neon( src + 2 * j, reducedLine - j, dst + j, line, vshift6 );
+    fwdDCT2_B2_lines_neon( src + stride * j, stride, reducedLine - j, dst + j, line, vshift6 );
   }
+}
+
+static void fastForwardDCT2_B2_neon( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 )
+{
+  const int reducedLine = line - iSkipLine;
+  fwdDCT2_B2_neon( src, 2, dst, shift, line, reducedLine );
 
   if( iSkipLine )
   {
@@ -606,18 +661,18 @@ typedef void ( *FwdButterfly4Neon )( const TMatrixCoeff* iT, const int32x4_t s0,
                                     const int32x4_t s2, const int32x4_t s3, int32x4_t& d0, int32x4_t& d1, int32x4_t& d2,
                                     int32x4_t& d3 );
 
-// Forward 4-point transform of lines j..j+numLines-1: src = their values line by line, dst[k * line + i] = result k of
-// line j + i
-template<FwdButterfly4Neon butterfly>
-static ALWAYS_INLINE void fwd_B4_lines_neon( const TMatrixCoeff* iT, const TCoeff* src, int numLines, TCoeff* dst,
-                                             int line, const int32x4_t shift )
+// Forward 4-point transform of lines j..j+numLines-1: src = their values, lines stride apart, dst[k * line + i] =
+// result k of line j + i
+template<FwdButterfly4Neon butterfly, typename T>
+static ALWAYS_INLINE void fwd_B4_lines_neon( const TMatrixCoeff* iT, const T* src, ptrdiff_t stride, int numLines,
+                                             TCoeff* dst, int line, const int32x4_t shift )
 {
   // the lines past numLines are zero
   const int32x4_t zero = vdupq_n_s32( 0 );
-  int32x4_t       s0   = vld1q_s32( src );
-  int32x4_t       s1   = numLines > 1 ? vld1q_s32( src + 4 ) : zero;
-  int32x4_t       s2   = numLines > 2 ? vld1q_s32( src + 8 ) : zero;
-  int32x4_t       s3   = numLines > 3 ? vld1q_s32( src + 12 ) : zero;
+  int32x4_t       s0   = loadFwd4_s32( src );
+  int32x4_t       s1   = numLines > 1 ? loadFwd4_s32( src + stride ) : zero;
+  int32x4_t       s2   = numLines > 2 ? loadFwd4_s32( src + 2 * stride ) : zero;
+  int32x4_t       s3   = numLines > 3 ? loadFwd4_s32( src + 3 * stride ) : zero;
 
   // s0..s3 hold one line each: after the transpose, s0..s3 hold values 0..3 of the 4 lines
   transpose_4x4_s32( s0, s1, s2, s3 );
@@ -631,9 +686,9 @@ static ALWAYS_INLINE void fwd_B4_lines_neon( const TMatrixCoeff* iT, const TCoef
   store_s32x4_n( dst + 3 * line, vrshlq_s32( d3, shift ), numLines );
 }
 
-template<FwdButterfly4Neon butterfly>
-static void fastForward_B4_neon( const TMatrixCoeff* iT, const TCoeff* src, TCoeff* dst, int shift, int line,
-                                 int iSkipLine )
+template<FwdButterfly4Neon butterfly, typename T>
+static void fastForward_B4_neon( const TMatrixCoeff* iT, const T* src, ptrdiff_t stride, TCoeff* dst, int shift,
+                                 int line, int iSkipLine )
 {
   const int32x4_t vshift      = vdupq_n_s32( -shift );
   const int       reducedLine = line - iSkipLine;
@@ -641,11 +696,11 @@ static void fastForward_B4_neon( const TMatrixCoeff* iT, const TCoeff* src, TCoe
   int j = 0;
   for( ; j + 4 <= reducedLine; j += 4 )
   {
-    fwd_B4_lines_neon<butterfly>( iT, src + 4 * j, 4, dst + j, line, vshift );
+    fwd_B4_lines_neon<butterfly>( iT, src + stride * j, stride, 4, dst + j, line, vshift );
   }
   if( j < reducedLine )
   {
-    fwd_B4_lines_neon<butterfly>( iT, src + 4 * j, reducedLine - j, dst + j, line, vshift );
+    fwd_B4_lines_neon<butterfly>( iT, src + stride * j, stride, reducedLine - j, dst + j, line, vshift );
   }
 
   if( iSkipLine )
@@ -661,20 +716,45 @@ static void fastForwardDCT2_B4_neon( const TCoeff* src, TCoeff* dst, int shift, 
 {
   const TMatrixCoeff* iT = g_trCoreDCT2P4[TRANSFORM_FORWARD][0];
   CHECKD( iT[0] != 64 || iT[1] != 64 || iT[8] != 64 || iT[9] != -64, "unexpected DCT-II coefficients" );
-  fastForward_B4_neon<fwdButterflyDCT2_4_neon>( iT, src, dst, shift, line, iSkipLine );
+  fastForward_B4_neon<fwdButterflyDCT2_4_neon>( iT, src, 4, dst, shift, line, iSkipLine );
 }
 
 static void fastForwardDST7_B4_neon( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 )
 {
-  fastForward_B4_neon<fwdButterflyDST7_4_neon>( g_trCoreDST7P4[TRANSFORM_FORWARD][0], src, dst, shift, line, iSkipLine );
+  fastForward_B4_neon<fwdButterflyDST7_4_neon>( g_trCoreDST7P4[TRANSFORM_FORWARD][0], src, 4, dst, shift, line, iSkipLine );
 }
 
 static void fastForwardDCT8_B4_neon( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 )
 {
   // C's DCT-VIII adds 1 << ( shift - 1 ) without checking for shift 0, so its shift is never 0 here
   CHECKD( shift == 0, "DCT-VIII with shift 0" );
-  fastForward_B4_neon<fwdButterflyDCT8_4_neon>( g_trCoreDCT8P4[TRANSFORM_FORWARD][0], src, dst, shift, line, iSkipLine );
+  fastForward_B4_neon<fwdButterflyDCT8_4_neon>( g_trCoreDCT8P4[TRANSFORM_FORWARD][0], src, 4, dst, shift, line, iSkipLine );
 }
+
+// the forward matrix of a transform type, N = 4 to 64 points (DST-VII and DCT-VIII: up to 32)
+template<int trType, int N>
+static inline const TMatrixCoeff* fwdMatrix_neon()
+{
+  static_assert( N >= 4 && N <= ( trType == DCT2 ? 64 : 32 ), "no such matrix" );
+  return trType == DST7 ? ( N == 4  ? g_trCoreDST7P4[TRANSFORM_FORWARD][0]
+                          : N == 8  ? g_trCoreDST7P8[TRANSFORM_FORWARD][0]
+                          : N == 16 ? g_trCoreDST7P16[TRANSFORM_FORWARD][0]
+                          :           g_trCoreDST7P32[TRANSFORM_FORWARD][0] )
+       : trType == DCT8 ? ( N == 4  ? g_trCoreDCT8P4[TRANSFORM_FORWARD][0]
+                          : N == 8  ? g_trCoreDCT8P8[TRANSFORM_FORWARD][0]
+                          : N == 16 ? g_trCoreDCT8P16[TRANSFORM_FORWARD][0]
+                          :           g_trCoreDCT8P32[TRANSFORM_FORWARD][0] )
+       :                  ( N == 4  ? g_trCoreDCT2P4[TRANSFORM_FORWARD][0]
+                          : N == 8  ? g_trCoreDCT2P8[TRANSFORM_FORWARD][0]
+                          : N == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
+                          : N == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0]
+                          :           g_trCoreDCT2P64[TRANSFORM_FORWARD][0] );
+}
+
+// the forward matrix multiply, defined after its int32 adapter fastFwdCore_neon below
+template<unsigned trSize, typename T>
+static void fwdMatMul_neon( const TMatrixCoeff* tc, const T* src, ptrdiff_t srcStride, TCoeff* dst, unsigned line,
+                            unsigned reducedLine, unsigned cutoff, int shift );
 
 template<unsigned trSize>
 static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines,
@@ -929,6 +1009,14 @@ template<unsigned trSize>
 static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line,
                               unsigned reducedLine, unsigned cutoff, int shift )
 {
+  fwdMatMul_neon<trSize>( tc, src, trSize, dst, line, reducedLine, cutoff, shift );
+}
+
+// The forward matrix multiply: dst[j * line + i] = sum over k of tc[j * trSize + k] * src[i * srcStride + k], rounded
+template<unsigned trSize, typename T>
+static void fwdMatMul_neon( const TMatrixCoeff* tc, const T* src, ptrdiff_t srcStride, TCoeff* dst, unsigned line,
+                            unsigned reducedLine, unsigned cutoff, int shift )
+{
   static_assert( trSize % 4 == 0, "trSize should be a multiple of four" );
   CHECK( cutoff % 4 != 0, "cutoff should be a multiple of four" );
   CHECK( cutoff == 0, "cutoff should be non-zero" );
@@ -941,7 +1029,7 @@ static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff*
     do
     {
       const TMatrixCoeff* tcj = tc + j * trSize;
-      const TCoeff* srci      = src + i * trSize;
+      const T* srci           = src + i * srcStride;
 
       int32x4_t sum00 = vdupq_n_s32( 0 );
       int32x4_t sum01 = vdupq_n_s32( 0 );
@@ -961,10 +1049,10 @@ static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff*
       int32x4_t sum33 = vdupq_n_s32( 0 );
       for( unsigned k = 0; k < trSize; k += 4 )
       {
-        int16x4_t s0 = vmovn_s32( vld1q_s32( srci + 0 * trSize ) );
-        int16x4_t s1 = vmovn_s32( vld1q_s32( srci + 1 * trSize ) );
-        int16x4_t s2 = vmovn_s32( vld1q_s32( srci + 2 * trSize ) );
-        int16x4_t s3 = vmovn_s32( vld1q_s32( srci + 3 * trSize ) );
+        int16x4_t s0 = loadFwd4_s16( srci + 0 * srcStride );
+        int16x4_t s1 = loadFwd4_s16( srci + 1 * srcStride );
+        int16x4_t s2 = loadFwd4_s16( srci + 2 * srcStride );
+        int16x4_t s3 = loadFwd4_s16( srci + 3 * srcStride );
         int16x4_t c0 = vld1_s16( tcj + 0 * trSize );
         int16x4_t c1 = vld1_s16( tcj + 1 * trSize );
         int16x4_t c2 = vld1_s16( tcj + 2 * trSize );
@@ -1015,7 +1103,7 @@ static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff*
     do
     {
       const TMatrixCoeff* tcj = tc + j * trSize;
-      const TCoeff* srci      = src + i * trSize;
+      const T* srci           = src + i * srcStride;
 
       int32x4_t sum00 = vdupq_n_s32( 0 );
       int32x4_t sum01 = vdupq_n_s32( 0 );
@@ -1023,7 +1111,7 @@ static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff*
       int32x4_t sum03 = vdupq_n_s32( 0 );
       for( int k = 0; k < trSize; k += 4 )
       {
-        int16x4_t s0 = vmovn_s32( vld1q_s32( srci ) );
+        int16x4_t s0 = loadFwd4_s16( srci );
         int16x4_t c0 = vld1_s16( tcj + 0 * trSize );
         int16x4_t c1 = vld1_s16( tcj + 1 * trSize );
         int16x4_t c2 = vld1_s16( tcj + 2 * trSize );
@@ -1052,8 +1140,8 @@ static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff*
 // rows (row0, row0 + 2, ..) of the forward matrix, numRows of them (2 or 4), times the 4 lines' E (even rows) or O
 // (odd rows), lanes = lines: dst row j, columns i .. i + 3 of the 4 lines
 template<int N, int numRows>
-static inline void fwdEvenOddRows_neon( const TMatrixCoeff* tc, int row0, const int16x4_t* even, const int16x4_t* odd,
-                                        TCoeff* dst, int line, const int32x4_t vshift )
+static ALWAYS_INLINE void fwdEvenOddRows_neon( const TMatrixCoeff* tc, int row0, const int16x4_t* even, const int16x4_t* odd,
+                                               TCoeff* dst, int line, const int32x4_t vshift )
 {
   int32x4_t accE[numRows], accO[numRows];
   for( int q = 0; q < numRows; q++ )
@@ -1100,8 +1188,8 @@ static inline bool fwdTwoLevelLines_neon( std::false_type, const TMatrixCoeff*, 
 }
 
 template<int N>
-static inline bool fwdTwoLevelLines_neon( std::true_type, const TMatrixCoeff* tc, const int16x4_t* even, const int16x4_t* odd,
-                                          const int16x8_t range8192, int cutoff, TCoeff* dst, int line, const int32x4_t vshift )
+static ALWAYS_INLINE bool fwdTwoLevelLines_neon( std::true_type, const TMatrixCoeff* tc, const int16x4_t* even, const int16x4_t* odd,
+                                                 const int16x8_t range8192, int cutoff, TCoeff* dst, int line, const int32x4_t vshift )
 {
   const uint16x4_t range = vreinterpret_u16_s16( vorr_s16( vget_low_s16( range8192 ), vget_high_s16( range8192 ) ) );
   if( vget_lane_u64( vreinterpret_u64_u16( vshr_n_u16( range, 14 ) ), 0 ) != 0 )
@@ -1156,27 +1244,25 @@ static inline bool fwdTwoLevelLines_neon( std::true_type, const TMatrixCoeff* tc
 // Forward DCT-II, N = 8, 16, 32 or 64 (TCoeffOps::fastFwdDCT2[5], [2..4]), with the even/odd split of the AVX2
 // fastForwardDCT2_EvenOdd_SIMD: the matrix rows are symmetric, T[j][N - 1 - k] = (-1)^j T[j][k], so output j is row
 // j's first half times E[k] = x[k] + x[N - 1 - k] (j even) or O[k] = x[k] - x[N - 1 - k] (j odd), half the
-// multiply-adds of the matrix multiply. Exact with fastFwdCore_neon, which the C default (fastForwardDCT2_MM) runs:
+// multiply-adds of the matrix multiply. Exact with fwdMatMul_neon, which the C default (fastForwardDCT2_MM) runs:
 // the same x = the inputs truncated to int16 (vmovn), the same int32 sums (no overflow with |T| <= 91) and the same
 // rounding shift. Groups of 4 lines whose x all lie in [-16384, 16383] (E and O fit int16) take the split, with the
-// lines in the lanes (no horizontal adds); other groups run fastFwdCore_neon. Fewer than 4 lines and a cut-off of 4
-// take fastForwardDCT2_MM.
-template<int N>
-static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 )
+// lines in the lanes (no horizontal adds); other groups run fwdMatMul_neon. Fewer than 4 lines and a cut-off of 4
+// take the matrix multiply. src: the block (lines N apart) or the residual (TCoeffOps::fastFwdPel).
+template<int N, typename T>
+static NO_INLINE void fwdEvenOddLines_neon( const T* src, ptrdiff_t srcStride, TCoeff* dst, int shift, int line,
+                                            int iSkipLine, int iSkipLine2 )
 {
   const int reducedLine = line - iSkipLine;
   const int cutoff      = N - iSkipLine2;
   CHECKD( cutoff % 4 != 0 || cutoff == 0, "cutoff should be a non-zero multiple of four" );
 
-  const TMatrixCoeff* tc = N == 8  ? g_trCoreDCT2P8[TRANSFORM_FORWARD][0]
-                         : N == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
-                         : N == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0]
-                         :           g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
+  const TMatrixCoeff* tc = fwdMatrix_neon<DCT2, N>();
   const int32x4_t vshift = vdupq_n_s32( -shift );
   const int       half   = cutoff >> 1;   // output rows of each parity, even since cutoff is a multiple of 4
 
   int i = 0;
-  for( ; i + 4 <= reducedLine; i += 4, src += 4 * N )
+  for( ; i + 4 <= reducedLine; i += 4, src += 4 * srcStride )
   {
     int16x4_t even[N / 2], odd[N / 2];   // lanes = lines i .. i + 3
     // x + 16384 wraps to a negative int16 exactly when x lies outside [-16384, 16383]
@@ -1184,13 +1270,13 @@ static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int 
     int16x8_t range8192 = vdupq_n_s16( 0 );   // the same with x + 8192 for the second even/odd level
     for( int k = 0; k < N / 2; k += 4 )
     {
-      // per line x[k .. k + 3] and x[N - 4 - k .. N - 1 - k], truncated to int16 as in fastFwdCore_neon
+      // per line x[k .. k + 3] and x[N - 4 - k .. N - 1 - k] as int16, the block truncated as in fwdMatMul_neon
       int16x8_t x[4];
       for( int l = 0; l < 4; l++ )
       {
-        const int32x4_t first  = vld1q_s32( src + l * N + k );
-        const int32x4_t mirror = vld1q_s32( src + l * N + N - 4 - k );
-        x[l]  = vcombine_s16( vmovn_s32( first ), vmovn_s32( mirror ) );
+        const int16x4_t first  = loadFwd4_s16( src + l * srcStride + k );
+        const int16x4_t mirror = loadFwd4_s16( src + l * srcStride + N - 4 - k );
+        x[l]  = vcombine_s16( first, mirror );
         range = vorrq_s16( range, vaddq_s16( x[l], vdupq_n_s16( 16384 ) ) );
         if( N == 32 )
         {
@@ -1221,7 +1307,7 @@ static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int 
     const uint64_t highBytes = vget_lane_u64( vreinterpret_u64_s8( vshrn_n_s16( range, 8 ) ), 0 );
     if( ( highBytes & 0x8080808080808080ull ) != 0 )
     {
-      fastFwdCore_neon<N>( tc, src, dst + i, line, 4, cutoff, shift );
+      fwdMatMul_neon<N>( tc, src, srcStride, dst + i, line, 4, cutoff, shift );
       continue;
     }
     if( fwdTwoLevelLines_neon<N>( std::integral_constant<bool, N == 32>(), tc, even, odd, range8192, cutoff, dst + i, line, vshift ) )
@@ -1241,10 +1327,47 @@ static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int 
   }
   if( i < reducedLine )
   {
-    fastFwdCore_neon<N>( tc, src, dst + i, line, reducedLine - i, cutoff, shift );
+    fwdMatMul_neon<N>( tc, src, srcStride, dst + i, line, reducedLine - i, cutoff, shift );
   }
 
   fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine );
+}
+
+// TCoeffOps::fastFwdPel: the first stage of a 2-D forward transform on the residual itself, with the kernels of the
+// widened block. The residual is int16, so they take the same inputs and give the same results. line is 2 or a multiple
+// of 4; no lines are skipped, and the rows past the cut-off are left as they were.
+static void fastFwdPelDCT2_B2_neon( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  fwdDCT2_B2_neon( src, stride, dst, shift, line, line );
+}
+
+template<int trType, FwdButterfly4Neon butterfly>
+static void fastFwdPel4_neon( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  fastForward_B4_neon<butterfly>( fwdMatrix_neon<trType, 4>(), src, stride, dst, shift, line, 0 );
+}
+
+// DCT-II, 8 to 64 points, as fastForwardDCT2_EvenOdd_neon
+template<int N>
+static void fastFwdPelDCT2_neon( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  const int cutoff = N - iSkipLine2;
+
+  if( line < 4 || cutoff <= 4 )
+  {
+    fwdMatMul_neon<N>( fwdMatrix_neon<DCT2, N>(), src, stride, dst, line, line, cutoff, shift );
+  }
+  else
+  {
+    fwdEvenOddLines_neon<N>( src, stride, dst, shift, line, 0, iSkipLine2 );
+  }
+}
+
+// DST-VII and DCT-VIII, 8 to 32 points: the matrix multiply, as their C kernels through fastFwdCore_2D
+template<int trType, int N>
+static void fastFwdPelMatMul_neon( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  fwdMatMul_neon<N>( fwdMatrix_neon<trType, N>(), src, stride, dst, line, line, N - iSkipLine2, shift );
 }
 
 template<int N>
@@ -1259,7 +1382,7 @@ static void fastForwardDCT2_EvenOdd_neon( const TCoeff* src, TCoeff* dst, int sh
   }
   else
   {
-    fwdEvenOddLines_neon<N>( src, dst, shift, line, iSkipLine, iSkipLine2 );
+    fwdEvenOddLines_neon<N>( src, N, dst, shift, line, iSkipLine, iSkipLine2 );
   }
 }
 
@@ -1298,6 +1421,21 @@ void TCoeffOps::_initTCoeffOpsARM<NEON>()
   fastFwdDCT2[ 3 ] = fastForwardDCT2_EvenOdd_neon<32>;
   fastFwdDCT2[ 4 ] = fastForwardDCT2_EvenOdd_neon<64>;
   fastFwdDCT2[ 5 ] = fastForwardDCT2_EvenOdd_neon<8>;
+
+  fastFwdPel[ DCT2 ][ 0 ] = fastFwdPelDCT2_B2_neon;
+  fastFwdPel[ DCT2 ][ 1 ] = fastFwdPel4_neon<DCT2, fwdButterflyDCT2_4_neon>;
+  fastFwdPel[ DCT2 ][ 2 ] = fastFwdPelDCT2_neon<8>;
+  fastFwdPel[ DCT2 ][ 3 ] = fastFwdPelDCT2_neon<16>;
+  fastFwdPel[ DCT2 ][ 4 ] = fastFwdPelDCT2_neon<32>;
+  fastFwdPel[ DCT2 ][ 5 ] = fastFwdPelDCT2_neon<64>;
+  fastFwdPel[ DST7 ][ 1 ] = fastFwdPel4_neon<DST7, fwdButterflyDST7_4_neon>;
+  fastFwdPel[ DST7 ][ 2 ] = fastFwdPelMatMul_neon<DST7, 8>;
+  fastFwdPel[ DST7 ][ 3 ] = fastFwdPelMatMul_neon<DST7, 16>;
+  fastFwdPel[ DST7 ][ 4 ] = fastFwdPelMatMul_neon<DST7, 32>;
+  fastFwdPel[ DCT8 ][ 1 ] = fastFwdPel4_neon<DCT8, fwdButterflyDCT8_4_neon>;
+  fastFwdPel[ DCT8 ][ 2 ] = fastFwdPelMatMul_neon<DCT8, 8>;
+  fastFwdPel[ DCT8 ][ 3 ] = fastFwdPelMatMul_neon<DCT8, 16>;
+  fastFwdPel[ DCT8 ][ 4 ] = fastFwdPelMatMul_neon<DCT8, 32>;
 }
 
 template<>
