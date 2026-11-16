@@ -1092,68 +1092,6 @@ const MotionInfo& CodingStructure::getMotionInfo( const Position& pos ) const
   return *( m_motionBuf + miPos.y * stride + miPos.x );
 }
 
-PelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType type )
-{
-  if (!blk.valid())
-  {
-    return PelBuf();
-  }
-
-  const ComponentID compID = blk.compID;
-
-  PelStorage* buf = type == PIC_PREDICTION ? &m_pred : ( type == PIC_RESIDUAL ? &m_resi : ( type == PIC_RECONSTRUCTION ? &m_reco : nullptr ) );
-  if (type == PIC_ORIGINAL)
-  {
-    buf = m_org;
-  }
-
-  CHECK( !buf, "Unknown buffer requested" );
-
-  CHECKD( !area.blocks[compID].contains( blk ), "Buffer not contained in self requested" );
-
-  CompArea cFinal = blk;
-  cFinal.relativeTo( area.blocks[compID] );
-
-  if( !parent && ( type == PIC_RESIDUAL || type == PIC_PREDICTION ) )
-  {
-    cFinal.x &= ( pcv->maxCUSizeMask >> getComponentScaleX( blk.compID, blk.chromaFormat ) );
-    cFinal.y &= ( pcv->maxCUSizeMask >> getComponentScaleY( blk.compID, blk.chromaFormat ) );
-  }
-
-  return buf->getBuf( cFinal );
-}
-
-const CPelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType type ) const
-{
-  if (!blk.valid())
-  {
-    return PelBuf();
-  }
-
-  const ComponentID compID = blk.compID;
-
-  const PelStorage* buf = type == PIC_PREDICTION ? &m_pred : ( type == PIC_RESIDUAL ? &m_resi : ( type == PIC_RECONSTRUCTION ? &m_reco : nullptr ) );
-  if (type == PIC_ORIGINAL)
-  {
-    buf = m_org;
-  }
-
-  CHECK( !buf, "Unknown buffer requested" );
-
-  CHECKD( !area.blocks[compID].contains( blk ), "Buffer not contained in self requested" );
-
-  CompArea cFinal = blk;
-  cFinal.relativeTo( area.blocks[compID] );
-
-  if( !parent && ( type == PIC_RESIDUAL || type == PIC_PREDICTION ) )
-  {
-    cFinal.x &= ( pcv->maxCUSizeMask >> getComponentScaleX( blk.compID, blk.chromaFormat ) );
-    cFinal.y &= ( pcv->maxCUSizeMask >> getComponentScaleY( blk.compID, blk.chromaFormat ) );
-  }
-
-  return buf->getBuf( cFinal );
-}
-
 PelUnitBuf CodingStructure::getBuf( const UnitArea& unit, const PictureType type )
 {
   // no parent fetching for buffers
