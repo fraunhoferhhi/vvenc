@@ -113,18 +113,30 @@ static inline int16x8_t clip3_neon( const int16x8_t val, const int16x8_t minVal,
   return vmaxq_s16( vminq_s16( val, maxVal ), minVal );
 }
 
+// With isNonLinear, the differences of ptr0 and ptr1 are clipped to [clipA[0], clipA[1]], those of ptr2 and ptr3 to
+// [clipB[0], clipB[1]].
+template<bool isNonLinear = false>
 static inline void processALF_CoeffPair_neon( const Pel* ptr0, const Pel* ptr1, const Pel* ptr2, const Pel* ptr3,
-                                              const int16x8_t curr, int16x8_t& accA, int16x8_t& accB )
+                                              const int16x8_t curr, int16x8_t& accA, int16x8_t& accB,
+                                              const int16x8_t* clipA = nullptr, const int16x8_t* clipB = nullptr )
 {
   const int16x8_t v0 = vld1q_s16( ptr0 );
   const int16x8_t v1 = vld1q_s16( ptr1 );
   const int16x8_t v2 = vld1q_s16( ptr2 );
   const int16x8_t v3 = vld1q_s16( ptr3 );
 
-  const int16x8_t diff0 = vsubq_s16( v0, curr );
-  const int16x8_t diff1 = vsubq_s16( v1, curr );
-  const int16x8_t diff2 = vsubq_s16( v2, curr );
-  const int16x8_t diff3 = vsubq_s16( v3, curr );
+  int16x8_t diff0 = vsubq_s16( v0, curr );
+  int16x8_t diff1 = vsubq_s16( v1, curr );
+  int16x8_t diff2 = vsubq_s16( v2, curr );
+  int16x8_t diff3 = vsubq_s16( v3, curr );
+
+  if( isNonLinear )
+  {
+    diff0 = clip3_neon( diff0, clipA[0], clipA[1] );
+    diff1 = clip3_neon( diff1, clipA[0], clipA[1] );
+    diff2 = clip3_neon( diff2, clipB[0], clipB[1] );
+    diff3 = clip3_neon( diff3, clipB[0], clipB[1] );
+  }
 
   accA = vaddq_s16( diff0, diff1 );
   accB = vaddq_s16( diff2, diff3 );
@@ -333,9 +345,146 @@ void Filter7x7Blk_neon( const AlfClassifier* classifier, const PelUnitBuf& recDs
   } while( i < height );
 }
 
+template<bool isNonLinear>
+static inline int16x8_t processALF5x5Row_neon( const Pel* pImg0, const int yVb, const int vbPos,
+                                               const ptrdiff_t srcStride, const int16x4_t coeff[2],
+                                               const int16x8_t clip[6][2], const int16x8_t maxVal )
+{
+  constexpr int SHIFT = AdaptiveLoopFilter::m_NUM_BITS - 1;
+
+  const Pel* pImg1 = pImg0 + srcStride; // y+1
+  const Pel* pImg2 = pImg0 - srcStride; // y-1
+  const Pel* pImg3 = pImg1 + srcStride; // y+2
+  const Pel* pImg4 = pImg2 - srcStride; // y-2
+
+  // The rows 2 away from the VB reuse the rows 1 away, the rows next to it the current row.
+  if( yVb >= vbPos - 2 && yVb <= vbPos + 1 )
+  {
+    const bool isNearVB = yVb == vbPos - 1 || yVb == vbPos;
+    pImg1 = isNearVB ? pImg0 : pImg1;
+    pImg2 = isNearVB ? pImg0 : pImg2;
+    pImg3 = pImg1;
+    pImg4 = pImg2;
+  }
+
+  const int16x8_t curr = vld1q_s16( pImg0 );
+
+  int16x8_t sum[6];
+  processALF_CoeffPair_neon<isNonLinear>( pImg3 + 0, pImg4 + 0, pImg1 + 1, pImg2 - 1, curr, sum[0], sum[1],
+                                          clip[0], clip[1] );
+  processALF_CoeffPair_neon<isNonLinear>( pImg1 + 0, pImg2 + 0, pImg1 - 1, pImg2 + 1, curr, sum[2], sum[3],
+                                          clip[2], clip[3] );
+  processALF_CoeffPair_neon<isNonLinear>( pImg0 + 2, pImg0 - 2, pImg0 + 1, pImg0 - 1, curr, sum[4], sum[5],
+                                          clip[4], clip[5] );
+
+  int32x4_t accLo = vmull_lane_s16( vget_low_s16( sum[0] ), coeff[0], 0 );
+  int32x4_t accHi = vmull_lane_s16( vget_high_s16( sum[0] ), coeff[0], 0 );
+  accLo = vmlal_lane_s16( accLo, vget_low_s16( sum[1] ), coeff[0], 1 );
+  accHi = vmlal_lane_s16( accHi, vget_high_s16( sum[1] ), coeff[0], 1 );
+  accLo = vmlal_lane_s16( accLo, vget_low_s16( sum[2] ), coeff[0], 2 );
+  accHi = vmlal_lane_s16( accHi, vget_high_s16( sum[2] ), coeff[0], 2 );
+  accLo = vmlal_lane_s16( accLo, vget_low_s16( sum[3] ), coeff[0], 3 );
+  accHi = vmlal_lane_s16( accHi, vget_high_s16( sum[3] ), coeff[0], 3 );
+  accLo = vmlal_lane_s16( accLo, vget_low_s16( sum[4] ), coeff[1], 0 );
+  accHi = vmlal_lane_s16( accHi, vget_high_s16( sum[4] ), coeff[1], 0 );
+  accLo = vmlal_lane_s16( accLo, vget_low_s16( sum[5] ), coeff[1], 1 );
+  accHi = vmlal_lane_s16( accHi, vget_high_s16( sum[5] ), coeff[1], 1 );
+
+  int16x8_t acc;
+  if( yVb == vbPos - 1 || yVb == vbPos )
+  {
+    // Weaker filter, next to the VB.
+    acc = vcombine_s16( vqrshrn_n_s32( accLo, SHIFT + 3 ), vqrshrn_n_s32( accHi, SHIFT + 3 ) );
+  }
+  else
+  {
+    // Regular filter strength.
+    acc = vcombine_s16( vqrshrn_n_s32( accLo, SHIFT ), vqrshrn_n_s32( accHi, SHIFT ) );
+  }
+
+  acc = vaddq_s16( acc, curr );
+  // clpRng.min() is always 0
+  return clip3_neon( acc, vdupq_n_s16( 0 ), maxVal );
+}
+
+template<bool isNonLinear>
+void Filter5x5Blk_neon( const AlfClassifier*, const PelUnitBuf& recDst, const CPelUnitBuf& recSrc, const Area& blkDst,
+                        const Area& blk, const ComponentID compId, const short* filterSet, const short* fClipSet,
+                        const ClpRng& clpRng, const CodingStructure&, const int vbCTUHeight, int vbPos )
+{
+  CHECKD( ( vbCTUHeight & ( vbCTUHeight - 1 ) ) != 0, "vbCTUHeight must be a power of 2" );
+  CHECKD( !isChroma( compId ), "ALF 5x5 filter is for chroma only" );
+
+  const CPelBuf srcBuf = recSrc.get( compId );
+  PelBuf dstBuf = recDst.get( compId );
+
+  const ptrdiff_t srcStride = srcBuf.stride;
+  const ptrdiff_t dstStride = dstBuf.stride;
+
+  const int width = blk.width;
+  const int height = blk.height;
+
+  const Pel* src = srcBuf.buf + blk.y * srcStride + blk.x;
+  Pel* dst = dstBuf.buf + blkDst.y * dstStride + blkDst.x;
+
+  constexpr int STEP_X = 8;
+
+  CHECKD( blk.y % 4, "Wrong startHeight in filtering" );
+  CHECKD( blk.x % STEP_X, "Wrong startWidth in filtering" );
+  CHECKD( height % 4, "Wrong endHeight in filtering" );
+  CHECKD( width % 4, "Wrong endWidth in filtering" );
+
+  const int16x8_t coeffs = vld1q_s16( filterSet );
+  const int16x4_t coeff[2] = { vget_low_s16( coeffs ), vget_high_s16( coeffs ) };
+
+  // Per coefficient the bounds -clip, clip of its differences.
+  int16x8_t clip[6][2] = {};
+  if( isNonLinear )
+  {
+    const int16x8_t clips = vld1q_s16( fClipSet );
+    const int16x4_t clipLo = vget_low_s16( clips );
+    const int16x4_t clipHi = vget_high_s16( clips );
+    clip[0][1] = vdupq_lane_s16( clipLo, 0 );
+    clip[1][1] = vdupq_lane_s16( clipLo, 1 );
+    clip[2][1] = vdupq_lane_s16( clipLo, 2 );
+    clip[3][1] = vdupq_lane_s16( clipLo, 3 );
+    clip[4][1] = vdupq_lane_s16( clipHi, 0 );
+    clip[5][1] = vdupq_lane_s16( clipHi, 1 );
+    for( int k = 0; k < 6; k++ )
+    {
+      clip[k][0] = vnegq_s16( clip[k][1] );
+    }
+  }
+
+  const int16x8_t maxVal = vdupq_n_s16( clpRng.max() );
+
+  for( int i = 0; i < height; i++ )
+  {
+    const int yVb = ( blkDst.y + i ) & ( vbCTUHeight - 1 );
+
+    for( int j = 0; j < width; j += STEP_X )
+    {
+      const int16x8_t res = processALF5x5Row_neon<isNonLinear>( src + j, yVb, vbPos, srcStride, coeff, clip, maxVal );
+      if( j + STEP_X <= width )
+      {
+        vst1q_s16( dst + j, res );
+      }
+      else
+      {
+        vst1_s16( dst + j, vget_low_s16( res ) );
+      }
+    }
+
+    src += srcStride;
+    dst += dstStride;
+  }
+}
+
 template<>
 void AdaptiveLoopFilter::_initAdaptiveLoopFilterARM<NEON>()
 {
+  m_filter5x5Blk[0] = Filter5x5Blk_neon<false>;
+  m_filter5x5Blk[1] = Filter5x5Blk_neon<true>;
   m_filter7x7Blk[0] = Filter7x7Blk_neon;
 }
 
