@@ -3949,7 +3949,7 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
   const bool skipResidual = residualPass == 1;
   if( skipResidual || histBestSbt == MAX_UCHAR || !CU::isSbtMode( histBestSbt ) )
   {
-    m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual );
+    m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual, bestCS->cost );
     xEncodeDontSplit( *tempCS, partitioner );
     xCheckDQP       ( *tempCS, partitioner );
 
@@ -4092,7 +4092,7 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
       cu->sbtInfo = (sbtPos << 4) + sbtIdx;
 
       //try residual coding
-      m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual );
+      m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual, bestCS->cost );
       numRDOTried++;
 
       xEncodeDontSplit( *tempCS, partitioner );
