@@ -895,23 +895,6 @@ ALWAYS_INLINE void affinePROF4x4_SSE( Pel* dst, int dstStride, const Pel* pred, 
   }
 }
 
-// The MV of one luma sub-block, as xPredAffineBlk derives it: the affine model at the sub-block centre, rounded to
-// 1/16 sample and to the MV storage range. It is stored for the chroma pass, which reads the luma MVs. (A CU whose MV
-// spread is over the limit, where every sub-block takes the MV at the CU centre, is predicted before the CU kernel.)
-static inline Mv affineLumaSubblockMv( const InterPredInterpolation::AffineLumaCU& cu, int w, int h )
-{
-  const int half = AFFINE_MIN_BLOCK_SIZE >> 1;
-  const int x    = half + w;
-  const int y    = half + h;
-  int mvHor      = cu.mvScaleHor + cu.dMvHorX * x + cu.dMvVerX * y;
-  int mvVer      = cu.mvScaleVer + cu.dMvHorY * x + cu.dMvVerY * y;
-  roundAffineMv( mvHor, mvVer, cu.roundShift );
-  Mv mv( mvHor, mvVer );
-  mv.clipToStorageBitDepth();
-  cu.storedMv[( h / AFFINE_MIN_BLOCK_SIZE ) * cu.storedMvStride + w / AFFINE_MIN_BLOCK_SIZE] = mv;
-  return mv;
-}
-
 // The 6-tap 4x4 luma filter of m_filter4x4[0][isLast] without the call, below AVX2; src points at the sub-block.
 template<X86_VEXT vext, bool isLast>
 static ALWAYS_INLINE void affineLumaFilter4x4( const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride,
@@ -919,29 +902,6 @@ static ALWAYS_INLINE void affineLumaFilter4x4( const ClpRng& clpRng, const Pel* 
 {
   src -= 2 + 2 * srcStride;
   simdFilter4x4_N6_SSE<isLast, false>( clpRng, src, srcStride, dst, dstStride, coeffH, coeffV, rnd.offset1st, rnd.shift1st, rnd.offset2nd, rnd.shift2nd );
-}
-
-// Where one luma sub-block of the CU loop reads the reference: its MV, clipped to the reference window, split into the
-// integer position (ref) and the 1/16 fractions; nearest is the nearest integer position, which PROF takes its border
-// from.
-struct AffineLumaSubblockRef
-{
-  const Pel* ref;
-  const Pel* nearest;
-  int        xFrac, yFrac;
-};
-
-static ALWAYS_INLINE AffineLumaSubblockRef affineLumaSubblockRef( const InterPredInterpolation::AffineLumaCU& cu, int w, int h )
-{
-  const Mv  mv    = affineLumaSubblockMv( cu, w, h );
-  const int mvHor = std::min<int>( cu.horMax, std::max<int>( cu.horMin, mv.hor ) );
-  const int mvVer = std::min<int>( cu.verMax, std::max<int>( cu.verMin, mv.ver ) );
-  AffineLumaSubblockRef r;
-  r.xFrac   = mvHor & 15;
-  r.yFrac   = mvVer & 15;
-  r.ref     = cu.ref + ( h + ( mvVer >> 4 ) ) * cu.refStride + w + ( mvHor >> 4 );
-  r.nearest = r.ref + ( r.yFrac >> 3 ) * cu.refStride + ( r.xFrac >> 3 );
-  return r;
 }
 
 // One luma sub-block of the CU loop: its 4x4 filter into dst. Returns the sub-block's nearest integer position.

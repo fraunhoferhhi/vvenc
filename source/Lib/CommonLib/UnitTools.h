@@ -207,8 +207,9 @@ bool      allowLfnstWithMip             (const Size& block);
 
 bool      refPicCtuLineReady            (const Slice& slice, const int refCtuRow, const PreCalcValues& pcv);
 
+// called by updateCandList when its inline reject does not apply
 template<typename T, size_t N>
-uint32_t updateCandList( T uiMode, double uiCost, static_vector<T, N> &candModeList, static_vector<double, N> &candCostList, size_t uiFastCandNum = N, int *iserttPos = nullptr )
+uint32_t updateCandListInsert( T uiMode, double uiCost, static_vector<T, N> &candModeList, static_vector<double, N> &candCostList, size_t uiFastCandNum, int *iserttPos )
 {
   CHECK( std::min( uiFastCandNum, candModeList.size() ) != std::min( uiFastCandNum, candCostList.size() ), "Sizes do not match!" );
   CHECK( uiFastCandNum > candModeList.capacity(), "The vector is to small to hold all the candidates!" );
@@ -252,6 +253,23 @@ uint32_t updateCandList( T uiMode, double uiCost, static_vector<T, N> &candModeL
     *iserttPos = -1;
   }
   return 0;
+}
+
+// Inserts uiMode into the cost-sorted list if it beats one of the first uiFastCandNum entries: returns 1 (iserttPos: its
+// position), else 0 (iserttPos: -1). The common reject (a full list whose last entry it does not beat) is decided inline.
+template<typename T, size_t N>
+inline uint32_t updateCandList( T uiMode, double uiCost, static_vector<T, N> &candModeList, static_vector<double, N> &candCostList, size_t uiFastCandNum = N, int *iserttPos = nullptr )
+{
+  if( candModeList.size() >= uiFastCandNum && candCostList.size() >= uiFastCandNum
+      && ( uiFastCandNum == 0 || !( uiCost < candCostList[uiFastCandNum - 1] ) ) )
+  {
+    if( iserttPos != nullptr )
+    {
+      *iserttPos = -1;
+    }
+    return 0;
+  }
+  return updateCandListInsert( uiMode, uiCost, candModeList, candCostList, uiFastCandNum, iserttPos );
 }
 
 } // namespace vvenc

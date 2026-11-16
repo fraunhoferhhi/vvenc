@@ -922,10 +922,6 @@ void HLSWriter::codeSPS( const SPS* pcSPS )
 
   WRITE_FLAG(pcSPS->PLT,                                  "sps_palette_enabled_flag" );
 
-  if (pcSPS->chromaFormatIdc == CHROMA_444)
-  {
-    WRITE_FLAG(pcSPS->PLT,                                "sps_plt_enabled_flag" );
-  }
   if (pcSPS->chromaFormatIdc == CHROMA_444 && pcSPS->log2MaxTbSize != 6)
   {
     WRITE_FLAG(pcSPS->useColorTrans,                      "sps_act_enabled_flag");

@@ -72,6 +72,9 @@ public:
 
   void        start                     ()                                                    { m_BinEncoder.start(); }
   void        resetBits                 ()                                                    { m_BinEncoder.resetBits(); }
+  // from now on transform_unit counts these bits for the residuals, without coding them. nullptr ends it.
+  void        setTuResiBits             ( const uint64_t* tuResiBits )                        { m_tuResiBits = tuResiBits; }
+  void        addEstFracBits            ( uint64_t fracBits )                                 { static_cast<BitEstimatorBase&>( m_BinEncoder ).addEstFracBits( fracBits ); }
   uint64_t    getEstFracBits            ()                                            const   { return m_BinEncoder.getEstFracBits(); }
   uint32_t    getNumBins                ()                                                    { return m_BinEncoder.getNumBins(); }
   bool        isEncoding                ()                                                    { return m_BinEncoder.isEncoding(); }
@@ -175,6 +178,7 @@ private:
 
   void        xWriteTruncBinCode         ( uint32_t uiSymbol, uint32_t uiMaxSymbol);
 private:
+  const uint64_t*    m_tuResiBits = nullptr;
   BinEncIf&          m_BinEncoder;
   OutputBitstream*   m_Bitstream;
   Ctx                m_TestCtx;

@@ -528,6 +528,182 @@ static bool check_checkAllRdCostsOdd1( DepQuant* ref, DepQuant* opt, unsigned nu
     }
   }
 
+  // Test 4: every combination of "decision k takes its second candidate". With all bits 0 and SCAN_ISCSBB, decision 0
+  // takes it if rdCost[0] - rdCost[1] > pq_b_dist and decision 2 if rdCost[0] - rdCost[1] > -pq_b_dist; decisions 1 and 3
+  // the same with rdCost[2] - rdCost[3] and pq_a_dist. Each row gives one of the four outcomes of such a pair:
+  // ( cost difference, distance ) for ( neither, only decision 2 or 3, only decision 0 or 1, both ). A negative distance
+  // does not occur in encodes but is a valid input to both implementations.
+  static const int64_t pairSetup[4][2] = { { -100, 10 }, { 0, 10 }, { 0, -10 }, { 100, 10 } };
+  std::set<int> outcomes;
+  for( int mask = 0; mask < 16; mask++ )   // bit k: decision k takes its second candidate
+  {
+    setup_state_and_decisions();
+    for( int j = 0; j < 4; ++j )
+    {
+      state.ctx.sig[j]  = 0;
+      state.ctx.cff[j]  = state.cffBitsCtxOffset;
+      state.sbbBits1[j] = 0;
+      sigBuf[j][0].intBits[0] = sigBuf[j][0].intBits[1] = 0;
+    }
+    state.cffBits1[state.cffBitsCtxOffset] = 0;
+
+    const int64_t* pair02 = pairSetup[( mask & 1 ) * 2 + ( ( mask >> 2 ) & 1 )];
+    const int64_t* pair13 = pairSetup[( ( mask >> 1 ) & 1 ) * 2 + ( ( mask >> 3 ) & 1 )];
+    state.rdCost[0] = 1000 + pair02[0];
+    state.rdCost[1] = 1000;
+    state.rdCost[2] = 1000 + pair13[0];
+    state.rdCost[3] = 1000;
+
+    passed = check_one_checkAllRdCostsOdd1( ref, opt, DQIntern::SCAN_ISCSBB, pair13[1], pair02[1], decisions_ref,
+                                            decisions_opt, state,
+                                            "DepQuant checkAllRdCostsOdd1 all choices mask=" + std::to_string( mask ) ) &&
+             passed;
+    int outcome = 0;
+    for( int k = 0; k < 4; k++ )
+    {
+      outcome = outcome * 8 + decisions_ref.absLevel[k] * 4 + decisions_ref.prevId[k];
+    }
+    outcomes.insert( outcome );
+  }
+  if( outcomes.size() != 16 )
+  {
+    printf( "DepQuant checkAllRdCostsOdd1 all choices: only %d of the 16 outcomes reached\n", int( outcomes.size() ) );
+    passed = false;
+  }
+
+  return passed;
+}
+
+static bool check_one_checkAllRdCosts( DepQuant* ref, DepQuant* opt, DQIntern::ScanPosType spt, const DQIntern::PQData* pqData,
+                                       const DQIntern::StateMem& state, const std::string& context )
+{
+  DQIntern::Decisions decisions_ref;
+  DQIntern::Decisions decisions_opt;
+  for( int j = 0; j < 4; ++j )
+  {
+    // The start decisions of a scan position: no candidate yet. absLevel and prevId differ between ref and opt, so a
+    // decision left unwritten fails.
+    decisions_ref.rdCost[j] = decisions_opt.rdCost[j] = DQIntern::rdCostInit >> 2;
+    decisions_ref.absLevel[j] = decisions_ref.prevId[j] = -1;
+    decisions_opt.absLevel[j] = decisions_opt.prevId[j] = -2;
+  }
+
+  ref->m_checkAllRdCosts( spt, pqData, decisions_ref, state );
+  opt->m_checkAllRdCosts( spt, pqData, decisions_opt, state );
+
+  bool passed = true;
+  passed = compare_values_1d( context + " rdCost", decisions_ref.rdCost, decisions_opt.rdCost, 4 ) && passed;
+  passed = compare_values_1d( context + " absLevel", decisions_ref.absLevel, decisions_opt.absLevel, 4 ) && passed;
+  passed = compare_values_1d( context + " prevId", decisions_ref.prevId, decisions_opt.prevId, 4 ) && passed;
+  return passed;
+}
+
+static bool check_checkAllRdCosts( DepQuant* ref, DepQuant* opt, unsigned num_cases )
+{
+  printf( "Testing DepQuant::checkAllRdCosts\n" );
+
+  InputGenerator<TCoeff> g4{ 4, /*is_signed=*/false };
+  InputGenerator<TCoeff> g20{ 20, /*is_signed=*/false };
+  InputGenerator<TCoeff> g31{ 31 };
+  InputGenerator<TCoeff> g_dist{ 20 };
+  DimensionGenerator rng;
+
+  DQIntern::StateMem state;
+  BinFracBits sigBuf[4][DQIntern::RateEstimator::sm_maxNumSigCtx];
+  DQIntern::CoeffFracBits gtxBuf[DQIntern::RateEstimator::sm_maxNumGtxCtx];
+  DQIntern::PQData pqData[4];
+
+  // xDecide calls checkAllRdCosts only when every state has at least 4 regular bins left and pqData[0] and pqData[3]
+  // are below level 4, so qIdx is 1, 2 or 3 (its levels are 1 to 3). The four candidates are set up as there.
+  auto setup_pq_data = [&]( int qIdx )
+  {
+    for( int k = 0; k < 4; ++k )
+    {
+      pqData[( qIdx + k ) & 3].absLevel = ( qIdx + k + 1 ) >> 1;
+      pqData[( qIdx + k ) & 3].deltaDist = g_dist();
+    }
+  };
+
+  auto setup_state = [&]
+  {
+    state.m_gtxFracBitsArray = gtxBuf;
+    for( int j = 0; j < 4; ++j )
+    {
+      state.rdCost[j] = g31();
+      state.remRegBins[j] = 4;
+      state.m_goRicePar[j] = 0;
+      state.m_goRiceZero[j] = 0;
+      state.sbbBits1[j] = g20();
+      state.numSig[j] = g4();
+      state.ctx.sig[j] = rng.get( 0, DQIntern::RateEstimator::sm_maxNumSigCtx - 1 );
+      // any gtx context, repeats included: the cff bits are read through each state's own context
+      state.ctx.cff[j] = rng.get( 0, DQIntern::RateEstimator::sm_maxNumGtxCtx - 1 );
+      state.m_sigFracBitsArray[j] = sigBuf[j];
+
+      for( int k = 0; k < DQIntern::RateEstimator::sm_maxNumSigCtx; ++k )
+      {
+        sigBuf[j][k].intBits[0] = g20();
+        sigBuf[j][k].intBits[1] = g20();
+      }
+    }
+    for( auto& cff : gtxBuf )
+    {
+      std::generate( cff.bits, cff.bits + 6, g20 );
+    }
+  };
+
+  bool passed = true;
+
+  for( unsigned i = 0; i < std::max( 1u, num_cases / 5 ); ++i )
+  {
+    for( DQIntern::ScanPosType spt : { DQIntern::SCAN_ISCSBB, DQIntern::SCAN_SOCSBB, DQIntern::SCAN_EOCSBB } )
+    {
+      const char* spt_str = spt == DQIntern::SCAN_ISCSBB   ? "ISC_SBB"
+                            : spt == DQIntern::SCAN_SOCSBB ? "SOC_SBB"
+                                                           : "EOC_SBB";
+      const std::string context = std::string( "DepQuant checkAllRdCosts scanPosType=" ) + spt_str;
+
+      for( int qIdx = 1; qIdx <= 3; ++qIdx )
+      {
+        // Test 1: random states and candidates.
+        setup_state();
+        setup_pq_data( qIdx );
+        passed = check_one_checkAllRdCosts( ref, opt, spt, pqData, state, context + " random qIdx=" + std::to_string( qIdx ) ) && passed;
+
+        // Test 2: equal costs in every state and one gtx context for all, so that candidates tie and the choice
+        // between them must follow the scalar order.
+        const int64_t base_rd_cost = g31();
+        const int64_t dist = g_dist();
+        for( int j = 0; j < 4; ++j )
+        {
+          state.rdCost[j] = base_rd_cost;
+          state.sbbBits1[j] = 1;
+          state.numSig[j] = 1;
+          state.ctx.sig[j] = 0;
+          state.ctx.cff[j] = 0;
+          sigBuf[j][0].intBits[0] = 2;
+          sigBuf[j][0].intBits[1] = 1;
+          pqData[j].deltaDist = dist;
+        }
+        std::fill( gtxBuf[0].bits, gtxBuf[0].bits + 6, 1 );
+        passed = check_one_checkAllRdCosts( ref, opt, spt, pqData, state, context + " ties qIdx=" + std::to_string( qIdx ) ) && passed;
+      }
+    }
+
+    // Test 3: SCAN_EOCSBB with numSig == 0 in some states, where coding no coefficient is not allowed.
+    for( int pattern : { 0, 1 } )
+    {
+      setup_state();
+      setup_pq_data( rng.get( 1, 3 ) );
+      for( int j = 0; j < 4; ++j )
+      {
+        state.numSig[j] = ( j & 1 ) ^ pattern;   // 0,1,0,1 or 1,0,1,0
+      }
+      passed = check_one_checkAllRdCosts( ref, opt, DQIntern::SCAN_EOCSBB, pqData, state,
+                                          "DepQuant checkAllRdCosts scanPosType=EOC_SBB numSig-01mixed" ) && passed;
+    }
+  }
+
   return passed;
 }
 
@@ -559,19 +735,28 @@ static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases
     std::memset( &curr_opt, 0xCD, sizeof( curr_opt ) );
 
     // The settings below are chosen to satisfy the updateStates() constraints:
-    // insidePos = ( nextInsidePos + 1 ) % sbbSize.
-    // All scanInfo.currNbInfoSbb.invInPos are smaller than insidePos.
+    // insidePos = nextInsidePos + 1: position 0 of an SBB goes to updateStatesEOS().
+    // All scanInfo.currNbInfoSbb.invInPos are different and smaller than insidePos.
     // scanInfo.currNbInfoSbb.numInv <= std::min(insidePos, 5).
     scanInfo.sbbSize = rng.getOneOf<int8_t>( { 4, 16 } );
-    scanInfo.nextInsidePos = rng.get( 0, scanInfo.sbbSize - 1 );
-    scanInfo.insidePos = ( scanInfo.nextInsidePos + 1 ) % scanInfo.sbbSize;
+    scanInfo.nextInsidePos = rng.get( 0, scanInfo.sbbSize - 2 );
+    scanInfo.insidePos = scanInfo.nextInsidePos + 1;
     scanInfo.gtxCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
     scanInfo.sigCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
     scanInfo.currNbInfoSbb.numInv = ( uint8_t )rng.get( 0, std::min<int>( scanInfo.insidePos, 5 ) );
 
+    uint8_t positions[16];
+    std::iota( positions, positions + 16, uint8_t( 0 ) );
+    scanInfo.currNbInfoSbb.invInMask = 0;
     for( int inv = 0; inv < 5; ++inv )
     {
-      scanInfo.currNbInfoSbb.invInPos[inv] = ( uint8_t )rng.get( 0, std::max<int>( 0, scanInfo.insidePos - 1 ) );
+      scanInfo.currNbInfoSbb.invInPos[inv] = 0;
+      if( inv < scanInfo.currNbInfoSbb.numInv )
+      {
+        std::swap( positions[inv], positions[rng.get( inv, scanInfo.insidePos - 1 )] );
+        scanInfo.currNbInfoSbb.invInPos[inv] = positions[inv];
+        scanInfo.currNbInfoSbb.invInMask |= uint16_t( 1 << positions[inv] );
+      }
     }
 
     for( int idx = 0; idx < 4; ++idx )
@@ -625,14 +810,16 @@ static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases
       passed =
           compare_value( sstm.str() + " refSbbCtxId", curr_ref.refSbbCtxId[idx], curr_opt.refSbbCtxId[idx] ) && passed;
 
+      // only what is read later: tplAcc and sum1st at the positions still to come, absVal at this one and above
+      const unsigned pos = scanInfo.insidePos;
       passed =
-          compare_values_2d( sstm.str() + " tplAcc", &curr_ref.tplAcc[0][idx], &curr_opt.tplAcc[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " tplAcc", &curr_ref.tplAcc[0][idx], &curr_opt.tplAcc[0][idx], pos, 1, 4 ) &&
           passed;
       passed =
-          compare_values_2d( sstm.str() + " sum1st", &curr_ref.sum1st[0][idx], &curr_opt.sum1st[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " sum1st", &curr_ref.sum1st[0][idx], &curr_opt.sum1st[0][idx], pos, 1, 4 ) &&
           passed;
       passed =
-          compare_values_2d( sstm.str() + " absVal", &curr_ref.absVal[0][idx], &curr_opt.absVal[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " absVal", &curr_ref.absVal[pos][idx], &curr_opt.absVal[pos][idx], 16 - pos, 1, 4 ) &&
           passed;
 
       if( curr_ref.remRegBins[idx] >= 4 )
@@ -705,6 +892,8 @@ static bool check_updateStatesEOS( DepQuant* ref, DepQuant* opt, unsigned num_ca
     scanInfo.sbbPos = rng.get( 0, scanInfo.numSbb - 1 );
     scanInfo.nextSbbRight = 0;
     scanInfo.nextSbbBelow = 0;
+    // as TUParameters sets it: the levels past this SBB that the next SBB's templates reach
+    scanInfo.levelsCopySize = std::max<int>( tuPars.m_scanId2NbInfoOut[scanInfo.scanIdx - 1].maxDist - scanInfo.sbbSize, 0 );
 
     scanInfo.insidePos = 0;
     scanInfo.nextInsidePos = 15;
@@ -860,8 +1049,75 @@ static bool check_xFindFirstTestPos( DepQuant* ref, DepQuant* opt, unsigned num_
     {
       return false;
     }
+    // Sparse coefficients, as after the last significant one: about one in 64 is above every threshold, so the
+    // subblock that stops the search mostly has a single one, at any of its 16 positions.
+    auto sparse = [] { return ( rand() & 63 ) ? 0 : ( rand() & 1 ? 200 : -200 ); };
+    if( !check_one_xFindFirstTestPos( ref, opt, false, sparse ) )
+    {
+      return false;
+    }
   }
 
+  return true;
+}
+
+static bool check_dequantCoeffs( DepQuant* ref, DepQuant* opt, unsigned num_cases )
+{
+  printf( "Testing DepQuant::dequantCoeffs\n" );
+
+  DimensionGenerator rng;
+  std::vector<TCoeffSig> levels( MAX_TB_SIZEY * MAX_TB_SIZEY );
+  std::vector<TCoeff> recRef( levels.size() ), recOpt( levels.size() );
+  std::vector<int> scalingList( levels.size() );
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    for( int kind = 0; kind < 5; kind++ )
+    {
+      const int log2W = rng.get( 1, 6 ), log2H = rng.get( 1, 6 );
+      const int width = 1 << log2W, height = 1 << log2H, numCoeff = width * height;
+      const ScanElement* scan = getScanOrder( SCAN_GROUPED_4x4, log2W, log2H );
+      // mostly inside the coded region (a 64-point transform zeroes the rest), sometimes in the zero-out region
+      const int numCoded = std::min( width, JVET_C0024_ZERO_OUT_TH ) * std::min( height, JVET_C0024_ZERO_OUT_TH );
+      const int lastScanIdx = rng.get( 0, ( rand() & 7 ) ? numCoded - 1 : numCoeff - 1 );
+
+      // levels: 0: mostly 0 and +-1 (the common case), 1: up to +-255, 2: the 16-bit extremes, 3: full 16-bit range,
+      // 4: kind 0 with a scaling list (the x86 kernel's scalar fallback)
+      for( int k = 0; k < numCoeff; k++ )
+      {
+        const int r = rand();
+        levels[k] = kind == 1 ? TCoeffSig( ( r & 511 ) - 256 )
+                  : kind == 2 ? TCoeffSig( r & 1 ? ( r & 2 ? 32767 : -32768 ) : ( r & 2 ? 32766 : -32767 ) )
+                  : kind == 3 ? TCoeffSig( ( ( r & 0x7fff ) << 1 | ( rand() & 1 ) ) - 32768 )
+                  : TCoeffSig( ( r & 7 ) < 4 ? 0 : ( r & 7 ) - 5 );
+        scalingList[k] = rng.get( 1, 255 ) * rng.get( 40, 72 );
+      }
+      if( rand() & 1 )
+      {
+        levels[scan[lastScanIdx].idx] = 0;   // the step is not scaled when the last level is 0 (not in real streams)
+      }
+
+      // the real shift range, past the 32-bit products limit at its negative end
+      const int shift = rng.get( 0, 22 ) - 10;
+      const Intermediate_Int invQScale = g_invQuantScales[rng.get( 0, 1 )][rng.get( 0, SCALING_LIST_REM_NUM - 1 )];
+      const int maxLog2TrDynamicRange = rng.getOneOf<int>( { 15, 16, 20 } );
+      const TCoeff minTCoeff = -( 1 << maxLog2TrDynamicRange ), maxTCoeff = ( 1 << maxLog2TrDynamicRange ) - 1;
+      const int* piDequantCoef = kind == 4 ? scalingList.data() : nullptr;
+
+      std::fill( recRef.begin(), recRef.end(), 0 );
+      std::fill( recOpt.begin(), recOpt.end(), 0 );
+      ref->m_dequantCoeffs( levels.data(), recRef.data(), scan, lastScanIdx, width, height, shift, invQScale, piDequantCoef, minTCoeff, maxTCoeff );
+      opt->m_dequantCoeffs( levels.data(), recOpt.data(), scan, lastScanIdx, width, height, shift, invQScale, piDequantCoef, minTCoeff, maxTCoeff );
+
+      std::ostringstream sstm;
+      sstm << "DepQuant dequantCoeffs " << width << "x" << height << " kind=" << kind << " last=" << lastScanIdx
+           << " shift=" << shift << " invQScale=" << invQScale << " range=" << maxLog2TrDynamicRange;
+      if( !compare_values_1d( sstm.str(), recRef.data(), recOpt.data(), numCoeff ) )
+      {
+        return false;
+      }
+    }
+  }
   return true;
 }
 
@@ -882,10 +1138,12 @@ static bool test_DepQuant()
   unsigned num_cases = NUM_CASES;
   bool passed = true;
 
+  passed = check_checkAllRdCosts( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_checkAllRdCostsOdd1( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_updateStates( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_updateStatesEOS( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_xFindFirstTestPos( ref.get(), opt.get(), num_cases ) && passed;
+  passed = check_dequantCoeffs( ref.get(), opt.get(), num_cases ) && passed;
 
   return passed;
 }
@@ -1243,7 +1501,7 @@ static bool check_IntraPredAngleLumaModes( IntraPrediction* ref, IntraPrediction
 // IntraPredAngleLumaHor (horizontal luma modes in the block's own orientation) against the reference implementation's
 // IntraPredAngleLuma on the transposed block, its IntraAnglePDPC (positive angles, reference line 0) and a transpose:
 // every block width 8..64 and height 4..64 (aspect ratios up to 16:1), every horizontal mode after the wide-angle
-// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8, 10 and 12. Samples:
+// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8 and 10. Samples:
 // random, alternating 0 / max (the cubic clip), a ramp, and the PDPC extremes (prediction 0 with side samples at max,
 // and the reverse). Main and side samples outside the ranges the scalar code reads differ between the two runs;
 // destination strides of the block width and of MAX_CU_SIZE in canary-filled buffers, compared whole.
@@ -1259,7 +1517,7 @@ static bool check_IntraPredAngleLumaHor( IntraPrediction* ref, IntraPrediction* 
   std::vector<Pel> tmp( MAX_CU_SIZE * MAX_CU_SIZE ), dstRef( MAX_CU_SIZE * MAX_CU_SIZE ), dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
   const unsigned size = static_cast<unsigned>( dstRef.size() );
   bool passed = true;
-  for( int bd : { 8, 10, 12 } )
+  for( int bd : { 8, 10 } )   // the internal bit depths VVenC codes (the NEON kernel refuses more than 10)
   for( int log2W : INTRA_LOG2_SIZES ) for( int log2H : INTRA_LOG2_SIZES )
   for( int mode = 2; mode < NUM_LUMA_MODE; mode++ )
   for( bool cubic : { true, false } )
@@ -1496,11 +1754,8 @@ static bool check_cpyResi( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
   return passed;
 }
 
-template<int W>
-static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned width, unsigned height )
+static bool check_roundClip8( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned width, unsigned height )
 {
-  static_assert( W == 4 || W == 8, "W must be either 4 or 8" );
-
   static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
 
   // Use xMalloc to create aligned buffers for x86.
@@ -1521,7 +1776,7 @@ static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases,
   const TCoeff outputMax = INT16_MAX;
 
   std::ostringstream sstm_test;
-  sstm_test << "TCoeffOps::roundClip" << W << " w=" << width << " h=" << height << " stride=" << stride;
+  sstm_test << "TCoeffOps::roundClip8 w=" << width << " h=" << height << " stride=" << stride;
   std::cout << "Testing " << sstm_test.str() << std::endl;
 
   for( unsigned output_bd : { 8, 10 } )
@@ -1538,16 +1793,8 @@ static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases,
       std::generate( dst_ref, dst_ref + buf_size, inp_gen );
       std::memcpy( dst_opt, dst_ref, buf_size * sizeof( TCoeff ) );
 
-      if( W == 8 )
-      {
-        ref->roundClip8( dst_ref, width, height, stride, outputMin, outputMax, round, shift );
-        opt->roundClip8( dst_opt, width, height, stride, outputMin, outputMax, round, shift );
-      }
-      else // W == 4
-      {
-        ref->roundClip4( dst_ref, width, height, stride, outputMin, outputMax, round, shift );
-        opt->roundClip4( dst_opt, width, height, stride, outputMin, outputMax, round, shift );
-      }
+      ref->roundClip8( dst_ref, width, height, stride, outputMin, outputMax, round, shift );
+      opt->roundClip8( dst_opt, width, height, stride, outputMin, outputMax, round, shift );
 
       passed = compare_values_2d( sstm_subtest.str(), dst_ref, dst_opt, height, stride ) && passed;
     }
@@ -1561,7 +1808,7 @@ static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases,
 
 template<typename G, typename T>
 static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned lines,
-                                   unsigned reducedLines, unsigned rows, G input_generator, T trafo_generator )
+                                   unsigned reducedLines, unsigned rows, TCoeff shift, G input_generator, T trafo_generator )
 {
   CHECK( lines == 0, "Lines must be non-zero" );
   CHECK( reducedLines > lines, "ReducedLines must be less than or equal to lines" );
@@ -1570,7 +1817,8 @@ static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx,
   CHECK( rows > trSize, "Rows must not be larger than transformation size" );
 
   std::ostringstream sstm;
-  sstm << "fastInvCore trSize=" << trSize << " lines=" << lines << " reducedLines=" << reducedLines << " rows=" << rows;
+  sstm << "fastInvCore trSize=" << trSize << " lines=" << lines << " reducedLines=" << reducedLines << " rows=" << rows
+       << " shift=" << shift;
 
   TMatrixCoeff *it   = ( TMatrixCoeff* ) xMalloc( TMatrixCoeff, trSize * trSize );
   TCoeff       *src  = ( TCoeff* )       xMalloc( TCoeff,       trSize * lines );
@@ -1586,8 +1834,13 @@ static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx,
   std::generate_n( dst0, trSize * lines, input_generator );  // Kernels set dst themselves.
   std::copy_n( dst0, trSize * lines, dst1 );
 
-  ref->fastInvCore[ idx ]( it, src, dst0, lines, reducedLines, rows );
-  opt->fastInvCore[ idx ]( it, src, dst1, lines, reducedLines, rows );
+  // The clip range of the callers.
+  const TCoeff outputMin = INT16_MIN;
+  const TCoeff outputMax = INT16_MAX;
+  const TCoeff round     = 1 << ( shift - 1 );
+
+  ref->fastInvCore[ idx ]( it, src, dst0, lines, reducedLines, rows, outputMin, outputMax, round, shift );
+  opt->fastInvCore[ idx ]( it, src, dst1, lines, reducedLines, rows, outputMin, outputMax, round, shift );
 
   auto ret = compare_values_2d( sstm.str(), dst0, dst1, trSize, lines );
 
@@ -1651,18 +1904,75 @@ static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_case
 
   for( unsigned i = 0; i < num_cases; ++i )
   {
-    // Clamp lines down to the next multiple of four when generating
-    // reducedLines to avoid existing x86 implementations over-writing.
-    unsigned lines        = 1 << rng.get( 1, 6 );
-    unsigned reducedLines = lines == 2 ? lines : std::min( 32u, rng.get( 4, lines, 4 ) );
+    // reducedLines as the callers pass it: all lines when they are fewer than 4, else a multiple of four (the x86
+    // kernels write whole groups of 4 lines).
+    unsigned lines        = 1 << rng.get( 0, 6 );
+    unsigned reducedLines = lines <= 2 ? lines : std::min( 32u, rng.get( 4, lines, 4 ) );
     unsigned rows         = rng.get( 4, trSize, 4 );  // Cutoff must be a non-zero multiple of four.
-    if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, rows, g, t ) )
+    // The first stage's shift: most sums clip, at both ends. A second stage's: few do.
+    TCoeff   shift        = i & 1 ? 12 : 7;
+    if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, rows, shift, g, t ) )
     {
       return false;
     }
   }
 
   return true;
+}
+
+// TCoeffOps::fastInvDCT2[3..5] (the whole inverse DCT-II 16/32/64 including the zeroed skip lines) against the matrix
+// multiply fastInverseDCT2_MM, at the shifts of the callers (7 for the first stage, 20 - bitDepth for the second). The
+// inputs stay within the bound that keeps every output in the int16 range, where roundClip8's clip has no effect (the
+// NEON roundClip8 does not clip): random values and the bound's extremes; every line / reducedLine / cutoff
+// combination the callers use.
+static bool check_fastInvDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize )
+{
+  printf( "Testing TCoeffOps::fastInvDCT2 trSize=%d\n", trSize );
+  DimensionGenerator rng;
+
+  const unsigned size = trSize * 64;
+  TCoeff* src  = ( TCoeff* ) xMalloc( TCoeff, size );
+  TCoeff* dst0 = ( TCoeff* ) xMalloc( TCoeff, size + 16 );
+  TCoeff* dst1 = ( TCoeff* ) xMalloc( TCoeff, size + 16 );
+  bool passed  = true;
+
+  for( unsigned line : { 1, 2, 4, 8, 16, 32, 64 } )
+  {
+    for( unsigned reducedLine = line <= 2 ? line : 4; reducedLine <= line; reducedLine += line <= 2 ? line : 4 )
+    {
+      for( unsigned cutoff = 4; cutoff <= std::min( trSize, 32u ); cutoff += 4 )
+      {
+        for( int shift : { 7, 8, 10, 12 } )
+        {
+          // |sum| <= cutoff * 90 * maxAbs, so that ( sum + round ) >> shift fits int16
+          const int maxAbs = int( std::min<int64_t>( 32767, ( int64_t( 32767 ) << shift ) / ( cutoff * 90 ) ) );
+          for( int dist = 0; dist < 2; dist++ )
+          {
+            for( unsigned n = 0; n < size; n++ )
+            {
+              src[n] = dist == 0 ? int( rng.get( 0, 2 * maxAbs ) ) - maxAbs : ( rng.get( 0, 1 ) ? maxAbs : -maxAbs );
+            }
+            std::fill( dst0, dst0 + size + 16, 0x5a5a5a5a );
+            std::fill( dst1, dst1 + size + 16, 0x5a5a5a5a );
+
+            ref->fastInvDCT2[idx]( src, dst0, shift, line, line - reducedLine, trSize - cutoff, INT16_MIN, INT16_MAX );
+            opt->fastInvDCT2[idx]( src, dst1, shift, line, line - reducedLine, trSize - cutoff, INT16_MIN, INT16_MAX );
+
+            std::ostringstream sstm;
+            sstm << "fastInvDCT2 trSize=" << trSize << " line=" << line << " reducedLine=" << reducedLine << " cutoff=" << cutoff
+                 << " shift=" << shift << " inputs=" << dist;
+            passed = compare_values_1d( sstm.str(), dst0, dst1, size + 16 ) && passed;   // stray writes fail too
+          }
+        }
+      }
+    }
+  }
+
+  xFree( src );
+  xFree( dst0 );
+  xFree( dst1 );
+
+  return passed;
 }
 
 static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
@@ -1771,14 +2081,16 @@ static bool check_dct2_matrix_symmetry()
   return true;
 }
 
-// TCoeffOps::fastFwdDCT2[2..4] (the whole forward DCT-II 16/32/64 including the zeroed columns) against the scalar
-// matrix multiply. Inputs: residuals, the extremes of the SIMD even/odd split's range (16383, -16384), values that trip
-// its range check (16384, 32767, -32768, at one random position) and random int16; every line / reducedLine / cutoff
-// combination the callers use, plus line 1 and cutoffs the split leaves to the matrix multiply (4, 12).
+// TCoeffOps::fastFwdDCT2[2..5] (the whole forward DCT-II 16/32/64 and 8 including the zeroed columns) against the
+// scalar matrix multiply. Inputs: residuals, the extremes of the SIMD even/odd split's range (16383, -16384), values
+// that trip its range check (16384, 32767, -32768, at one random position) and random int16; every line / reducedLine /
+// cutoff combination the callers use, plus line 1 and cutoffs the split leaves to the matrix multiply (4, and 12 from
+// 16 points).
 static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastFwdDCT2 trSize=%d\n", trSize );
-  const TMatrixCoeff* tc = trSize == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
+  const TMatrixCoeff* tc = trSize == 8  ? g_trCoreDCT2P8[TRANSFORM_FORWARD][0]
+                         : trSize == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
                          : trSize == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0] : g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
   const unsigned coreIdx = Log2( trSize ) - 2;   // fastFwdCore_* index of the same size
   DimensionGenerator rng;
@@ -1796,19 +2108,35 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
     {
       for( unsigned cutoff = 4; cutoff <= std::min( trSize, 32u ); cutoff += 4 )
       {
-        for( int dist = 0; dist < 4; dist++ )
+        for( int dist = 0; dist < 6; dist++ )
         {
           for( unsigned n = 0; n < size; n++ )
           {
             src[n] = dist == 0 ? int( rng.get( 0, 2047 ) ) - 1024
               : dist == 1 ? ( rng.get( 0, 1 ) ? 16383 : -16384 )
               : dist == 2 ? int( rng.get( 0, 32767 ) ) - 16384
-              :             TCoeff( Pel( ( rand() << 8 ) ^ rand() ) );   // any int16 value (RAND_MAX may be only 2^15 - 1)
+              : dist == 3 ? TCoeff( Pel( ( rand() << 8 ) ^ rand() ) )   // any int16 value (RAND_MAX may be only 2^15 - 1)
+              : dist == 4 ? ( rng.get( 0, 1 ) ? 8191 : -8192 )         // the extremes of [-8192, 8191]
+              :             -8192;
           }
           if( dist == 2 )
           {
-            const int trip[] = { 16384, 32767, -32768 };
-            src[rng.get( 0, trSize * reducedLine - 1 )] = trip[rng.get( 0, 2 )];
+            // values the range check must catch, in a line that changes with the cut-off (m * 5 % reducedLine: with
+            // reducedLine 8, lines 5, 2, 7 and 4 for the cut-offs 8, 16, 24 and 32) and, for the cut-off 24, also in the
+            // line 4 further on: a group of 8 lines sees them in its second half, its first half and both
+            const int      trip[]   = { 16384, 32767, -32768 };
+            const unsigned m        = cutoff / 8;
+            const unsigned tripLine = m * 5 % reducedLine;
+            src[tripLine * trSize + rng.get( 0, trSize - 1 )] = trip[rng.get( 0, 2 )];
+            if( m == 3 )
+            {
+              src[( tripLine + 4 ) % reducedLine * trSize + rng.get( 0, trSize - 1 )] = trip[rng.get( 0, 2 )];
+            }
+          }
+          if( dist == 5 )
+          {
+            // one value just outside [-8192, 8191] anywhere among -8192s: taken as in range, -8193 would wrap EE
+            src[rng.get( 0, trSize * reducedLine - 1 )] = rng.get( 0, 1 ) ? 8192 : -8193;
           }
           std::fill( dst0, dst0 + size, 0x5a5a5a5a );
           std::fill( dst1, dst1 + size, 0x5a5a5a5a );
@@ -1831,6 +2159,91 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
   xFree( src );
   xFree( dst0 );
   xFree( dst1 );
+
+  return passed;
+}
+
+static const TMatrixCoeff* trCoreMatrix( int dir, int trType, int sizeIdx )
+{
+  switch( trType * 10 + sizeIdx )
+  {
+  case  0: return g_trCoreDCT2P2 [dir][0];
+  case  1: return g_trCoreDCT2P4 [dir][0];
+  case  2: return g_trCoreDCT2P8 [dir][0];
+  case  3: return g_trCoreDCT2P16[dir][0];
+  case  4: return g_trCoreDCT2P32[dir][0];
+  case  5: return g_trCoreDCT2P64[dir][0];
+  case 11: return g_trCoreDCT8P4 [dir][0];
+  case 12: return g_trCoreDCT8P8 [dir][0];
+  case 13: return g_trCoreDCT8P16[dir][0];
+  case 14: return g_trCoreDCT8P32[dir][0];
+  case 21: return g_trCoreDST7P4 [dir][0];
+  case 22: return g_trCoreDST7P8 [dir][0];
+  case 23: return g_trCoreDST7P16[dir][0];
+  case 24: return g_trCoreDST7P32[dir][0];
+  default: return nullptr;
+  }
+}
+
+// TCoeffOps::fastFwdPel against the matrix multiply it stands for, for all transform types and sizes and every line
+// count and cutoff. The inputs reach the range the even/odd split takes. The whole destination is compared: stray
+// writes fail.
+static bool check_fastPelKernels( TCoeffOps* opt )
+{
+  printf( "Testing TCoeffOps::fastFwdPel\n" );
+  DimensionGenerator rng;
+  bool passed = true;
+
+  for( int trType = 0; trType < NUM_TRANS_TYPE; trType++ )
+  {
+    for( int sizeIdx = 0; sizeIdx < 6; sizeIdx++ )
+    {
+      const int N = 2 << sizeIdx;
+
+      for( int line : { 2, 4, 8, 16, 32, 64 } )
+      {
+        const int stride = N + 3;
+
+        for( int cutoff = N <= 4 ? N : 4; cutoff <= std::min( N, 32 ); cutoff += N <= 4 ? N : 4 )
+        {
+          for( int dist = 0; dist < 2; dist++ )
+          {
+            if( opt->fastFwdPel[trType][sizeIdx] )
+            {
+              const TMatrixCoeff* tc = trCoreMatrix( TRANSFORM_FORWARD, trType, sizeIdx );
+              const int shift = rng.get( N == 2 ? 0 : 1, 16 );
+              const int rnd   = shift ? 1 << ( shift - 1 ) : 0;
+
+              std::vector<Pel> src( stride * line + 8 );
+              for( Pel& v : src )
+              {
+                v = Pel( dist ? ( rng.get( 0, 1 ) ? 16383 : -16384 ) : int( rng.get( 0, 4095 ) ) - 2048 );
+              }
+
+              std::vector<TCoeff> dst0( N * line, 0x5a5a5a5a ), dst1( N * line, 0x5a5a5a5a );
+              for( int i = 0; i < line; i++ )
+              {
+                for( int j = 0; j < cutoff; j++ )
+                {
+                  int sum = 0;
+                  for( int k = 0; k < N; k++ )
+                  {
+                    sum += src[i * stride + k] * tc[j * N + k];
+                  }
+                  dst0[j * line + i] = ( sum + rnd ) >> shift;
+                }
+              }
+              opt->fastFwdPel[trType][sizeIdx]( src.data(), stride, dst1.data(), shift, line, N - cutoff );
+
+              std::ostringstream sstm;
+              sstm << "fastFwdPel trType=" << trType << " N=" << N << " line=" << line << " cutoff=" << cutoff << " shift=" << shift << " inputs=" << dist;
+              passed = compare_values_1d( sstm.str(), dst0.data(), dst1.data(), N * line ) && passed;
+            }
+          }
+        }
+      }
+    }
+  }
 
   return passed;
 }
@@ -1967,11 +2380,9 @@ static bool test_TCoeffOps()
 
   for( unsigned h : { 1, 2, 4, 8, 16, 32, 64 } )
   {
-    passed = check_roundClip<4>( &ref, &opt, num_cases, 4, h ) && passed;
-
     for( unsigned w : { 8, 16, 32, 64 } )
     {
-      passed = check_roundClip<8>( &ref, &opt, num_cases, w, h ) && passed;
+      passed = check_roundClip8( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
 
@@ -1980,6 +2391,9 @@ static bool test_TCoeffOps()
   passed = check_fastInvCore( &ref, &opt, num_cases, 2, 16 ) && passed;
   passed = check_fastInvCore( &ref, &opt, num_cases, 3, 32 ) && passed;
   passed = check_fastInvCore( &ref, &opt, num_cases, 4, 64 ) && passed;
+  passed = check_fastInvDCT2( &ref, &opt, 3, 16 ) && passed;
+  passed = check_fastInvDCT2( &ref, &opt, 4, 32 ) && passed;
+  passed = check_fastInvDCT2( &ref, &opt, 5, 64 ) && passed;
 
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 0, 4 ) && passed;
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 1, 8 ) && passed;
@@ -1994,9 +2408,11 @@ static bool test_TCoeffOps()
   passed = check_fastFwdCore_2D_extreme( &ref, &opt, 4, 64 ) && passed;
 
   passed = check_dct2_matrix_symmetry() && passed;
+  passed = check_fastFwdDCT2( &ref, &opt, 5, 8 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 2, 16 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 3, 32 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 4, 64 ) && passed;
+  passed = check_fastPelKernels( &opt ) && passed;
 
   passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 0, 4 ) && passed;
   passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 1, 8 ) && passed;
@@ -2070,12 +2486,88 @@ static bool check_ict( TrQuant& ref, TrQuant& opt, unsigned num_cases )
   return true;
 }
 
+// LFNST kernels against the scalar code, for every matrix (4x4 and 8x8, 4 sets, 2 indices) and both zero-out sizes.
+// Inputs: random int16, the int16 extremes, the extremes signed like one matrix row (the largest sums the matrices
+// allow), and for the forward kernel random 19-bit values and random int16 with one value just outside int16 at any
+// position (both take the 32-bit path of the SIMD code). The inverse takes dequantized coefficients, which are clipped
+// to int16. The whole 48-entry output is compared, so writes past the kernel's output are caught as well.
+static bool check_lfnst( TrQuant& ref, TrQuant& opt, unsigned num_cases )
+{
+  printf( "Testing TrQuant::m_fwdLfnstNxN and m_invLfnstNxN\n" );
+  // rand() may give only 15 bits (RAND_MAX 32767 on Windows): two calls for each value
+  auto randBits = []( int bits ) { return ( int ) ( ( ( ( unsigned ) rand() << 15 ) ^ ( unsigned ) rand() ) & ( ( 1u << bits ) - 1 ) ) - ( 1 << ( bits - 1 ) ); };
+  auto rand16   = [&]() { return randBits( 16 ); };
+  auto rand19   = [&]() { return randBits( 19 ); };
+  MinMaxGenerator<TCoeff> extremes{ 16 };
+
+  for( int fwd = 0; fwd < 2; fwd++ )
+  {
+    for( uint32_t size = 4; size <= 8; size += 4 )
+    {
+      const int numIn = fwd ? ( size > 4 ? 48 : 16 ) : 16;
+      for( uint32_t mode = 0; mode < 4; mode++ )
+      {
+        for( uint32_t index = 0; index < 2; index++ )
+        {
+          for( int zeroOutSize = 8; zeroOutSize <= 16; zeroOutSize += 8 )
+          {
+            for( unsigned c = 0; c < num_cases; c++ )
+            {
+              const int kind = c % ( fwd ? 5 : 3 );
+              std::vector<TCoeff> src( 48, 0 );
+              for( int i = 0; i < numIn; i++ )
+              {
+                src[i] = kind == 0 || kind == 4 ? rand16() : kind == 1 ? extremes() : kind == 3 ? rand19() : 0;
+              }
+              if( kind == 4 )
+              {
+                src[rand() % numIn] = ( rand() & 1 ) ? 32768 : -32769;
+              }
+              if( kind == 2 )
+              {
+                // the signs of one row's coefficients: the forward row j holds the weights of output j; for the
+                // inverse, output j is row j of the inverse matrix
+                const int     outRows = fwd ? zeroOutSize : ( size > 4 ? 48 : 16 );
+                const int     j       = rand() % outRows;
+                const int8_t* row     = fwd ? ( size > 4 ? g_lfnstFwd8x8[mode][index][j] : g_lfnstFwd4x4[mode][index][j] )
+                                            : ( size > 4 ? g_lfnstInv8x8[mode][index][j] : g_lfnstInv4x4[mode][index][j] );
+                const bool    negate  = rand() & 1;
+                for( int i = 0; i < numIn; i++ )
+                {
+                  src[i] = ( row[i] >= 0 ) != negate ? 32767 : -32768;
+                }
+              }
+
+              std::vector<TCoeff> srcRef( src ), srcOpt( src );
+              std::vector<TCoeff> dstRef( 48, 0x5a5a5a5a ), dstOpt( 48, 0x5a5a5a5a );
+              ( fwd ? ref.m_fwdLfnstNxN : ref.m_invLfnstNxN )( srcRef.data(), dstRef.data(), mode, index, size, zeroOutSize );
+              ( fwd ? opt.m_fwdLfnstNxN : opt.m_invLfnstNxN )( srcOpt.data(), dstOpt.data(), mode, index, size, zeroOutSize );
+
+              std::ostringstream sstm;
+              sstm << ( fwd ? "fwd" : "inv" ) << "LfnstNxN size=" << size << " mode=" << mode << " index=" << index
+                   << " zeroOutSize=" << zeroOutSize << " kind=" << kind;
+              if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), 48 )
+               || !compare_values_1d( sstm.str() + " src", srcRef.data(), srcOpt.data(), 48 ) )
+              {
+                return false;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
 static bool test_TrQuant()
 {
   TrQuant ref( /*enableOpt=*/false );
   TrQuant opt( /*enableOpt=*/true );
 
-  return check_ict( ref, opt, NUM_CASES );
+  bool passed = check_ict( ref, opt, NUM_CASES );
+  passed = check_lfnst( ref, opt, 20 ) && passed;
+  return passed;
 }
 
 #endif // ENABLE_SIMD_TRAFO
@@ -3420,6 +3912,12 @@ static bool check_SADFourPositions( RdCost* ref, RdCost* opt, unsigned num_cases
       const Distortion full = ref->m_afpDistortFunc[0][DF_SAD + log2Width]( dtParam );
       passed = compare_value( sstm.str(), full, sads[k] ) && passed;
       passed = compare_value( sstm.str() + " above maximumDistortionForEarlyExit", full > threshold, sadsWithThreshold[k] > threshold ) && passed;
+      // a position at or below the threshold may become the search's new best: it must have its whole SAD, not a partial
+      // one from an exit taken because other positions were above already
+      if( full <= threshold )
+      {
+        passed = compare_value( sstm.str() + " at or below maximumDistortionForEarlyExit", full, sadsWithThreshold[k] ) && passed;
+      }
     }
   }
   return passed;
@@ -4104,8 +4602,74 @@ static bool check_width2Ops( PelBufferOps* ref, PelBufferOps* opt, unsigned num_
   return true;
 }
 
+// sub4 serves the widths that are a multiple of 4 but not of 8 (PelBuf::subtract), so 12, 20, ... as well as 4.
+static bool check_sub4( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::sub4\n" );
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width  = 4 + 8 * rng.get( 0, 7 );
+    const int height = rng.get( 1, 16 );
+    const int stride = width + rng.get( 0, 8 );
+    std::vector<Pel> src0( stride * height ), src1( stride * height );
+    std::generate( src0.begin(), src0.end(), anyPel );
+    std::generate( src1.begin(), src1.end(), anyPel );
+    std::vector<Pel> dstRef( stride * height, 0x5a5a ), dstOpt( stride * height, 0x5a5a );
+
+    ref->sub4( src0.data(), stride, src1.data(), stride, dstRef.data(), stride, width, height );
+    opt->sub4( src0.data(), stride, src1.data(), stride, dstOpt.data(), stride, width, height );
+    std::ostringstream sstm;
+    sstm << "sub4 " << width << "x" << height << " stride=" << stride;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+// sub8 with any Pel values (the SIMD versions wrap around like C) for the widths AreaBuf::subtract passes it (multiples of
+// 8); the whole destination is compared, so that writes beyond the block are found
+static bool check_sub8( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::sub8\n" );
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  static constexpr int maxStride = 128 + 16, maxHeight = 64;
+  Pel* src0 = ( Pel* ) xMalloc( Pel, maxStride * maxHeight );
+  Pel* src1 = ( Pel* ) xMalloc( Pel, maxStride * maxHeight );
+
+  bool ok = true;
+  for( unsigned i = 0; ok && i < num_cases; i++ )
+  {
+    const int width      = rng.getOneOf<int>( { 8, 16, 24, 32, 48, 64, 128 } );
+    const int height     = rng.get( 1, maxHeight );
+    const int src0Stride = ( ( width + 7 ) & ~7 ) + 8 * rng.get( 0, 2 );
+    const int src1Stride = ( ( width + 7 ) & ~7 ) + 8 * rng.get( 0, 2 );
+    const int dstStride  = width + rng.get( 0, 9 );
+    std::generate( src0, src0 + src0Stride * height, anyPel );
+    std::generate( src1, src1 + src1Stride * height, anyPel );
+    std::vector<Pel> dstRef( dstStride * height, 0x5a5a ), dstOpt( dstStride * height, 0x5a5a );
+
+    ref->sub8( src0, src0Stride, src1, src1Stride, dstRef.data(), dstStride, width, height );
+    opt->sub8( src0, src0Stride, src1, src1Stride, dstOpt.data(), dstStride, width, height );
+
+    std::ostringstream sstm;
+    sstm << "sub8 " << width << "x" << height << " strides=" << src0Stride << "," << src1Stride << "," << dstStride;
+    ok = compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), dstStride * height );
+  }
+
+  xFree( src0 );
+  xFree( src1 );
+  return ok;
+}
+
 // Block statistics: sumSquaredError, sum and sumAndSumSquares over random sizes and strides; sample values up to
-// 15 bit (the documented range of the SIMD sums of squares), and signed 16-bit values for the sums.
+// 15 bit (the documented range of the SIMD sums of squares) plus one case of differences of -32768, and signed 16-bit
+// values for the sums.
 static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
 {
   printf( "Testing PelBufferOps::sumSquaredError, sum, sumAndSumSquares\n" );
@@ -4145,12 +4709,70 @@ static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigne
     ok = ok && compare_value( "sumAndSumSquares sum " + sstm.str(), sumRef, sumOpt )
             && compare_value( "sumAndSumSquares squares " + sstm.str(), sumSqRef, sumSqOpt );
 
+    // differences of -32768, whose two squares fill a 32-bit lane up to 2^31
+    std::generate( a.begin(), a.end(), []() { return Pel( rand() & 1 ? INT16_MIN : 0 ); } );
+    std::fill( b.begin(), b.end(), Pel( 0 ) );
+    ok = ok && compare_value( "sumSquaredError -32768 " + sstm.str(), ref->sumSquaredError( a.data(), stride, b.data(), stride, width, height ),
+                                                                      opt->sumSquaredError( a.data(), stride, b.data(), stride, width, height ) );
+
     // the plain sum is exact for any Pel
     std::generate( a.begin(), a.end(), anyPel );
     ok = ok && compare_value( "sum " + sstm.str(), ref->sum( a.data(), stride, width, height ), opt->sum( a.data(), stride, width, height ) );
     if( !ok )
     {
       return false;
+    }
+  }
+  return true;
+}
+
+// sumSquaredErrorParts against sumSquaredError of each part, in the shapes of xCalcMinDistSbt; 10-bit samples, and the
+// extremes of 12 bits, where a part of 16 x 16 samples nearly fills its 32 bits
+static bool check_sumSquaredErrorParts( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::sumSquaredErrorParts\n" );
+  static const int shapes[][2] = { { 16, 4 }, { 8, 4 }, { 4, 4 }, { 2, 4 }, { 4, 2 }, { 2, 2 }, { 4, 1 }, { 2, 1 } };
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 10, /*is_signed=*/false };
+  MinMaxGenerator<Pel> extremePixels{ 12, /*is_signed=*/false };
+
+  for( unsigned c = 0; c < num_cases; c++ )
+  {
+    for( const auto& shape : shapes )
+    {
+      const int lengthX = shape[0];
+      const int numX    = shape[1];
+      const int lengthY = 2 << rng.get( 0, 3 );
+      const int numY    = 1 << rng.get( 0, 2 );
+      const int stride  = lengthX * numX + rng.get( 0, 40 );
+      std::vector<Pel> a( stride * lengthY * numY ), b( stride * lengthY * numY );
+      if( c % 3 == 2 )
+      {
+        std::generate( a.begin(), a.end(), extremePixels );
+        std::generate( b.begin(), b.end(), extremePixels );
+      }
+      else
+      {
+        std::generate( a.begin(), a.end(), pixels );
+        std::generate( b.begin(), b.end(), pixels );
+      }
+
+      uint32_t sums[4][4];
+      opt->sumSquaredErrorParts( a.data(), stride, b.data(), stride, lengthX, lengthY, numX, numY, sums );
+
+      for( int j = 0; j < numY; j++ )
+      {
+        for( int i = 0; i < numX; i++ )
+        {
+          std::ostringstream sstm;
+          sstm << "sumSquaredErrorParts lengthX=" << lengthX << " numX=" << numX << " lengthY=" << lengthY << " numY=" << numY << " part " << j << " " << i;
+          const int offset = j * lengthY * stride + i * lengthX;
+          if( !compare_value( sstm.str(), ref->sumSquaredError( &a[offset], stride, &b[offset], stride, lengthX, lengthY ), uint64_t( sums[j][i] ) ) )
+          {
+            return false;
+          }
+        }
+      }
     }
   }
   return true;
@@ -4224,6 +4846,46 @@ static bool check_downsample2x2( PelBufferOps* ref, PelBufferOps* opt, unsigned 
   return true;
 }
 
+// MIP matrix multiply: the three sizes, transposed or not, 10- and 12-bit, with the input range of
+// MatrixIntraPrediction (boundary differences, |input| < 2^bitDepth) and weights below 128 like the MIP matrices.
+static bool check_mipMatrixMul( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::mipMatrixMul_4_4, mipMatrixMul_8_4, mipMatrixMul_8_8\n" );
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int  bitDepth  = rng.getOneOf<int>( { 10, 12 } );
+    const int  sizeId    = int( rng.get( 0, 2 ) );
+    const bool transpose = rng.get( 0, 1 ) != 0;
+    const int  inputSize = sizeId ? 8 : 4;
+    const int  outSize   = sizeId == 2 ? 8 : 4;
+    InputGenerator<Pel> inputs{ unsigned( bitDepth + 1 ), /*is_signed=*/true };
+
+    alignas( 32 ) Pel     input[8];
+    alignas( 32 ) uint8_t weight[64 * 8];
+    alignas( 32 ) Pel     resRef[64];
+    alignas( 32 ) Pel     resOpt[64];
+    std::generate( input, input + inputSize, inputs );
+    std::generate( weight, weight + inputSize * outSize * outSize, [] { return uint8_t( rand() & 127 ); } );
+    const int maxVal      = ( 1 << bitDepth ) - 1;
+    const int inputOffset = int( rng.get( 0, unsigned( maxVal ) ) );
+
+    auto mul = []( PelBufferOps* ops, const int sizeId )
+    { return sizeId == 0 ? ops->mipMatrixMul_4_4 : sizeId == 1 ? ops->mipMatrixMul_8_4 : ops->mipMatrixMul_8_8; };
+    mul( ref, sizeId )( resRef, input, weight, maxVal, inputOffset, transpose );
+    mul( opt, sizeId )( resOpt, input, weight, maxVal, inputOffset, transpose );
+
+    std::ostringstream sstm;
+    sstm << "mipMatrixMul_" << inputSize << "_" << outSize << " transpose=" << transpose << " bitDepth=" << bitDepth;
+    if( !compare_values_1d( sstm.str(), resRef, resOpt, outSize * outSize ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // MIP upsampling: all reduced sizes and factors, 12-bit samples (the documented range of the SIMD version). The
 // vertical pass is also run in place, with its source rows inside the destination as in MatrixIntraPrediction::predBlock.
 static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -4282,6 +4944,62 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
       {
         return false;
       }
+    }
+  }
+  return true;
+}
+
+// CCLM's linear model (linTf4 / linTf8): random scale, shift and offset, with and without the clip, widths in steps
+// of 4 and 8. With the clip any 16-bit sample; without it the C code truncates the result to 16 bits where the SIMD
+// code saturates, so there the samples are small enough for every result to fit.
+static bool check_linTf( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::linTf4 / linTf8\n" );
+  DimensionGenerator rng;
+  auto anyPel   = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  auto smallPel = []() { return Pel( rand() % 2048 - 1024 ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const bool     useLinTf8 = i & 1;
+    const int      width     = useLinTf8 ? 8 * rng.get( 1, 16 ) : 4 * rng.get( 1, 32 );
+    const int      height    = rng.get( 1, 16 );
+    const int      stride    = width + rng.get( 0, 8 );
+    const int      scale     = int( rng.get( 0, 32 ) ) - 16;
+    const unsigned shift     = rng.get( 0, 16 );
+    const bool     bClip     = rng.get( 0, 1 );
+    const int      bitDepth  = rng.getOneOf<int>( { 8, 10, 12 } );
+    const ClpRng   clpRng{ bitDepth };
+    const int      offset    = int( rng.get( 0, 2u << bitDepth ) ) - ( 1 << bitDepth );
+
+    std::vector<Pel> src( stride * height );
+    if( bClip )
+    {
+      std::generate( src.begin(), src.end(), anyPel );
+    }
+    else
+    {
+      std::generate( src.begin(), src.end(), smallPel );
+    }
+    std::vector<Pel> dstRef( stride * height, 0x5a5a ), dstOpt( stride * height, 0x5a5a );
+
+    if( useLinTf8 )
+    {
+      ref->linTf8( src.data(), stride, dstRef.data(), stride, width, height, scale, shift, offset, clpRng, bClip );
+      opt->linTf8( src.data(), stride, dstOpt.data(), stride, width, height, scale, shift, offset, clpRng, bClip );
+    }
+    else
+    {
+      ref->linTf4( src.data(), stride, dstRef.data(), stride, width, height, scale, shift, offset, clpRng, bClip );
+      opt->linTf4( src.data(), stride, dstOpt.data(), stride, width, height, scale, shift, offset, clpRng, bClip );
+    }
+
+    std::ostringstream sstm;
+    sstm << ( useLinTf8 ? "linTf8 " : "linTf4 " ) << width << "x" << height << " scale=" << scale << " shift=" << shift
+         << " offset=" << offset << " bClip=" << bClip;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), stride * height ) )
+    {
+      return false;
     }
   }
   return true;
@@ -4408,6 +5126,67 @@ static bool check_sumAbsDeviation( PelBufferOps* ref, PelBufferOps* opt, unsigne
     sstm << "sumAbsDeviation " << width << "x" << height << " value=" << value;
     if( !compare_value( sstm.str(), ref->sumAbsDeviation( src.data(), stride, width, height, value ),
                                     opt->sumAbsDeviation( src.data(), stride, width, height, value ) ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+// QPA visual activity sums (BitAllocation.cpp): HD kernels at any width from 9, the downsampled (UHD) ones at the
+// widths the encoder passes, a CTU plus two guard columns on one or both sides (the x86 kernels differ from the C
+// cores at some other widths), 8- and 10-bit samples and 10-bit extremes. The kernels read up to two rows above the
+// block and one column right of it.
+// HDHighPass is not compared: its SIMD kernels add the columns in pairs before rounding (BufferX86.h).
+static bool check_qpaActivity( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps QPA activity (AvgHighPass, HDHighPass2, AvgHighPassWithDownsampling*)\n" );
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int  bitDepth  = i & 1 ? 10 : 8;
+    const bool extremes  = ( i & 3 ) == 3;
+    const int  maxSample = ( 1 << bitDepth ) - 1;
+    const int  ctuWidth  = 8 * rng.get( 1, 16 );
+    const int  hdWidth   = rng.get( 9, 140 );   // the HD kernels' SIMD equals the C at any width >= 9
+    const int  uhdWidth  = ctuWidth + 2 * rng.get( 1, 2 );
+    const int  height    = rng.get( 3, 70 );
+    InputGenerator<Pel> pixels{ unsigned( bitDepth ), /*is_signed=*/false };
+
+    // the picture and the two before it
+    std::vector<Pel> pics[3];
+    int              strides[3];
+    const Pel*       blocks[3];
+    for( int p = 0; p < 3; p++ )
+    {
+      strides[p] = std::max( hdWidth, uhdWidth ) + 1 + rng.get( 0, 16 );
+      pics[p].resize( strides[p] * ( height + 2 ) );
+      for( Pel& sample: pics[p] )
+      {
+        sample = extremes ? ( rand() & 1 ? maxSample : 0 ) : pixels();
+      }
+      blocks[p] = pics[p].data() + 2 * strides[p];
+    }
+
+    std::ostringstream sstm;
+    sstm << " " << hdWidth << "/" << uhdWidth << "x" << height << " bitDepth=" << bitDepth << ( extremes ? " extremes" : "" );
+    const std::string size = sstm.str();
+    bool passed = compare_value( "AvgHighPass" + size, ref->AvgHighPass( hdWidth, height, blocks[0], strides[0] ),
+                                                       opt->AvgHighPass( hdWidth, height, blocks[0], strides[0] ) );
+    passed = passed && compare_value( "HDHighPass2" + size,
+                                      ref->HDHighPass2( hdWidth, height, blocks[0], blocks[1], blocks[2], strides[0], strides[1], strides[2] ),
+                                      opt->HDHighPass2( hdWidth, height, blocks[0], blocks[1], blocks[2], strides[0], strides[1], strides[2] ) );
+    passed = passed && compare_value( "AvgHighPassWithDownsampling" + size,
+                                      ref->AvgHighPassWithDownsampling( uhdWidth, height, blocks[0], strides[0] ),
+                                      opt->AvgHighPassWithDownsampling( uhdWidth, height, blocks[0], strides[0] ) );
+    passed = passed && compare_value( "AvgHighPassWithDownsamplingDiff1st" + size,
+                                      ref->AvgHighPassWithDownsamplingDiff1st( uhdWidth, height, blocks[0], blocks[1], strides[0], strides[1] ),
+                                      opt->AvgHighPassWithDownsamplingDiff1st( uhdWidth, height, blocks[0], blocks[1], strides[0], strides[1] ) );
+    passed = passed && compare_value( "AvgHighPassWithDownsamplingDiff2nd" + size,
+                                      ref->AvgHighPassWithDownsamplingDiff2nd( uhdWidth, height, blocks[0], blocks[1], blocks[2], strides[0], strides[1], strides[2] ),
+                                      opt->AvgHighPassWithDownsamplingDiff2nd( uhdWidth, height, blocks[0], blocks[1], blocks[2], strides[0], strides[1], strides[2] ) );
+    if( !passed )
     {
       return false;
     }
@@ -4570,15 +5349,21 @@ static bool test_PelBufferOps()
   passed = check_copyClip( &ref, &opt, num_cases ) && passed;
   passed = check_copyClipScalarTail( &ref, num_cases ) && passed;
   passed = check_width2Ops( &ref, &opt, num_cases ) && passed;
+  passed = check_sub4( &ref, &opt, num_cases ) && passed;
+  passed = check_sub8( &ref, &opt, num_cases ) && passed;
   passed = check_pictureChecksum( &ref, &opt, num_cases ) && passed;
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
+  passed = check_sumSquaredErrorParts( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
+  passed = check_mipMatrixMul( &ref, &opt, num_cases ) && passed;
   passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
+  passed = check_linTf( &ref, &opt, num_cases ) && passed;
   passed = check_highPassCorrelation( &ref, &opt, num_cases ) && passed;
   passed = check_blockStats4x4( &ref, &opt, num_cases ) && passed;
   passed = check_absGradientSums( &ref, &opt, num_cases ) && passed;
   passed = check_sumAbsDeviation( &ref, &opt, num_cases ) && passed;
+  passed = check_qpaActivity( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }
@@ -5317,6 +6102,206 @@ static bool test_InterpolationFilter()
 #define MAX_NUM_ALF_TRANSPOSE_ID 4
 
 template<typename G>
+static bool check_one_deriveClassificationBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, int w, int h,
+                                               int bitDepth, int vbCTUHeight, int vbPos, int dstY, G input_generator )
+{
+  std::ostringstream sstm;
+  sstm << "deriveClassificationBlk w=" << w << " h=" << h << " bitDepth=" << bitDepth << " vbCTUHeight=" << vbCTUHeight
+       << " vbPos=" << vbPos << " dstY=" << dstY;
+
+  // The classification reads 3 samples around the block, its SIMD kernels whole vectors.
+  constexpr int margin    = 16;
+  const int     picWidth  = w + 2 * margin;
+  const int     picHeight = h + 2 * margin;
+  std::vector<Pel> picture( picWidth * picHeight );
+  std::generate( picture.begin(), picture.end(), input_generator );
+  const CPelBuf srcLuma( picture.data(), picWidth, Size( picWidth, picHeight ) );
+
+  // Every 4x4 unit of the largest block, so that writes outside the block show too.
+  constexpr int              numUnits = ( MAX_CU_SIZE / 4 ) * ( MAX_CU_SIZE / 4 );
+  std::vector<AlfClassifier> classRef( numUnits, AlfClassifier( 0, 0 ) );
+  std::vector<AlfClassifier> classOpt( numUnits, AlfClassifier( 0, 0 ) );
+
+  const Area blkDst( 0, dstY, w, h );
+  const Area blk( margin, margin, w, h );
+  ref->m_deriveClassificationBlk( classRef.data(), srcLuma, blkDst, blk, bitDepth + 4, vbCTUHeight, vbPos );
+  opt->m_deriveClassificationBlk( classOpt.data(), srcLuma, blkDst, blk, bitDepth + 4, vbCTUHeight, vbPos );
+
+  for( int i = 0; i < numUnits; i++ )
+  {
+    if( classRef[i].classIdx != classOpt[i].classIdx || classRef[i].transposeIdx != classOpt[i].transposeIdx )
+    {
+      std::cout << "failed: " << sstm.str() << "\n  mismatch at unit " << i << ": ref=" << +classRef[i].classIdx << "/"
+                << +classRef[i].transposeIdx << " opt=" << +classOpt[i].classIdx << "/" << +classOpt[i].transposeIdx
+                << "\n";
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool check_deriveClassificationBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt )
+{
+  printf( "Testing AdaptiveLoopFilter::deriveClassificationBlk\n" );
+
+  struct VirtualBoundaryCase
+  {
+    int ctuHeight;
+    int vbPos;
+    int dstY;
+  };
+  std::vector<VirtualBoundaryCase> vbCases;
+  for( int ctuHeight : { 64, 128 } )
+  {
+    // ALF's luma virtual boundary lies 4 rows above the CTU's bottom; blocks starting at the picture top, below it
+    // and at the rows the classification treats differently next to the boundary.
+    const int vbPos = ctuHeight - 4;
+    for( int dstY : { 0, 8, vbPos - 8, vbPos - 4, vbPos } )
+    {
+      vbCases.push_back( { ctuHeight, vbPos, dstY } );
+    }
+  }
+  vbCases.push_back( { 128, 2 * 128, 64 } );   // a virtual boundary no row meets
+
+  DimensionGenerator rng;
+  for( int bitDepth : { 8, 10, 12 } )
+  {
+    InputGenerator<Pel>  randomSamples{ static_cast<unsigned>( bitDepth ), /*is_signed=*/false };
+    MinMaxGenerator<Pel> extremeSamples{ static_cast<unsigned>( bitDepth ), /*is_signed=*/false };
+    for( const VirtualBoundaryCase& vb : vbCases )
+    {
+      // the largest block and three random ones, all multiples of 8 as the encoder's
+      for( int size = 0; size < 4; size++ )
+      {
+        const int w = size == 0 ? 128 : rng.get( 8, 128, 8 );
+        const int h = size == 0 ? 128 : rng.get( 8, 128, 8 );
+        if( !check_one_deriveClassificationBlk( ref, opt, w, h, bitDepth, vb.ctuHeight, vb.vbPos, vb.dstY,
+                                                randomSamples ) ||
+            !check_one_deriveClassificationBlk( ref, opt, w, h, bitDepth, vb.ctuHeight, vb.vbPos, vb.dstY,
+                                                extremeSamples ) )
+        {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+template<typename G>
+static bool check_one_filterBlkCcAlf( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, CodingStructure& cs,
+                                      ComponentID compId, int w, int h, int bitDepth, int vbCTUHeight, int dstX,
+                                      int dstY, int dstStride, const int16_t* coeff, G input_generator )
+{
+  const ChromaFormat chromaFormat = cs.slice->sps->chromaFormatIdc;
+  const int          vbPos        = vbCTUHeight - ALF_VB_POS_ABOVE_CTUROW_LUMA;
+  const int          scaleX       = getComponentScaleX( compId, chromaFormat );
+  const int          scaleY       = getComponentScaleY( compId, chromaFormat );
+
+  std::ostringstream sstm;
+  sstm << "filterBlkCcAlf chromaFormat=" << int( chromaFormat ) << " compId=" << int( compId ) << " w=" << w
+       << " h=" << h << " bitDepth=" << bitDepth << " vbCTUHeight=" << vbCTUHeight << " dstX=" << dstX
+       << " dstY=" << dstY << " dstStride=" << dstStride << " coeff=";
+  for( int i = 0; i < MAX_NUM_CC_ALF_CHROMA_COEFF; i++ )
+  {
+    sstm << ( i ? "," : "" ) << coeff[i];
+  }
+
+  // The luma of the block, with a margin for the taps one row above, two rows below and one column to each side, and
+  // for whole vector loads.
+  constexpr int    margin  = 16;
+  const int        lumaW   = ( w << scaleX ) + 2 * margin;
+  const int        lumaH   = ( h << scaleY ) + 2 * margin;
+  std::vector<Pel> luma( lumaW * lumaH );
+  std::generate( luma.begin(), luma.end(), input_generator );
+  const AreaBuf<const Pel> lumaBuf( luma.data(), lumaW, Size( lumaW, lumaH ) );
+  const CPelUnitBuf        recSrc( chromaFormat, lumaBuf, lumaBuf, lumaBuf );
+  const Area               blkSrc( margin, margin, w << scaleX, h << scaleY );
+
+  // The filter adds to the chroma samples in place. The buffer ends after the block: a store past it is caught by the
+  // sanitizers, one into the stride or next to the block by the compare of the whole buffer.
+  const Area       blkDst( dstX, dstY, w, h );
+  std::vector<Pel> chromaRef( ( dstY + h - 1 ) * dstStride + dstX + w );
+  std::generate( chromaRef.begin(), chromaRef.end(), input_generator );
+  std::vector<Pel> chromaOpt = chromaRef;
+  const PelBuf     dstRef( chromaRef.data(), dstStride, Size( dstX + w, dstY + h ) );
+  const PelBuf     dstOpt( chromaOpt.data(), dstStride, Size( dstX + w, dstY + h ) );
+
+  ClpRngs clpRngs;
+  clpRngs.bd = bitDepth;
+
+  ref->m_filterCcAlf( dstRef, recSrc, blkDst, blkSrc, compId, coeff, clpRngs, cs, vbCTUHeight, vbPos );
+  opt->m_filterCcAlf( dstOpt, recSrc, blkDst, blkSrc, compId, coeff, clpRngs, cs, vbCTUHeight, vbPos );
+
+  return compare_values_1d( sstm.str(), chromaRef.data(), chromaOpt.data(), unsigned( chromaRef.size() ) );
+}
+
+static bool check_filterBlkCcAlf( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt )
+{
+  printf( "Testing AdaptiveLoopFilter::filterBlkCcAlf\n" );
+
+  // SPS holds arrays sized by MAX_NUM_SUB_PICS, too large for the stack.
+  auto            sps = std::make_unique<SPS>();
+  Slice           slice;
+  XUCache         xuCache;
+  std::mutex      csMutex;
+  CodingStructure cs{ xuCache, &csMutex };
+  slice.sps = sps.get();
+  cs.slice  = &slice;
+
+  // The coefficients of the bitstream: 0 and +-2^k up to 64; the eighth is padding, 0 as in the encoder's arrays.
+  static const std::vector<int16_t> coeffValues{ 0, 1, 2, 4, 8, 16, 32, 64, -1, -2, -4, -8, -16, -32, -64 };
+
+  // 4:2:2 is left out: the x86 kernels filter it with the 4:2:0 path, which does not skip the two luma rows at the
+  // virtual boundary that the C code skips when chroma has full height, so they differ from C there.
+  DimensionGenerator rng;
+  for( ChromaFormat chromaFormat : { CHROMA_420, CHROMA_444 } )
+  {
+    sps->chromaFormatIdc = chromaFormat;
+    for( int bitDepth : { 8, 10 } )
+    {
+      InputGenerator<Pel>  randomSamples{ static_cast<unsigned>( bitDepth ), /*is_signed=*/false };
+      MinMaxGenerator<Pel> extremeSamples{ static_cast<unsigned>( bitDepth ), /*is_signed=*/false };
+      for( int vbCTUHeight : { 32, 64, 128 } )
+      {
+        for( int w : { 4, 8, 12, 16, 32, 64 } )
+        {
+          for( int h : { 4, 8, 16, 32, 64 } )
+          {
+            const ComponentID compId = rng.getOneOf<ComponentID>( { COMP_Cb, COMP_Cr } );
+            const int         scaleY = getComponentScaleY( compId, chromaFormat );
+            // a block starting at the 4-row group of the virtual boundary or the one above it, or anywhere in the first
+            // two CTUs
+            const int vbGroup = ( ( vbCTUHeight - ALF_VB_POS_ABOVE_CTUROW_LUMA ) >> scaleY ) & ~3;
+            const int anyRow  = rng.get( 0, ( 2 * vbCTUHeight ) >> scaleY, 4 );
+            const int dstY    = rng.getOneOf<int>( { vbGroup - 4, vbGroup, anyRow } );
+            const int dstX      = rng.get( 0, 64, 4 );
+            const int dstStride = dstX + w + rng.getOneOf<int>( { 0, int( rng.get( 1, 64 ) ) } );
+
+            int16_t randomCoeff[MAX_NUM_CC_ALF_CHROMA_COEFF] = { 0 };
+            int16_t extremeCoeff[MAX_NUM_CC_ALF_CHROMA_COEFF] = { 0 };
+            for( int i = 0; i < MAX_NUM_CC_ALF_CHROMA_COEFF - 1; i++ )
+            {
+              randomCoeff[i]  = rng.getOneOf<int16_t>( coeffValues );
+              extremeCoeff[i] = rng.getOneOf<int16_t>( { -64, 64 } );
+            }
+
+            if( !check_one_filterBlkCcAlf( ref, opt, cs, compId, w, h, bitDepth, vbCTUHeight, dstX, dstY, dstStride,
+                                           randomCoeff, randomSamples ) ||
+                !check_one_filterBlkCcAlf( ref, opt, cs, compId, w, h, bitDepth, vbCTUHeight, dstX, dstY, dstStride,
+                                           extremeCoeff, extremeSamples ) )
+            {
+              return false;
+            }
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
+template<typename G>
 static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, int srcStride, int dstStride,
                                  unsigned int w, unsigned int h, G input_generator, unsigned int linearIndex )
 {
@@ -5413,6 +6398,112 @@ static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* op
   return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h + blkDst.y, w, dstStride );
 }
 
+template<typename G>
+static bool check_one_filter5x5Blk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, int srcStride, int dstStride,
+                                    unsigned int w, unsigned int h, int bitDepth, G input_generator,
+                                    unsigned int linearIndex )
+{
+  CHECK( srcStride < w, "SrcStride must be greater than or equal to width." );
+  CHECK( dstStride < w, "DstStride must be greater than or equal to width." );
+
+  DimensionGenerator rng;
+
+  // Chroma CTU heights of 128 and 64 luma CTUs in 4:2:0; every block of 32 or more rows crosses a VB, and a block
+  // starting 4 rows above the end of a CTU has its first 4 rows on the rows folded at the VB.
+  const int vbCTUHeight = rng.getOneOf<int>( { 32, 64 } );
+  const int vbPos = vbCTUHeight - ALF_VB_POS_ABOVE_CTUROW_CHMA;
+  const int dstX = rng.get( 0, MAX_CU_SIZE, 8 );
+  const int dstY = rng.getOneOf<int>( { vbCTUHeight - 4, int( rng.get( 0, MAX_CU_SIZE, 4 ) ) } );
+
+  std::ostringstream sstm;
+  sstm << "filter5x5Blk linearIndex=" << linearIndex << " bitDepth=" << bitDepth << " srcStride=" << srcStride
+       << " dstStride=" << dstStride << " w=" << w << " h=" << h << " dstY=" << dstY << " vbCTUHeight=" << vbCTUHeight;
+
+  ClpRng clpRng{ bitDepth };
+
+  const Area blk{ 0, 0, w, h };
+  const Area blkDst{ dstX, dstY, w, h };
+
+  // Padding to src memory so that the filter can safely index [-2,+2] rows and read 16 samples (AVX2) from the last
+  // columns. dst ends after the block: a store past it is caught by the sanitizers, one into the stride by the compare
+  // of the whole buffer.
+  constexpr int pad = 2;
+  std::vector<Pel> src( ( blk.y + h + 2 * pad ) * srcStride + blk.x + 2 * pad + 16 );
+  std::vector<Pel> dst_ref( ( blkDst.y + h - 1 ) * dstStride + blkDst.x + w );
+  std::vector<Pel> dst_opt( ( blkDst.y + h - 1 ) * dstStride + blkDst.x + w );
+  std::generate( src.begin(), src.end(), input_generator );
+
+  Size sz{ w, h };
+  AreaBuf<const Pel> areaBufSrc{ src.data() + pad * srcStride + pad, srcStride, sz };
+  AreaBuf<Pel> areaBufDst_ref{ dst_ref.data(), dstStride, sz };
+  AreaBuf<Pel> areaBufDst_opt{ dst_opt.data(), dstStride, sz };
+
+  XUCache xuCache;
+  std::mutex csMutex;
+  CodingStructure cs{ xuCache, &csMutex }; // Dummy CodingStructure for filterBlk (unused).
+
+  const ComponentID compId = rng.getOneOf<ComponentID>( { COMP_Cb, COMP_Cr } );
+  const ChromaFormat chromaFormat = CHROMA_444;
+
+  // Give all three planes same buffer, as only one of them is active in filterBlk.
+  PelUnitBuf dstUnitBuf_ref{ chromaFormat, areaBufDst_ref, areaBufDst_ref, areaBufDst_ref };
+  PelUnitBuf dstUnitBuf_opt{ chromaFormat, areaBufDst_opt, areaBufDst_opt, areaBufDst_opt };
+  CPelUnitBuf srcUnitBuf{ chromaFormat, areaBufSrc, areaBufSrc, areaBufSrc };
+
+  // Coefficients in the range of the bitstream, one more than MAX_NUM_ALF_CHROMA_COEFF as the SIMD versions load 8.
+  InputGenerator<short> coeffGenerator{ 8, /*is_signed=*/true };
+  std::vector<short> coeffChroma( MAX_NUM_ALF_CHROMA_COEFF + 1 );
+  std::vector<short> clipChroma( MAX_NUM_ALF_CHROMA_COEFF + 1 );
+  for( unsigned i = 0; i < MAX_NUM_ALF_CHROMA_COEFF + 1; ++i )
+  {
+    coeffChroma[i] = coeffGenerator();
+    // In optimized versions, clipping is used only when isNonLinear is true.
+    if( linearIndex == 1 )
+    {
+      clipChroma[i] = rng.getOneOf<short>( { short( 1 << bitDepth ), short( 1 << ( bitDepth - 3 ) ),
+                                             short( 1 << ( bitDepth - 4 ) ), short( 1 << ( bitDepth - 5 ) ) } );
+    }
+    else
+    {
+      clipChroma[i] = INT16_MAX;
+    }
+  }
+
+  ref->m_filter5x5Blk[linearIndex]( nullptr, dstUnitBuf_ref, srcUnitBuf, blkDst, blk, compId, coeffChroma.data(),
+                                    clipChroma.data(), clpRng, cs, vbCTUHeight, vbPos );
+  opt->m_filter5x5Blk[linearIndex]( nullptr, dstUnitBuf_opt, srcUnitBuf, blkDst, blk, compId, coeffChroma.data(),
+                                    clipChroma.data(), clpRng, cs, vbCTUHeight, vbPos );
+
+  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h + blkDst.y, w, dstStride ) &&
+         compare_values_1d( sstm.str() + " (whole buffer)", dst_ref.data(), dst_opt.data(), unsigned( dst_ref.size() ) );
+}
+
+static bool check_filter5x5Blk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, unsigned num_cases, int w, int h )
+{
+  printf( "Testing AdaptiveLoopFilter::filter5x5Blk w=%d h=%d\n", w, h );
+
+  DimensionGenerator rng;
+
+  for( unsigned linearIndex : { 0, 1 } )
+  {
+    for( int bitDepth : { 8, 10 } )
+    {
+      InputGenerator<Pel> g{ unsigned( bitDepth ), /*is_signed=*/false };
+      for( unsigned i = 0; i < num_cases; ++i )
+      {
+        unsigned srcStride = rng.get( w + 16, g_fastUnitTest ? 512 : 8192 );
+        unsigned dstStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
+
+        if( !check_one_filter5x5Blk( ref, opt, srcStride, dstStride, w, h, bitDepth, g, linearIndex ) )
+        {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 static bool check_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, unsigned num_cases, int w, int h )
 {
   printf( "Testing AdaptiveLoopFilter::filterBlk w=%d h=%d\n", w, h );
@@ -5435,170 +6526,6 @@ static bool check_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, u
     }
   }
   return true;
-}
-
-template<typename G>
-static void generate_symmetric_positive_definite_matrix( AlfCovariance::TE lhs, AlfCovariance::Ty rhs, int size, G gen )
-{
-  // Builds a random linear system that is guaranteed to be solvable by Cholesky.
-  // The matrix is symmetric positive definite, i.e. A = A^T and x^T A x > 0 for every nonzero x.
-  // It is constructed as A = U^T * U with a strictly positive diagonal in U.
-  AlfCovariance::TE upper;
-  AlfCovariance::Ty x;
-
-  // Generate a random solution vector x and a random upper-triangular matrix U.
-  std::generate_n( x, size, gen );
-
-  for( int row = 0; row < size; ++row )
-  {
-    // Fill the lower triangle part with zeros.
-    std::fill_n( upper[row], row, 0.0f );
-    // Diagonal entries are never zero (kept far away from zero) and strictly positive.
-    upper[row][row] = 50000.0f + std::abs( gen() );
-    // Upper triangular entries can be zero or any value, but smaller in magnitude than the diagonal.
-    std::generate_n( upper[row] + row + 1, size - row - 1, [&]() { return gen() * 0.25f; } );
-  }
-
-  // Form the symmetric positive-definite matrix A = U^T * U.
-  // A is lhs and U is upper.
-  for( int row = 0; row < size; ++row )
-  {
-    for( int col = 0; col < size; ++col )
-    {
-      alf_float_t sum = 0.0f;
-      for( int k = 0; k < size; ++k )
-      {
-        sum += upper[k][row] * upper[k][col];
-      }
-      lhs[row][col] = sum;
-    }
-  }
-
-  // Generate rhs = A * x so that the system A * x = rhs has a consistent solution.
-  for( int row = 0; row < size; ++row )
-  {
-    alf_float_t sum = 0.0f;
-    for( int col = 0; col < size; ++col )
-    {
-      sum += lhs[row][col] * x[col];
-    }
-    rhs[row] = sum;
-  }
-}
-
-template<typename GDiag, typename GRhs>
-static void generate_non_positive_definite_matrix( AlfCovariance::TE lhs, AlfCovariance::Ty rhs, int size,
-                                                   GDiag genDiag, GRhs genRhs )
-{
-  // Builds a diagonal matrix with strictly negative diagonal entries.
-  // Such a matrix is symmetric but not positive definite, so the initial Cholesky check fails.
-  // Depending on the chosen value range, regularization may or may not recover it.
-  for( int i = 0; i < size; ++i )
-  {
-    lhs[i][i] = genDiag();
-    CHECK( lhs[i][i] >= 0.0f, "Diagonal entries must be negative to ensure non-positive definiteness." );
-    rhs[i] = genRhs();
-  }
-}
-
-static bool check_one_gnsSolveByChol( const std::string& context, AlfCovariance* ref, AlfCovariance* opt,
-                                      AlfCovariance::TE lhsRef, AlfCovariance::Ty rhsRef, AlfCovariance::TE lhsOpt,
-                                      AlfCovariance::Ty rhsOpt, int size )
-{
-  AlfCovariance::Ty xRef;
-  AlfCovariance::Ty xOpt;
-
-  // gnsSolveByChol returns non-zero on successful Cholesky factorization and zero on failure.
-  const bool refOk = ref->m_gnsSolveByChol( lhsRef, rhsRef, xRef, size );
-  const bool optOk = opt->m_gnsSolveByChol( lhsOpt, rhsOpt, xOpt, size );
-
-  bool passed = true;
-  passed = compare_value( context + " Cholesky status", refOk, optOk ) && passed;
-  passed = compare_values_1d( context + " x", xRef, xOpt, size, 0.1f ) && passed;
-  return passed;
-}
-
-enum class CholeskyTestCase
-{
-  PositiveDefinite,
-  RegularizedRecovery,
-  NonPositiveDefinite,
-  AllZero,
-};
-
-template<CholeskyTestCase TestCase>
-static bool check_gnsSolveByChol( AlfCovariance* ref, AlfCovariance* opt, int size, unsigned num_cases )
-{
-  std::ostringstream sstm;
-  bool passed = true;
-
-  const char* caseStr = TestCase == CholeskyTestCase::PositiveDefinite      ? "Positive Definite"
-                        : TestCase == CholeskyTestCase::RegularizedRecovery ? "Regularized Recovery"
-                        : TestCase == CholeskyTestCase::NonPositiveDefinite ? "Non-Positive Definite"
-                                                                            : "All Zero";
-  sstm << "AlfCovariance::gnsSolveByChol " << caseStr << " Size=" << size;
-  std::cout << "Testing " << sstm.str() << '\n';
-
-  AlfCovariance::TE lhsRef;
-  AlfCovariance::Ty rhsRef;
-  AlfCovariance::TE lhsOpt;
-  AlfCovariance::Ty rhsOpt;
-
-  for( unsigned i = 0; i < num_cases; ++i )
-  {
-    if( TestCase == CholeskyTestCase::PositiveDefinite )
-    {
-      FloatGenerator gen( -100000.0f, 100000.0f );
-      generate_symmetric_positive_definite_matrix( lhsRef, rhsRef, size, gen );
-    }
-    else if( TestCase == CholeskyTestCase::RegularizedRecovery )
-    {
-      // Negative before regularization, positive after adding REG=0.0001f.
-      FloatGenerator genDiag( -0.00009f, -0.00001f );
-      FloatGenerator genRhs( -1000.0f, 1000.0f );
-      generate_non_positive_definite_matrix( lhsRef, rhsRef, size, genDiag, genRhs );
-    }
-    else if( TestCase == CholeskyTestCase::NonPositiveDefinite )
-    {
-      FloatGenerator genDiag( -2.0f, -0.1f ); // Every diagonal entry is negative.
-      FloatGenerator genRhs( 0.0f, 0.0f );
-      generate_non_positive_definite_matrix( lhsRef, rhsRef, size, genDiag, genRhs );
-    }
-    else // TestCase == CholeskyTestCase::AllZero.
-    {
-      std::memset( lhsRef, 0, sizeof( lhsRef ) );
-      std::memset( rhsRef, 0, sizeof( rhsRef ) );
-    }
-
-    std::memcpy( lhsOpt, lhsRef, sizeof( lhsRef ) );
-    std::memcpy( rhsOpt, rhsRef, sizeof( rhsRef ) );
-
-    passed = check_one_gnsSolveByChol( sstm.str(), ref, opt, lhsRef, rhsRef, lhsOpt, rhsOpt, size ) && passed;
-  }
-
-  return passed;
-}
-
-static bool test_AlfCovariance( unsigned num_cases )
-{
-  AlfCovariance ref( /*enableOpt=*/false );
-  AlfCovariance opt( /*enableOpt=*/true );
-  bool passed = true;
-
-  // 13 for luma and 7 for chroma.
-  for( int size : { 7, 13 } )
-  {
-    // Uses a valid positive-definite matrix.
-    passed = check_gnsSolveByChol<CholeskyTestCase::PositiveDefinite>( &ref, &opt, size, num_cases ) && passed;
-    // First Cholesky fails, but regularization makes the matrix solvable.
-    passed = check_gnsSolveByChol<CholeskyTestCase::RegularizedRecovery>( &ref, &opt, size, num_cases ) && passed;
-    // Failure handling - uses an invalid/singular matrix.
-    passed = check_gnsSolveByChol<CholeskyTestCase::NonPositiveDefinite>( &ref, &opt, size, num_cases ) && passed;
-    // All-zero LHS and RHS.
-    passed = check_gnsSolveByChol<CholeskyTestCase::AllZero>( &ref, &opt, size, 1 ) && passed;
-  }
-
-  return passed;
 }
 
 static bool compare_AlfCovariance( const std::string& name, const AlfCovariance& covRef, const AlfCovariance& covOpt )
@@ -5749,11 +6676,58 @@ static bool check_getPreBlkStatsAccumEqualBins( EncAdaptiveLoopFilter* ref, EncA
   return passed;
 }
 
+// The linear statistics inputs of a 4x4 block, for each filter shape and transposeIdx: random 10-bit samples, and samples
+// over the whole 16-bit range, where the sums wrap.
+static bool check_getLinBlkInputs( EncAdaptiveLoopFilter* ref, EncAdaptiveLoopFilter* opt, int filterSize, unsigned num_cases )
+{
+  std::cout << "Testing EncAdaptiveLoopFilter::getLinBlkInputs filterSize=" << filterSize << '\n';
+
+  const int halfFilterLength = filterSize >> 1;
+  constexpr int binSize = MAX_NUM_ALF_LUMA_COEFF << 4;   // Pels of the first bin in ELocal
+  bool passed = true;
+
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+  InputGenerator<Pel> g16{ 16, /*is_signed=*/true };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    InputGenerator<Pel>& g = i & 1 ? g16 : g10;
+    // the block at ( halfFilterLength, halfFilterLength ) with its filter margin
+    const int recStride = rng.get( 4 + 2 * halfFilterLength, 64 );
+    const int orgStride = rng.get( 4, 64 );
+    std::vector<Pel> rec( recStride * ( 4 + 2 * halfFilterLength ) );
+    std::vector<Pel> org( orgStride * 4 );
+    std::generate( rec.begin(), rec.end(), g );
+    std::generate( org.begin(), org.end(), g );
+    const Pel* block = rec.data() + halfFilterLength * recStride + halfFilterLength;
+
+    for( int transposeIdx = 0; transposeIdx < 4; transposeIdx++ )
+    {
+      std::vector<Pel> eRef( binSize, 0 ), eOpt( binSize, 0 );
+      Pel yRef[4][4], yOpt[4][4];
+      ref->m_getLinBlkInputs( eRef.data(), yRef, org.data(), orgStride, block, recStride, halfFilterLength, transposeIdx );
+      opt->m_getLinBlkInputs( eOpt.data(), yOpt, org.data(), orgStride, block, recStride, halfFilterLength, transposeIdx );
+
+      std::ostringstream sstm;
+      sstm << "EncAdaptiveLoopFilter::getLinBlkInputs filterSize=" << filterSize << " transposeIdx=" << transposeIdx;
+      passed = compare_values_1d( sstm.str() + " ELocal", eRef.data(), eOpt.data(), binSize ) && passed;
+      passed = compare_values_1d( sstm.str() + " yLocal", &yRef[0][0], &yOpt[0][0], 16 ) && passed;
+    }
+  }
+  return passed;
+}
+
 static bool test_EncAdaptiveLoopFilter( unsigned num_cases )
 {
   EncAdaptiveLoopFilter ref( /*enableOpt=*/false );
   EncAdaptiveLoopFilter opt( /*enableOpt=*/true );
   bool passed = true;
+
+  for( int filterSize : { 5, 7 } )
+  {
+    passed = check_getLinBlkInputs( &ref, &opt, filterSize, num_cases ) && passed;
+  }
 
   for( int numBin : { 1, AdaptiveLoopFilter::AlfNumClippingValues } )
   {
@@ -5778,14 +6752,23 @@ static bool test_AdaptiveLoopFilter()
   unsigned num_cases = NUM_CASES;
   bool passed = true;
 
-  passed = test_AlfCovariance( num_cases ) && passed;
   passed = test_EncAdaptiveLoopFilter( num_cases ) && passed;
+  passed = check_deriveClassificationBlk( &ref, &opt ) && passed;
+  passed = check_filterBlkCcAlf( &ref, &opt ) && passed;
 
   for( unsigned w : { 8, 16, 32, 48, 64, 128 } )
   {
     for( unsigned h : { 8, 16, 24, 32, 64, 112, 128 } )
     {
       passed = check_filterBlk( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+
+  for( unsigned w : { 4, 8, 12, 16, 32, 64 } )
+  {
+    for( unsigned h : { 4, 8, 16, 32, 64 } )
+    {
+      passed = check_filter5x5Blk( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
 
@@ -5854,6 +6837,299 @@ static bool check_SAOcalcSaoStatisticsBo( SampleAdaptiveOffset* ref, SampleAdapt
   return passed;
 }
 
+template<typename G>
+static bool check_SAOcalcSaoStatisticsEo0( SampleAdaptiveOffset* ref, SampleAdaptiveOffset* opt, int bd,
+                                           G src_generator, G org_generator, int orgStrideExtra = 0 )
+{
+  bool passed = true;
+  const int margin = 1; // calcSaoStatisticsEo0 reads one sample left/right of [0, width)
+
+  std::ostringstream sstm_test;
+  sstm_test << "SampleAdaptiveOffset::calcSaoStatisticsEo0 " << bd << " bit";
+  std::cout << "Testing " << sstm_test.str() << '\n';
+
+  for( unsigned width : { 15, 16, 17, 24, 31, 32, 33, 63, 64, 65, 128 } )
+  {
+    const int srcStride = width + 2 * margin;
+    const int orgStride = width + orgStrideExtra;
+    // extra row keeps the final row-pointer increment within the allocation
+    std::vector<Pel> srcBlk( srcStride * ( MAX_CU_SIZE + 1 ) );
+    std::vector<Pel> orgBlk( orgStride * ( MAX_CU_SIZE + 1 ) );
+
+    for( unsigned endY : { 1u, 2u, (unsigned)( MAX_CU_SIZE / 2 ), (unsigned)MAX_CU_SIZE } )
+    {
+      for( int startX : { 0, 1 } )
+      {
+        for( int naRight : { 0, 1, 3, 5, 7, 8 } )
+        {
+          if( naRight >= (int)width - startX )
+          {
+            continue;
+          }
+
+          std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
+          std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
+
+          const int endX = width - naRight;
+
+          std::vector<int64_t> countRef( NUM_SAO_EO_CLASSES, 0 );
+          std::vector<int64_t> diffRef( NUM_SAO_EO_CLASSES, 0 );
+          std::vector<int64_t> countOpt( NUM_SAO_EO_CLASSES, 0 );
+          std::vector<int64_t> diffOpt( NUM_SAO_EO_CLASSES, 0 );
+
+          ref->calcSaoStatisticsEo0( width, startX, endX, endY, srcBlk.data() + margin, orgBlk.data(), srcStride,
+                                     orgStride, countRef.data(), diffRef.data() );
+          opt->calcSaoStatisticsEo0( width, startX, endX, endY, srcBlk.data() + margin, orgBlk.data(), srcStride,
+                                     orgStride, countOpt.data(), diffOpt.data() );
+
+          std::ostringstream sstm_subtest;
+          sstm_subtest << sstm_test.str() << " width=" << width << " startX=" << startX << " endX=" << endX
+                       << " endY=" << endY;
+
+          passed = compare_values_1d( sstm_subtest.str(), countRef.data(), countOpt.data(), NUM_SAO_EO_CLASSES ) &&
+                   passed;
+          passed = compare_values_1d( sstm_subtest.str(), diffRef.data(), diffOpt.data(), NUM_SAO_EO_CLASSES ) &&
+                   passed;
+
+          // independent check: the bins must account for exactly the classified rectangle
+          int64_t countTotal = 0, diffTotal = 0;
+          for( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+          {
+            countTotal += countOpt[i];
+            diffTotal += diffOpt[i];
+          }
+          int64_t expectedDiff = 0;
+          for( unsigned y = 0; y < endY; y++ )
+          {
+            for( int x = startX; x < endX; x++ )
+            {
+              expectedDiff += orgBlk[y * orgStride + x] - srcBlk[margin + y * srcStride + x];
+            }
+          }
+          const int64_t expectedCount[1] = { (int64_t)( endX - startX ) * endY };
+          const int64_t expectedDiffArr[1] = { expectedDiff };
+          passed = compare_values_1d( sstm_subtest.str() + " count total", expectedCount, &countTotal, 1 ) && passed;
+          passed = compare_values_1d( sstm_subtest.str() + " diff total", expectedDiffArr, &diffTotal, 1 ) && passed;
+        }
+      }
+    }
+  }
+  return passed;
+}
+
+template<typename G>
+static bool check_SAOcalcSaoStatisticsEo90( SampleAdaptiveOffset* ref, SampleAdaptiveOffset* opt, int bd,
+                                            G src_generator, G org_generator )
+{
+  bool passed = true;
+  const int margin = 1; // one row of margin above the first processed row and below the last
+
+  std::ostringstream sstm_test;
+  sstm_test << "SampleAdaptiveOffset::calcSaoStatisticsEo90 " << bd << " bit";
+  std::cout << "Testing " << sstm_test.str() << '\n';
+
+  for( unsigned width : { 15, 16, 17, 24, 31, 32, 33, 63, 64, 65, 128 } )
+  {
+    const int srcStride = width;
+    const int orgStride = width;
+    std::vector<Pel> srcBlk( srcStride * ( MAX_CU_SIZE + 2 ) );
+    std::vector<Pel> orgBlk( orgStride * MAX_CU_SIZE );
+    std::vector<int8_t> signUpLineRef( width ), signUpLineOpt( width );
+
+    for( unsigned endY : { 1u, 2u, (unsigned)( MAX_CU_SIZE / 2 ), (unsigned)MAX_CU_SIZE } )
+    {
+      for( int startY : { 0, 1 } )
+      {
+        if( (unsigned)startY >= endY )
+        {
+          continue;
+        }
+        for( int naRight : { 0, 1, 3, 5, 7, 8 } )
+        {
+          if( naRight >= (int)width )
+          {
+            continue;
+          }
+
+          std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
+          std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
+
+          const int endX = width - naRight;
+
+          std::vector<int64_t> countRef( NUM_SAO_EO_CLASSES, 0 );
+          std::vector<int64_t> diffRef( NUM_SAO_EO_CLASSES, 0 );
+          std::vector<int64_t> countOpt( NUM_SAO_EO_CLASSES, 0 );
+          std::vector<int64_t> diffOpt( NUM_SAO_EO_CLASSES, 0 );
+
+          Pel* srcPtr = srcBlk.data() + margin * srcStride;
+          ref->calcSaoStatisticsEo90( width, endX, startY, endY, srcPtr, orgBlk.data(), srcStride, orgStride,
+                                       countRef.data(), diffRef.data(), signUpLineRef.data() );
+          opt->calcSaoStatisticsEo90( width, endX, startY, endY, srcPtr, orgBlk.data(), srcStride, orgStride,
+                                       countOpt.data(), diffOpt.data(), signUpLineOpt.data() );
+
+          std::ostringstream sstm_subtest;
+          sstm_subtest << sstm_test.str() << " width=" << width << " endX=" << endX << " startY=" << startY
+                       << " endY=" << endY;
+
+          passed = compare_values_1d( sstm_subtest.str(), countRef.data(), countOpt.data(), NUM_SAO_EO_CLASSES ) &&
+                   passed;
+          passed = compare_values_1d( sstm_subtest.str(), diffRef.data(), diffOpt.data(), NUM_SAO_EO_CLASSES ) &&
+                   passed;
+        }
+      }
+    }
+  }
+  return passed;
+}
+
+template<typename G>
+static bool check_SAOcalcSaoStatisticsEo135( SampleAdaptiveOffset* ref, SampleAdaptiveOffset* opt, int bd,
+                                             G src_generator, G org_generator )
+{
+  bool passed = true;
+  const int margin = 1; // one column of margin left/right, one row of margin above/below
+
+  std::ostringstream sstm_test;
+  sstm_test << "SampleAdaptiveOffset::calcSaoStatisticsEo135 " << bd << " bit";
+  std::cout << "Testing " << sstm_test.str() << '\n';
+
+  for( unsigned width : { 15, 16, 17, 24, 31, 32, 33, 63, 64, 65, 128 } )
+  {
+    const int srcStride = width + 2 * margin;
+    const int orgStride = width;
+    std::vector<Pel> srcBlk( srcStride * ( MAX_CU_SIZE + 2 ) );
+    std::vector<Pel> orgBlk( orgStride * MAX_CU_SIZE );
+    // the scalar reference writes signDownLine[endX]
+    std::vector<int8_t> signUpLineRef( width + 1, 0 ), signUpLineOpt( width + 1, 0 );
+    std::vector<int8_t> signDownLineRef( width + 1, 0 ), signDownLineOpt( width + 1, 0 );
+
+    for( unsigned endY : { 2u, 3u, (unsigned)( MAX_CU_SIZE / 2 ), (unsigned)MAX_CU_SIZE } )
+    {
+      for( int startX : { 0, 1 } )
+      {
+        for( int naRight : { 0, 1, 3, 5, 7, 8 } )
+        {
+          if( naRight >= (int)width - startX )
+          {
+            continue;
+          }
+
+          std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
+          std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
+
+          const int endX = width - naRight;
+          Pel* srcPtr    = srcBlk.data() + margin * srcStride + margin;
+
+          // initialize the upper diagonal signs as getBlkStats does
+          for( int x = startX; x <= endX; x++ )
+          {
+            const int8_t v   = (int8_t)sgn( srcPtr[x] - srcPtr[x - 1 - srcStride] );
+            signUpLineRef[x] = v;
+            signUpLineOpt[x] = v;
+          }
+
+          // seeded non-zero so a kernel that overwrites instead of accumulating onto the caller's
+          // first-row totals (the real contract) would diverge from the reference, not just match it
+          const std::vector<int64_t> countSeed{ 10, 20, 30, 40, 50 };
+          const std::vector<int64_t> diffSeed{ 101, -202, 303, -404, 505 };
+          std::vector<int64_t> countRefBase = countSeed, diffRefBase = diffSeed;
+          std::vector<int64_t> countOptBase = countSeed, diffOptBase = diffSeed;
+
+          // pass bin-2 pointers, matching getBlkStats
+          ref->calcSaoStatisticsEo135( width, startX, endX, endY, srcPtr, orgBlk.data(), srcStride, orgStride,
+                                        countRefBase.data() + 2, diffRefBase.data() + 2, signUpLineRef.data(),
+                                        signDownLineRef.data() );
+          opt->calcSaoStatisticsEo135( width, startX, endX, endY, srcPtr, orgBlk.data(), srcStride, orgStride,
+                                        countOptBase.data() + 2, diffOptBase.data() + 2, signUpLineOpt.data(),
+                                        signDownLineOpt.data() );
+
+          std::ostringstream sstm_subtest;
+          sstm_subtest << sstm_test.str() << " width=" << width << " startX=" << startX << " endX=" << endX
+                       << " endY=" << endY;
+
+          passed = compare_values_1d( sstm_subtest.str(), countRefBase.data(), countOptBase.data(),
+                                       NUM_SAO_EO_CLASSES ) && passed;
+          passed = compare_values_1d( sstm_subtest.str(), diffRefBase.data(), diffOptBase.data(),
+                                       NUM_SAO_EO_CLASSES ) && passed;
+        }
+      }
+    }
+  }
+  return passed;
+}
+
+template<typename G>
+static bool check_SAOcalcSaoStatisticsEo45( SampleAdaptiveOffset* ref, SampleAdaptiveOffset* opt, int bd,
+                                            G src_generator, G org_generator )
+{
+  bool passed = true;
+  const int margin = 1; // one column of margin left/right, one row of margin above/below
+
+  std::ostringstream sstm_test;
+  sstm_test << "SampleAdaptiveOffset::calcSaoStatisticsEo45 " << bd << " bit";
+  std::cout << "Testing " << sstm_test.str() << '\n';
+
+  for( unsigned width : { 15, 16, 17, 24, 31, 32, 33, 63, 64, 65, 128 } )
+  {
+    const int srcStride = width + 2 * margin;
+    const int orgStride = width;
+    std::vector<Pel> srcBlk( srcStride * ( MAX_CU_SIZE + 2 ) );
+    std::vector<Pel> orgBlk( orgStride * MAX_CU_SIZE );
+    // allow signUpLine[-1], matching getBlkStats
+    std::vector<int8_t> signUpLineRefBase( width + 2, 0 ), signUpLineOptBase( width + 2, 0 );
+
+    for( unsigned endY : { 2u, 3u, (unsigned)( MAX_CU_SIZE / 2 ), (unsigned)MAX_CU_SIZE } )
+    {
+      for( int startX : { 0, 1 } )
+      {
+        for( int naRight : { 0, 1, 3, 5, 7, 8 } )
+        {
+          if( naRight >= (int)width - startX )
+          {
+            continue;
+          }
+
+          std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
+          std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
+
+          const int endX = width - naRight;
+          Pel* srcPtr    = srcBlk.data() + margin * srcStride + margin;
+
+          // initialize the upper diagonal signs as getBlkStats does
+          for( int x = startX - 1; x < endX; x++ )
+          {
+            const int8_t v           = (int8_t)sgn( srcPtr[x] - srcPtr[x + 1 - srcStride] );
+            signUpLineRefBase[x + 1] = v;
+            signUpLineOptBase[x + 1] = v;
+          }
+
+          // seeded non-zero so a kernel that overwrites instead of accumulating onto the caller's
+          // first-row totals (the real contract) would diverge from the reference, not just match it
+          const std::vector<int64_t> countSeed{ 10, 20, 30, 40, 50 };
+          const std::vector<int64_t> diffSeed{ 101, -202, 303, -404, 505 };
+          std::vector<int64_t> countRefBase = countSeed, diffRefBase = diffSeed;
+          std::vector<int64_t> countOptBase = countSeed, diffOptBase = diffSeed;
+
+          ref->calcSaoStatisticsEo45( width, startX, endX, endY, srcPtr, orgBlk.data(), srcStride, orgStride,
+                                       countRefBase.data() + 2, diffRefBase.data() + 2, signUpLineRefBase.data() + 1 );
+          opt->calcSaoStatisticsEo45( width, startX, endX, endY, srcPtr, orgBlk.data(), srcStride, orgStride,
+                                       countOptBase.data() + 2, diffOptBase.data() + 2, signUpLineOptBase.data() + 1 );
+
+          std::ostringstream sstm_subtest;
+          sstm_subtest << sstm_test.str() << " width=" << width << " startX=" << startX << " endX=" << endX
+                       << " endY=" << endY;
+
+          passed = compare_values_1d( sstm_subtest.str(), countRefBase.data(), countOptBase.data(),
+                                       NUM_SAO_EO_CLASSES ) && passed;
+          passed = compare_values_1d( sstm_subtest.str(), diffRefBase.data(), diffOptBase.data(),
+                                       NUM_SAO_EO_CLASSES ) && passed;
+        }
+      }
+    }
+  }
+  return passed;
+}
+
 static bool test_SampleAdaptiveOffset()
 {
   SampleAdaptiveOffset ref{ false };
@@ -5870,6 +7146,23 @@ static bool test_SampleAdaptiveOffset()
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, max_gen, min_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, min_gen, max_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+
+    passed = check_SAOcalcSaoStatisticsEo0( &ref, &opt, bd, max_gen, min_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo0( &ref, &opt, bd, min_gen, max_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo0( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo0( &ref, &opt, bd, rand_gen, rand_gen, /*orgStrideExtra=*/4 ) && passed;
+
+    passed = check_SAOcalcSaoStatisticsEo90( &ref, &opt, bd, max_gen, min_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo90( &ref, &opt, bd, min_gen, max_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo90( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+
+    passed = check_SAOcalcSaoStatisticsEo135( &ref, &opt, bd, max_gen, min_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo135( &ref, &opt, bd, min_gen, max_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo135( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+
+    passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, max_gen, min_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, min_gen, max_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
   }
 
   return passed;
@@ -5960,6 +7253,99 @@ static bool test_LoopFilterPandQ()
   return passed;
 }
 
+// Filters one 4-line luma edge segment of a 32 x 20 buffer with both kernels, in every combination of edge direction,
+// strong / weak and second-P / second-Q flags, and compares the whole buffer (writes outside p3..q3 included).
+static bool check_xPelFilterLuma( LoopFilter& ref, LoopFilter& opt, const std::vector<Pel>& input, int tc, int bd )
+{
+  const ptrdiff_t stride = 32;
+  const ClpRng    clpRng{ bd };
+  bool            passed = true;
+  for( int vertical = 0; vertical < 2; vertical++ )
+  {
+    // vertical edge: lines are rows 6..9, the edge before column 12; horizontal: lines are columns 12..15, edge before row 8
+    const ptrdiff_t step   = vertical ? stride : 1;
+    const ptrdiff_t offset = vertical ? 1 : stride;
+    const ptrdiff_t pos    = vertical ? 6 * stride + 12 : 8 * stride + 12;
+    for( int flags = 0; flags < 8; flags++ )
+    {
+      const bool       sw = flags & 1, secondP = flags & 2, secondQ = flags & 4;
+      std::vector<Pel> buf_ref = input;
+      std::vector<Pel> buf_opt = input;
+      ref.xPelFilterLuma( buf_ref.data() + pos, step, offset, tc, sw, 10 * tc, secondP, secondQ, clpRng );
+      opt.xPelFilterLuma( buf_opt.data() + pos, step, offset, tc, sw, 10 * tc, secondP, secondQ, clpRng );
+
+      std::ostringstream ctx;
+      ctx << "xPelFilterLuma vertical=" << vertical << " sw=" << sw << " secondP=" << secondP << " secondQ=" << secondQ
+          << " tc=" << tc << " bd=" << bd;
+      passed = compare_values_1d( ctx.str(), buf_ref.data(), buf_opt.data(), (unsigned) input.size() ) && passed;
+    }
+  }
+  return passed;
+}
+
+static bool test_LoopFilterPelLuma()
+{
+  printf( "Testing LoopFilter::xPelFilterLuma\n" );
+
+  LoopFilter ref( /*enableOpt=*/false );
+  LoopFilter opt( /*enableOpt=*/true );
+
+  const int stride = 32, rows = 20;
+  bool      passed = true;
+  unsigned  num_cases = g_fastUnitTest ? 10 : NUM_CASES;
+
+  for( int bd = 8; bd <= 10; bd += 2 )
+  {
+    const int maxVal = ( 1 << bd ) - 1;
+    const int maxTc  = 395 >> ( 10 - bd );   // the largest tc of the bit depth (LoopFilter's tc table)
+
+    // fixed buffers: all zero, all maximum, alternating
+    for( int pattern = 0; pattern < 3; pattern++ )
+    {
+      std::vector<Pel> buf( stride * rows );
+      for( int i = 0; i < stride * rows; i++ ) buf[i] = pattern == 0 ? 0 : pattern == 1 ? maxVal : ( i & 1 ) * maxVal;
+      passed = check_xPelFilterLuma( ref, opt, buf, 1, bd ) && passed;
+      passed = check_xPelFilterLuma( ref, opt, buf, maxTc, bd ) && passed;
+    }
+
+    for( unsigned i = 0; i < num_cases; i++ )
+    {
+      // uniform random samples
+      std::vector<Pel> buf( stride * rows );
+      for( Pel& v : buf ) v = rand() % ( maxVal + 1 );
+      passed = check_xPelFilterLuma( ref, opt, buf, 1 + rand() % maxTc, bd ) && passed;
+
+      // samples near 0 and the maximum only, with a large tc: the weak filter clips at both ends
+      for( Pel& v : buf ) v = ( rand() & 1 ) ? rand() % 8 : maxVal - rand() % 8;
+      passed = check_xPelFilterLuma( ref, opt, buf, maxTc - rand() % 8, bd ) && passed;
+
+      // lines that differ: each line (row and column alike) a ramp with its own level, slope and step at the edge,
+      // up or down, sized around the weak filter's threshold, so lines pass and fail and the clamps vary per line
+      const int tc = 1 + rand() % ( maxTc / 8 );
+      int level[32], slope[32], jump[32];
+      for( int k = 0; k < 32; k++ )
+      {
+        level[k] = rand() % ( maxVal + 1 );
+        slope[k] = rand() % 9 - 4;
+        jump[k]  = ( rand() % ( 36 * tc + 1 ) ) * ( ( rand() & 1 ) ? 1 : -1 );
+      }
+      for( int vertical = 0; vertical < 2; vertical++ )
+      {
+        for( int y = 0; y < rows; y++ )
+          for( int x = 0; x < stride; x++ )
+          {
+            const int line = vertical ? y : x;
+            const int dist = vertical ? x - 12 : y - 8;   // distance from the edge, >= 0 on the Q side
+            const int v    = level[line] + slope[line] * dist + ( dist >= 0 ? jump[line] : 0 ) + rand() % 3;
+            buf[y * stride + x] = Pel( v < 0 ? 0 : v > maxVal ? maxVal : v );
+          }
+        passed = check_xPelFilterLuma( ref, opt, buf, tc, bd ) && passed;
+      }
+    }
+  }
+  return passed;
+}
+
 #endif   // ENABLE_SIMD_DBLF
 
 #if ENABLE_SIMD_OPT_FGA
@@ -6044,17 +7430,7 @@ static bool test_FGAnalyzerKernels()
         const int e2 = k.findEqual( c.data(), w, c[ w / 2 ], p2.data() );
         bad += e1 != e2 || p1 != p2;
 
-        // temporal residual: 4x downsampling and 4x4 SADs of w / 4 blocks over four rows, residual rows
-        const int n = w / 4 + 1, stride = 4 * n + 8;
-        auto s4 = randomRow( 4 * stride, mode ), r4 = randomRow( 4 * stride + 3, mode );
-        std::vector<Pel> q1( n + 16, -1 ), q2( n + 16, -1 );
-        vvenc::fgaDownsample4Core( s4.data(), stride, n, q1.data() );
-        k.downsample4( s4.data(), stride, n, q2.data() );
-        bad += q1 != q2;
-        std::vector<int> sad1( n + 16, -1 ), sad2( n + 16, -1 );
-        vvenc::fgaSad4x4RowCore( s4.data(), stride, r4.data(), stride + 1, n, sad1.data() );
-        k.sad4x4Row( s4.data(), stride, r4.data(), stride + 1, n, sad2.data() );
-        bad += sad1 != sad2;
+        // temporal residual rows
         for( bool two : { true, false } )
         {
           std::vector<Pel> e1r( w + 32, -1 ), e2r( w + 32, -1 );
@@ -7267,6 +8643,7 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_DBLF
     { "LoopFilterPandQ", test_LoopFilterPandQ },
+    { "LoopFilterPelLuma", test_LoopFilterPelLuma },
 #endif
 #if ENABLE_SIMD_OPT
     { "BvSearch", test_BvSearchOps },

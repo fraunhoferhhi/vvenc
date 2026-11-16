@@ -179,6 +179,11 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
 
   int step = optimize_clip ? (numBins+1)/2 : 0;
 
+  // After a win, the trial of that coefficient back by the same step is the factorisation already solved, with the
+  // error the win beat, so it can't win. With a regularised matrix (solver not valid) kE may differ, so it runs.
+  int solvedK   = -1;
+  int solvedInc = 0;
+
   while( step > 0 )
   {
     alf_float_t err_min = err_best;
@@ -187,7 +192,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
 
     for( int k = 0; k < size-1; ++k )
     {
-      if( clip[k] - step >= clip_max[k] )
+      if( clip[k] - step >= clip_max[k] && !( solver.valid && k == solvedK && solvedInc == -step ) )
       {
         clip[k] -= step;
         ky[k] = y[clip[k]][k];
@@ -212,7 +217,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
         }
         clip[k] += step;
       }
-      if( clip[k] + step < numBins )
+      if( clip[k] + step < numBins && !( solver.valid && k == solvedK && solvedInc == step ) )
       {
         clip[k] += step;
         ky[k] = y[clip[k]][k];
@@ -248,6 +253,8 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
 
     if( idx_min >= 0 )
     {
+      solvedK   = idx_min;
+      solvedInc = -inc_min;
       err_best = err_min;
       clip[idx_min] += inc_min;
       ky[idx_min] = y[clip[idx_min]][idx_min];
@@ -932,10 +939,27 @@ alf_float_t AlfCovariance::calculateError( const int *clip ) const
 #define REG              alf_float_t( 0.0001    )
 #define REG_SQR          alf_float_t( 0.0000001 )
 
+// A clip trial (AlfClipSolver) must give the same numbers as a whole solve, bit for bit. Both evaluate the same
+// expressions, but a compiler that fuses multiply-adds (FP contraction: Apple clang and GCC by default on Arm) may fuse
+// them differently in the two paths, so the solver functions below are compiled without contraction. clang marks each
+// operation, which survives inlining; GCC decides in the function the code ends up in, so these stay out of line there.
+// MSVC does not contract by default. Only the functions with multiply-adds need it: these three and clipTrial.
+#if defined( __clang__ )
+#define ALF_SOLVER_FUNC
+#define ALF_SOLVER_NO_CONTRACT _Pragma( "clang fp contract(off)" )
+#elif defined( __GNUC__ ) && defined( __FP_FAST_FMAF )   // without hardware FMA nothing is fused: keep the code as is
+#define ALF_SOLVER_FUNC        __attribute__( ( noinline, optimize( "fp-contract=off" ) ) )
+#define ALF_SOLVER_NO_CONTRACT
+#else
+#define ALF_SOLVER_FUNC
+#define ALF_SOLVER_NO_CONTRACT
+#endif
+
 //Find filter coeff related
 template<int NumEq>
-static int gnsCholeskyDec( AlfCovariance::TE inpMatr, AlfCovariance::TE outMatr )
+ALF_SOLVER_FUNC static int gnsCholeskyDec( AlfCovariance::TE inpMatr, AlfCovariance::TE outMatr )
 {
+  ALF_SOLVER_NO_CONTRACT
   static_assert( NumEq == 7 || NumEq == 13, "Unsupported ALF Cholesky order" );
 
   for( int i = 0; i < NumEq; i++ )
@@ -978,8 +1002,9 @@ static int gnsCholeskyDec( AlfCovariance::TE inpMatr, AlfCovariance::TE outMatr 
 }
 
 template<int NumEq>
-static void gnsTransposeBacksubstitution( AlfCovariance::TE U, alf_float_t* rhs, alf_float_t* x )
+ALF_SOLVER_FUNC static void gnsTransposeBacksubstitution( AlfCovariance::TE U, alf_float_t* rhs, alf_float_t* x )
 {
+  ALF_SOLVER_NO_CONTRACT
   static_assert( NumEq == 7 || NumEq == 13, "Unsupported ALF Cholesky order" );
 
 #if __GNUC__ == 7
@@ -1006,8 +1031,9 @@ static void gnsTransposeBacksubstitution( AlfCovariance::TE U, alf_float_t* rhs,
 }
 
 template<int NumEq>
-static void gnsBacksubstitution( AlfCovariance::TE R, alf_float_t* z, alf_float_t* A )
+ALF_SOLVER_FUNC static void gnsBacksubstitution( AlfCovariance::TE R, alf_float_t* z, alf_float_t* A )
 {
+  ALF_SOLVER_NO_CONTRACT
   static_assert( NumEq == 7 || NumEq == 13, "Unsupported ALF Cholesky order" );
 
   const int size = NumEq - 1;
@@ -1027,8 +1053,9 @@ static void gnsBacksubstitution( AlfCovariance::TE R, alf_float_t* z, alf_float_
 }
 
 template<int NumEq>
-static bool clipTrial( AlfClipSolver& s, AlfCovariance::TE inp, alf_float_t* rhs, const int k, alf_float_t* f )
+ALF_SOLVER_FUNC static bool clipTrial( AlfClipSolver& s, AlfCovariance::TE inp, alf_float_t* rhs, const int k, alf_float_t* f )
 {
+  ALF_SOLVER_NO_CONTRACT
   AlfCovariance::TE& U = s.U;
   for( int i = 0; i < k; i++ )
   {
@@ -1042,37 +1069,60 @@ static bool clipTrial( AlfClipSolver& s, AlfCovariance::TE inp, alf_float_t* rhs
   }
   for( int i = k; i < NumEq; i++ )
   {
-    alf_float_t invDiag = 0.0f;
-    for( int j = i; j < NumEq; j++ )
+    // the diagonal first, so a failing trial stops before the row's other columns are computed
+    alf_float_t diag = inp[i][i];
+    for( int m = i - 1; m >= 0; m-- )
     {
-      alf_float_t scale = inp[i][j];
-      for( int m = i - 1; m >= 0; m-- )
+      diag -= U[m][i] * U[m][i];
+    }
+    if( diag <= REG_SQR )
+    {
+      return false;
+    }
+    const alf_float_t invDiag = alf_float_t( 1.0 ) / ( U[i][i] = sqrt( diag ) );
+
+    // The row's other columns do not depend on each other. Updating all of them for each m does the same operations in the
+    // same order for every column as one column at a time (so gives the same values), but in one loop over contiguous
+    // U[m][j] that the compiler can vectorize, instead of one scalar pass down a column per column.
+    alf_float_t scale[NumEq];
+    for( int j = i + 1; j < NumEq; j++ )
+    {
+      scale[j] = inp[i][j];
+    }
+    for( int m = i - 1; m >= 0; m-- )
+    {
+      const alf_float_t uMi = U[m][i];
+      for( int j = i + 1; j < NumEq; j++ )
       {
-        scale -= U[m][j] * U[m][i];
+        scale[j] -= U[m][j] * uMi;
       }
-      if( i == j )
-      {
-        if( scale <= REG_SQR )
-        {
-          return false;
-        }
-        invDiag = alf_float_t( 1.0 ) / ( U[i][i] = sqrt( scale ) );
-      }
-      else
-      {
-        U[i][j] = scale * invDiag;
-      }
+    }
+    for( int j = i + 1; j < NumEq; j++ )
+    {
+      U[i][j] = scale[j] * invDiag;
     }
   }
+
+  // The forward substitution by columns: aux[i] needs the sum of aux[j] * U[j][i] over j < i, added from 0 in ascending j.
+  // Adding each known aux[j]'s terms to all later sums at once keeps that order for every i (the same values) with
+  // independent chains.
   std::memcpy( s.aux, s.baseAux, k * sizeof( alf_float_t ) );
+  alf_float_t sum[NumEq];
   for( int i = k; i < NumEq; i++ )
   {
-    alf_float_t sum = 0;
-    for( int j = 0; j < i; j++ )
+    sum[i] = 0;
+  }
+  for( int j = 0; j < NumEq; j++ )
+  {
+    if( j >= k )
     {
-      sum += s.aux[j] * U[j][i];
+      s.aux[j] = ( rhs[j] - sum[j] ) / U[j][j];
     }
-    s.aux[i] = ( rhs[i] - sum ) / U[i][i];
+    const alf_float_t auxJ = s.aux[j];
+    for( int i = std::max( j + 1, k ); i < NumEq; i++ )
+    {
+      sum[i] += auxJ * U[j][i];
+    }
   }
   if( f )
   {
@@ -1254,7 +1304,9 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter( bool enableOpt )
 
   m_getPreBlkStatsAccum = getPreBlkStatsAccum;
   m_getPreBlkStatsWeightedAccum = getPreBlkStatsWeightedAccum;
+  m_getLinBlkInputs = getLinBlkInputs<false>;
   m_getPreBlkStatsAccumEqualBins = getPreBlkStatsAccumEqualBins;
+  m_getBlkCovarianceCcAlf = nullptr;
 
   if( enableOpt )
   {
@@ -3414,7 +3466,12 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
       {
         for( int classIdx = 0; classIdx < numClasses; classIdx++ )
         {
-          frameCov[classIdx] += ctbCov[ctuIdx][classIdx];
+          // a class without samples in this ASU holds only zeros (all0), so adding it changes nothing: skip its up to
+          // 4x4 bin pairs of 13x13 sums. Often most luma classes of an ASU are empty.
+          if( !ctbCov[ctuIdx][classIdx].all0 )
+          {
+            frameCov[classIdx] += ctbCov[ctuIdx][classIdx];
+          }
         }
       }
     }
@@ -3652,7 +3709,8 @@ static void getPreBlkStatsWeightedAccum( AlfCovariance& alfCovariance, const Alf
 
 void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const ChannelType channel, int vbCTUHeight, int vbPos)
 {
-  const int numBins = ( isLuma( channel ) ? m_encCfg->m_useNonLinearAlfLuma : m_encCfg->m_useNonLinearAlfChroma ) ? AlfNumClippingValues : 1;
+  const bool linear  = isLuma( channel ) ? !m_encCfg->m_useNonLinearAlfLuma : !m_encCfg->m_useNonLinearAlfChroma;
+  const int  numBins = linear ? 1 : AlfNumClippingValues;
 
   int transposeIdx = 0;
   int classIdx = 0;
@@ -3686,6 +3744,8 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         clipBotRow[ii] = -clipTopRow[ii]; // symmetric
       }
     }
+    // no row of the group clipped at a virtual boundary (clipTopRow is -clipBotRow): each block's inputs in one call
+    const bool unclipped = std::all_of( clipBotRow, clipBotRow + 4, [&]( int clip ) { return clip == maxFilterSamples; } );
 
     for( int j = 0; j < areaDst.width; j += 4 )
     {
@@ -3702,57 +3762,63 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
       }
 
       Pel yLocal[4][4];
-      for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
-      {
-        yLocal[ii][jj] = org[j + jj + ii * orgStride] - rec[j + jj + ii * recStride];
-      }
-
-
       Pel ELocal[MaxAlfNumClippingValues * ( MAX_NUM_ALF_LUMA_COEFF << 4 )];
 
-      if( isLuma( channel ) ? !m_encCfg->m_useNonLinearAlfLuma : !m_encCfg->m_useNonLinearAlfChroma )
+      if( linear && unclipped )
       {
-        if( useSimd )
-        {
-          for( int ii = 0; ii < 4; ii++ )
-          {
-            if( clipBotRow[ii] == 4 )
-              calcLinCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
-            else
-              calcLinCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
-          }
-        }
-        else
-        {
-          for( int ii = 0; ii < 4; ii++ )
-          {
-            if( clipBotRow[ii] == 4 )
-              calcLinCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
-            else
-              calcLinCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
-          }
-        }
+        m_getLinBlkInputs( ELocal, yLocal, org + j, orgStride, rec + j, recStride, halfFilterLength, transposeIdx );
       }
       else
       {
-        if( useSimd )
+        for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
         {
-          for( int ii = 0; ii < 4; ii++ )
+          yLocal[ii][jj] = org[j + jj + ii * orgStride] - rec[j + jj + ii * recStride];
+        }
+
+        if( linear )
+        {
+          if( useSimd )
           {
-            if( clipBotRow[ii] == 4 )
-              calcCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
-            else
-              calcCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              if( clipBotRow[ii] == 4 )
+                calcLinCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+              else
+                calcLinCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            }
+          }
+          else
+          {
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              if( clipBotRow[ii] == 4 )
+                calcLinCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+              else
+                calcLinCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            }
           }
         }
         else
         {
-          for( int ii = 0; ii < 4; ii++ )
+          if( useSimd )
           {
-            if( clipBotRow[ii] == 4 )
-              calcCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
-            else
-              calcCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              if( clipBotRow[ii] == 4 )
+                calcCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+              else
+                calcCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            }
+          }
+          else
+          {
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              if( clipBotRow[ii] == 4 )
+                calcCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+              else
+                calcCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            }
           }
         }
       }
@@ -3784,7 +3850,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
   int numClasses = classifier ? MAX_NUM_ALF_CLASSES : 1;
 
-  if( ( isLuma( channel ) ? !m_encCfg->m_useNonLinearAlfLuma : !m_encCfg->m_useNonLinearAlfChroma ) )
+  if( linear )
   {
     for( classIdx = 0; classIdx < numClasses; classIdx++ )
     {
@@ -4217,6 +4283,23 @@ template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  false>( Pel* ELoc
 template void EncAdaptiveLoopFilter::calcLinCovariance4<false, false>( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  true> ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 template void EncAdaptiveLoopFilter::calcLinCovariance4<false, true> ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+
+template<bool simd>
+void EncAdaptiveLoopFilter::getLinBlkInputs( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride,
+                                             const int halfFilterLength, const int transposeIdx )
+{
+  for( int ii = 0; ii < 4; ii++ )
+  {
+    for( int jj = 0; jj < 4; jj++ )
+    {
+      yLocal[ii][jj] = org[jj + ii * orgStride] - rec[jj + ii * recStride];
+    }
+    calcLinCovariance4<false, simd>( ELocal + ( ii << 2 ), rec + ii * recStride, recStride, halfFilterLength, transposeIdx, -4, 4 );
+  }
+}
+
+template void EncAdaptiveLoopFilter::getLinBlkInputs<false>( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride, const int halfFilterLength, const int transposeIdx );
+template void EncAdaptiveLoopFilter::getLinBlkInputs<true> ( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride, const int halfFilterLength, const int transposeIdx );
 
 template<bool clipToBdry, bool simd>
 void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow )
@@ -4877,6 +4960,78 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
   }
 }
 
+// Luma distortion of ASU asuIdx when filtered with filter set filterSetIdx: its unfiltered distortion plus each class's
+// change, classes in order. A fixed set (filterSetIdx < NUM_FIXED_FILTER_SETS) takes its filters from the fixed table,
+// any other set from setCoeff / setClipp (MAX_NUM_ALF_CLASSES x MAX_NUM_ALF_LUMA_COEFF).
+double EncAdaptiveLoopFilter::getCtbLumaSetDistortion( const int asuIdx, const int filterSetIdx, const short* setCoeff, const short* setClipp, const bool doClip, const double invFactor ) const
+{
+  double dist = m_ctbDistortionUnfilter[COMP_Y][asuIdx];
+  int    filterCoeff[MAX_NUM_ALF_LUMA_COEFF];
+  int    filterClipp[MAX_NUM_ALF_LUMA_COEFF];
+
+  for( int classIdx = 0; classIdx < MAX_NUM_ALF_CLASSES; classIdx++ )
+  {
+    const AlfCovariance& cov = m_alfCovariance[COMP_Y][asuIdx][classIdx];
+    if( cov.all0 )
+    {
+      continue;
+    }
+    const int* coeff = filterCoeff;
+    const int* clipp = filterClipp;
+    if( filterSetIdx < NUM_FIXED_FILTER_SETS )
+    {
+      coeff = m_fixedFilterSetCoeff[m_classToFilterMapping[filterSetIdx][classIdx]];
+      clipp = m_clipDefaultEnc;
+    }
+    else
+    {
+      for( int i = 0; i < MAX_NUM_ALF_LUMA_COEFF; i++ )
+      {
+        filterCoeff[i] = setCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
+        filterClipp[i] = setClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
+      }
+    }
+    dist += doClip ? cov.calcErrorForCoeffs<true >( clipp, coeff, MAX_NUM_ALF_LUMA_COEFF, invFactor )
+                   : cov.calcErrorForCoeffs<false>( clipp, coeff, MAX_NUM_ALF_LUMA_COEFF, invFactor );
+  }
+  return dist;
+}
+
+// alfEncoderCtb tries every filter set on every ASU in each of its decision passes (with or without a new filter, each
+// number of APS sets, a re-derived new filter), but the fixed and APS sets stay the same in all passes. Their
+// distortions go into m_ctbSetDist once, and the passes look them up.
+void EncAdaptiveLoopFilter::deriveCtbSetDistortions( const int numAsus, const int numApsSets, const bool doClip, const double invFactor )
+{
+  if( m_ctbSetDist.size() < size_t( numAsus * CTB_SET_DIST_STRIDE ) )
+  {
+    m_ctbSetDist.resize( numAsus * CTB_SET_DIST_STRIDE );   // once per picture encoder: the ASU count is fixed
+  }
+  for( int asuIdx = 0; asuIdx < numAsus; asuIdx++ )
+  {
+    double* setDist = &m_ctbSetDist[asuIdx * CTB_SET_DIST_STRIDE];
+    for( int filterSetIdx = 0; filterSetIdx < NUM_FIXED_FILTER_SETS; filterSetIdx++ )
+    {
+      setDist[filterSetIdx] = getCtbLumaSetDistortion( asuIdx, filterSetIdx, nullptr, nullptr, doClip, invFactor );
+    }
+    for( int apsIdx = 0; apsIdx < numApsSets; apsIdx++ )
+    {
+      setDist[NUM_FIXED_FILTER_SETS + apsIdx] = getCtbLumaSetDistortion( asuIdx, NUM_FIXED_FILTER_SETS + apsIdx, m_coeffApsLuma[apsIdx],
+                                                                         m_clippApsLuma[apsIdx], doClip, invFactor );
+    }
+  }
+}
+
+// The new filter set (m_coeffFinal / m_clippFinal) changes only when alfEncoderCtb reconstructs it, so its distortions
+// are computed again only then.
+void EncAdaptiveLoopFilter::deriveCtbNewFilterDistortions( const int numAsus, const bool doClip, const double invFactor )
+{
+  for( int asuIdx = 0; asuIdx < numAsus; asuIdx++ )
+  {
+    m_ctbSetDist[asuIdx * CTB_SET_DIST_STRIDE + CTB_NEW_FILTER_DIST_COL] =
+      getCtbLumaSetDistortion( asuIdx, NUM_FIXED_FILTER_SETS, m_coeffFinal, m_clippFinal, doClip, invFactor );
+  }
+}
+
 void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfParamNewFilters, const double lambdaChromaWeight, const int numAsus, const int numCtus )
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_ENC_CTB );
@@ -4909,6 +5064,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
   std::vector<int> bestApsIds;
   double costMin = MAX_DOUBLE;
   reconstructCoeffAPSs(cs, true, false, true);
+  deriveCtbSetDistortions( numAsus, std::min<int>( (int)apsIds.size(), ALF_CTB_MAX_NUM_APS - 1 ), doClip, invFactor );
+  bool newFilterDistStale = true;   // m_coeffFinal changed since its distortions were computed
 
   DTRACE( g_trace_ctx, D_MISC, "POC=%d\n", cs.slice->poc );
 
@@ -4927,6 +5084,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
       {
         bitsNewFilter = m_bitsNewFilter[CH_L];
         reconstructCoeff(alfParamNewFilters, CH_L, true, true);
+        newFilterDistStale = true;
       }
     }
     int numIter = useNewFilter ? 2 : 1;
@@ -5025,6 +5183,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             DTRACE( g_trace_ctx, D_MISC, ", use it\n" );
 
             reconstructCoeff(m_alfParamTemp, CH_L, true, true);
+            newFilterDistStale = true;
             bitsNewFilter = bitsNewFilterTempLuma;
           }
           else //no blocks using new filter, skip
@@ -5032,6 +5191,12 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             continue;
           }
         }// if iter > 0
+
+        if( useNewFilter && newFilterDistStale )
+        {
+          deriveCtbNewFilterDistortions( numAsus, doClip, invFactor );
+          newFilterDistStale = false;
+        }
 
         m_CABACEstimator->getCtx() = ctxStart;
         for( int asuIdx = 0; asuIdx < numAsus; asuIdx++ )
@@ -5057,53 +5222,17 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             double rateOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, m_CABACEstimator, ctuLambda );
             alfCtbFilterSetIndex[ctbIdx] = filterSetIdx;
             rateOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctbIdx, m_CABACEstimator, ctuLambda );
-            //distortion
-            double dist = distUnfilterCtb;
-
-            for (int classIdx = 0; classIdx < MAX_NUM_ALF_CLASSES; classIdx++)
+            //distortion, from the table: with a new filter, set 16 is the new filter and APS set k moves to 17 + k
+            int distCol = filterSetIdx;
+            if( useNewFilter && filterSetIdx == NUM_FIXED_FILTER_SETS )
             {
-              if (filterSetIdx < NUM_FIXED_FILTER_SETS)
-              {
-                // fixed filter set
-                int filterIdx = m_classToFilterMapping[filterSetIdx][classIdx];
-
-                if( !m_alfCovariance[COMP_Y][asuIdx][classIdx].all0 )
-                  dist += doClip ? m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                                 : m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
-              }
-              else
-              {
-                short *pCoeff;
-                short *pClipp;
-                if (useNewFilter && filterSetIdx == NUM_FIXED_FILTER_SETS)
-                {
-                  // New filter, no APS
-                  pCoeff = m_coeffFinal;
-                  pClipp = m_clippFinal;
-                }
-                else if (useNewFilter)
-                {
-                  // New filter after APS
-                  pCoeff = m_coeffApsLuma[filterSetIdx - 1 - NUM_FIXED_FILTER_SETS];
-                  pClipp = m_clippApsLuma[filterSetIdx - 1 - NUM_FIXED_FILTER_SETS];
-                }
-                else
-                {
-                  // filter from APS
-                  pCoeff = m_coeffApsLuma[filterSetIdx - NUM_FIXED_FILTER_SETS];
-                  pClipp = m_clippApsLuma[filterSetIdx - NUM_FIXED_FILTER_SETS];
-                }
-                for (int i = 0; i < MAX_NUM_ALF_LUMA_COEFF; i++)
-                {
-                  m_filterTmp[i] = pCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
-                  m_clipTmp[i]   = pClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
-                }
-
-                if( !m_alfCovariance[COMP_Y][asuIdx][classIdx].all0 )
-                  dist += doClip ? m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                                 : m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
-              }
-            } //for(classIdx)
+              distCol = CTB_NEW_FILTER_DIST_COL;
+            }
+            else if( useNewFilter && filterSetIdx > NUM_FIXED_FILTER_SETS )
+            {
+              distCol = filterSetIdx - 1;
+            }
+            const double dist = m_ctbSetDist[asuIdx * CTB_SET_DIST_STRIDE + distCol];
             //cost
             const double costOnTmp = dist + rateOn;
 #if ENABLE_TRACING
@@ -6314,26 +6443,35 @@ void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs
         const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == pcv.lumaWidth );
         const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
         const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-        PelUnitBuf recBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
-        recBuf.copyFrom( recYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ), 
-                                                                              yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+        const int  padL = clipL ? 0 : MAX_ALF_PADDING_SIZE;
+        const int  padT = clipT ? 0 : MAX_ALF_PADDING_SIZE;
+        PelUnitBuf recBuf  = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        PelBuf     recLuma = recBuf.get( COMP_Y );
+        // Only luma is copied with the padding the filter taps reach into. Chroma is read at the block's own samples only
+        // (getBlkStatsCcAlf, as in the in-place branch below), so only the block is copied: the CTU lines above and below
+        // may be in their CC-ALF reconstruction meanwhile, and the statistics do not wait for them.
+        recLuma.copyFrom( recYuv.get( COMP_Y ).subBuf( Position( xStart - padL, yStart - padT ), Size( wBuf, hBuf ) ) );
         // pad top-left unavailable samples for raster slice
         if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
         {
-          recBuf.padBorderPel( MAX_ALF_PADDING_SIZE, 1 );
+          recLuma.padBorderPel( MAX_ALF_PADDING_SIZE, MAX_ALF_PADDING_SIZE, 1 );
         }
 
         // pad bottom-right unavailable samples for raster slice
         if( xEnd == xPos + width && yEnd == yPos + height && ( rasterSliceAlfPad & 2 ) )
         {
-          recBuf.padBorderPel( MAX_ALF_PADDING_SIZE, 2 );
+          recLuma.padBorderPel( MAX_ALF_PADDING_SIZE, MAX_ALF_PADDING_SIZE, 2 );
         }
-        recBuf.extendBorderPel( MAX_ALF_PADDING_SIZE );
-        recBuf = recBuf.subBuf( UnitArea(
-          cs.area.chromaFormat, Area( clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h ) ) );
+        recLuma.extendBorderPel( MAX_ALF_PADDING_SIZE, MAX_ALF_PADDING_SIZE );
+        recBuf = recBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( padL, padT, w, h ) ) );
 
         const UnitArea area( m_chromaFormat, Area( 0, 0, w, h ) );
         const UnitArea areaDst( m_chromaFormat, Area( xStart, yStart, w, h ) );
+        for( int comp = COMP_Cb; comp < getNumberValidComponents( m_chromaFormat ); comp++ )
+        {
+          const CompArea& blk = areaDst.blocks[comp];
+          recBuf.bufs[comp].copyFrom( recYuv.bufs[comp].subBuf( blk.pos(), blk.size() ) );
+        }
 
         getBlkStatsCcAlf( covarianceCb, covarianceCr, m_filterShapesCcAlf[COMP_Cb - 1], orgYuv, recBuf, areaDst, area, yPos );
 
@@ -6563,6 +6701,11 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &covarianceCb, AlfCov
         calcCovariance4CcAlf( ELocal, 12, recLine[3] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance3 );
       }
 
+      if( m_getBlkCovarianceCcAlf )
+      {
+        m_getBlkCovarianceCcAlf( covarianceCb, covarianceCr, shape.numCoeff, ELocal, yLocal );
+      }
+      else
       {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
         if( useSimd )

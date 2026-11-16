@@ -55,6 +55,17 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+// true when any of the four lanes of v is non-zero
+static inline bool any_lane_set_u32x4( const uint32x4_t v )
+{
+#if REAL_TARGET_AARCH64
+  return vgetq_lane_u64( vreinterpretq_u64_u32( vpmaxq_u32( v, v ) ), 0 ) != 0;
+#else
+  const uint32x2_t m = vorr_u32( vget_low_u32( v ), vget_high_u32( v ) );
+  return vget_lane_u64( vreinterpret_u64_u32( m ), 0 ) != 0;
+#endif
+}
+
 static inline uint16x8_t vvenc_vabaq_s16( uint16x8_t acc, int16x8_t x, int16x8_t y )
 {
   return vreinterpretq_u16_s16( vabaq_s16( vreinterpretq_s16_u16( acc ), x, y ) );
@@ -256,6 +267,17 @@ static inline int64x2_t pairwise_add_s64x2( const int64x2_t a, const int64x2_t b
   int64x1_t lo = vadd_s64( vget_low_s64( a ), vget_high_s64( a ) );
   int64x1_t hi = vadd_s64( vget_low_s64( b ), vget_high_s64( b ) );
   return vcombine_s64( lo, hi );
+#endif
+}
+
+// the largest of the four lanes of a
+static inline int32_t horizontal_max_s32x4( const int32x4_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vmaxvq_s32( a );
+#else
+  const int32x2_t m = vmax_s32( vget_low_s32( a ), vget_high_s32( a ) );
+  return vget_lane_s32( vpmax_s32( m, m ), 0 );
 #endif
 }
 

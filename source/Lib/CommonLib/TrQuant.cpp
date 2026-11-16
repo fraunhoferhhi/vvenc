@@ -255,6 +255,12 @@ TrQuant::TrQuant( bool enableOpt ) : m_scalingListEnabled(false), m_quant( nullp
     initTrQuantX86();
   }
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_TRAFO
+  if( enableOpt )
+  {
+    initTrQuantARM();
+  }
+#endif
 }
 
 TrQuant::~TrQuant()
@@ -520,7 +526,10 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   const int  resiStride = resi.stride;
 
 #if ENABLE_SIMD_TRAFO
-  if( width & 3 )
+  // the first stage of a 2-D transform may read the residual as it is
+  const auto fwdPel = width > 1 && height > 1 ? g_tCoeffOps.fastFwdPel[trTypeHor][transformWidthIndex] : nullptr;
+
+  if( !fwdPel && ( width & 3 ) )
 #endif
   {
     for( int y = 0; y < height; y++ )
@@ -532,11 +541,11 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     }
   }
 #if ENABLE_SIMD_TRAFO
-  else if( width & 7 )
+  else if( !fwdPel && ( width & 7 ) )
   {
     g_tCoeffOps.cpyCoeff4( resiBuf, resiStride, block, width, height );
   }
-  else
+  else if( !fwdPel )
   {
     g_tCoeffOps.cpyCoeff8( resiBuf, resiStride, block, width, height );
   }
@@ -548,7 +557,16 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     const int shift_2nd =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
-    fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
+#if ENABLE_SIMD_TRAFO
+    if( fwdPel )
+    {
+      fwdPel( resiBuf, resiStride, tmp, shift_1st, height, skipWidth );
+    }
+    else
+#endif
+    {
+      fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
+    }
     fastFwdTrans[trTypeVer][transformHeightIndex](tmp, dstCoeff.buf, shift_2nd, width, skipWidth, skipHeight);
     // The kernels leave the rows past the cut-off as they were. The second stage never reads those of the first stage. In the
     // coefficients, the RDOQ check reads 32 rows and the comparison of transforms reads blocks up to 32 rows, so 64 rows need no clear.
@@ -582,6 +600,34 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   }
 }
 
+
+// How many lines and rows of a coefficient block can hold coefficients, from the last scan position. The groups go by rising
+// diagonals of the block, and within a diagonal from the bottom left. So all earlier groups lie on lower diagonals or to the left
+// on this one, and in the first group the coefficients go by diagonals in the same way. Both round up to a multiple of 4, as the
+// matrix kernels' rows have to be one, and the first stage's lines are the second stage's rows.
+static inline void getCoeffExtent( const int lastPos, const int width, const int height, int& numLines, int& numRows )
+{
+  const ScanElement& last    = getScanOrder( SCAN_GROUPED_4x4, Log2( width ), Log2( height ) )[std::max( lastPos, 0 )];
+  const uint32_t*    log2Sbb = g_log2SbbSize[Log2( width )][Log2( height )];
+  const int          groupX  = last.x >> log2Sbb[0];
+  const int          groupY  = last.y >> log2Sbb[1];
+  const int          rank    = groupX + groupY;
+
+  int lines, rows;
+  if( rank == 0 )
+  {
+    lines = std::min<int>( last.x + last.y + 1, 1 << log2Sbb[0] );
+    rows  = std::min<int>( last.x + last.y + 1, 1 << log2Sbb[1] );
+  }
+  else
+  {
+    lines = std::max( rank, groupX + 1 ) << log2Sbb[0];
+    rows  = ( rank + 1 ) << log2Sbb[1];
+  }
+
+  numLines = std::min( width,  ( lines + 3 ) & ~3 );
+  numRows  = std::min( height, ( rows  + 3 ) & ~3 );
+}
 
 void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pCoeff, PelBuf& pResidual )
 {
@@ -628,7 +674,24 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
     const int shift_2nd = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
+    // LFNST writes its own region, which the zero-out above already gives. Otherwise the coefficients stop at the last scan position.
+    if( !tu.cu->lfnstIdx )
+    {
+      int numLines, numRows;
+      getCoeffExtent( tu.lastPos[compID], width, height, numLines, numRows );
+      skipWidth  = std::max( skipWidth , width  - numLines );
+      skipHeight = std::max( skipHeight, height - numRows  );
+    }
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
+#if ENABLE_SIMD_TRAFO
+    // the matrix kernels stop at their cutoff, so only the butterflies read the lines the first stage skips
+    if( width <= 8 && skipWidth )
+#else
+    if( skipWidth )
+#endif
+    {
+      memset( tmp + ( width - skipWidth ) * height, 0, skipWidth * height * sizeof( TCoeff ) );
+    }
     fastInvTrans[trTypeHor][transformWidthIndex](tmp, block, shift_2nd, height, 0, skipWidth, clipMinimum, clipMaximum);
   }
   else if (width == 1)   // 1-D vertical transform
@@ -939,7 +1002,8 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
-    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
+    const CodingUnit& cu = *tu.cu;
+    CHECKD( tu.cs->getCU( area.pos(), toChannelType( compID ), TREE_D ) != tu.cu, "the TU's CU is not the CU at its position" );
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -1022,12 +1086,24 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
       }
       else
       {
-        for (y = 0; y < sbSize; y++)
+        // a constant size per row lets the compiler copy each row inline, without dispatching on the size
+        if (sbSize == 4)
         {
-          uint32_t uiStride = (y < 4) ? sbSize : 4;
-          ::memcpy(coeffTemp, lfnstTemp, uiStride * sizeof(TCoeff));
-          lfnstTemp += uiStride;
-          coeffTemp += width;
+          for (y = 0; y < 4; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 4 * sizeof(TCoeff));
+          }
+        }
+        else   // ( sbSize == 8 ): rows 0-3 hold 8 coefficients, rows 4-7 hold 4
+        {
+          for (y = 0; y < 4; y++, lfnstTemp += 8, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 8 * sizeof(TCoeff));
+          }
+          for (; y < 8; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 4 * sizeof(TCoeff));
+          }
         }
       }
     }
@@ -1043,7 +1119,8 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if ((lfnstIdx || lfnstPrimary == LFNST_PRIMARY_KEEP) && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
-    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
+    const CodingUnit& cu = *tu.cu;
+    CHECKD( tu.cs->getCU( area.pos(), toChannelType( compID ), TREE_D ) != tu.cu, "the TU's CU is not the CU at its position" );
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -1123,12 +1200,24 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
       }
       else
       {
-        for (y = 0; y < sbSize; y++)
+        // a constant size per row lets the compiler copy each row inline, without dispatching on the size
+        if (sbSize == 4)
         {
-          uint32_t uiStride = (y < 4) ? sbSize : 4;
-          ::memcpy(lfnstTemp, coeffTemp, uiStride * sizeof(TCoeff));
-          lfnstTemp += uiStride;
-          coeffTemp += width;
+          for (y = 0; y < 4; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 4 * sizeof(TCoeff));
+          }
+        }
+        else   // ( sbSize == 8 ): rows 0-3 hold 8 coefficients, rows 4-7 hold 4
+        {
+          for (y = 0; y < 4; y++, lfnstTemp += 8, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 8 * sizeof(TCoeff));
+          }
+          for (; y < 8; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 4 * sizeof(TCoeff));
+          }
         }
       }
 
@@ -1137,16 +1226,37 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         return;
       }
 
-      m_fwdLfnstNxN( m_lfnstFwdIn, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
+      const int zeroOutSize = (tu4x4Flag || tu8x8Flag) ? 8 : 16;   // outputs that can be nonzero; the transform zeroes the rest
+      m_fwdLfnstNxN( m_lfnstFwdIn, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, zeroOutSize );
 
-      lfnstTemp                        = m_tempOutMatrix;   // forward spectral rearrangement
-      coeffTemp                        = tempCoeff;
-      const ScanElement *scanPtr       = scan;
-      int                lfnstCoeffNum = (sbSize == 4) ? sbSize * sbSize : 48;
-      for (y = 0; y < lfnstCoeffNum; y++)
+      // forward spectral rearrangement: the first 16 (sbSize 4) or 48 (sbSize 8) positions of the scan take the outputs.
+      // They are the top-left 4x4 group, or the 8x8 group without its bottom-right 4x4: where some outputs are zero,
+      // clear that region row by row and place only the first zeroOutSize outputs.
+      coeffTemp = tempCoeff;
+      if (sbSize == 4)
       {
-        coeffTemp[scanPtr->idx] = *lfnstTemp++;
-        scanPtr++;
+        if (zeroOutSize < 16)
+        {
+          for (y = 0; y < 4; y++)
+          {
+            ::memset(coeffTemp + y * width, 0, 4 * sizeof(TCoeff));
+          }
+        }
+      }
+      else   // ( sbSize == 8 ): 48 positions, rows 0-3 of 8 and rows 4-7 of 4
+      {
+        for (y = 0; y < 4; y++)
+        {
+          ::memset(coeffTemp + y * width, 0, 8 * sizeof(TCoeff));
+        }
+        for (; y < 8; y++)
+        {
+          ::memset(coeffTemp + y * width, 0, 4 * sizeof(TCoeff));
+        }
+      }
+      for (y = 0; y < zeroOutSize; y++)
+      {
+        coeffTemp[scan[y].idx] = m_tempOutMatrix[y];
       }
     }
   }

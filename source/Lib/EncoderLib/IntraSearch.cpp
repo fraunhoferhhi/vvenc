@@ -108,6 +108,11 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
     m_orgResiCb[i].create( chromaArea );
     m_orgResiCr[i].create( chromaArea );
   }
+
+  const int maxTbSize = std::min( maxCUSize, MAX_TB_SIZEY );
+  CompArea  preselPredArea( COMP_Cb, chrFormat, Area( 0, 0, maxTbSize, maxTbSize ), true );
+  m_preselPredMaxArea = preselPredArea.area();
+  m_preselPreds.resize( 2 * NUM_PRESEL_CHROMA_PREDS * m_preselPredMaxArea );
 }
 
 void IntraSearch::destroy()
@@ -176,6 +181,41 @@ static inline bool xCostCannotEnterList( const Distortion dist, const static_vec
   return costs.size() >= numCands && ( double ) dist >= costs[numCands - 1];
 }
 
+// Within one candidate loop of xEstimateLumaRdModeList (MIP, MRL and ISP fixed) every intra_luma_pred_mode estimate starts from
+// the same contexts and reads each of them at most once, so a mode's bits depend only on its class: the first mode of a class
+// is coded, the others of that class take its bits.
+static constexpr int NUM_MODE_BIT_CLASSES = NUM_MOST_PROBABLE_MODES + 2;
+
+// The number of symbols of a truncated binary code of numSymbols (<= 256) symbols that take one bin less than the others
+// (see CABACWriter::xWriteTruncBinCode)
+static constexpr int truncBinNumShort( const int numSymbols )
+{
+  return ( 2 << g_tbMax[numSymbols] ) - numSymbols;
+}
+
+// A regular mode's class: its index in the MPM list, else the length of the truncated binary code of its rank among the other
+// modes
+static inline int lumaModeBitsClass( const unsigned mode, const unsigned* mpmLst )
+{
+  static constexpr int numShort = truncBinNumShort( NUM_LUMA_MODE - NUM_MOST_PROBABLE_MODES );
+  int rank = mode;
+  for( int i = 0; i < NUM_MOST_PROBABLE_MODES; i++ )
+  {
+    if( mode == mpmLst[i] )
+    {
+      return i;
+    }
+    rank -= mpmLst[i] < mode ? 1 : 0;
+  }
+  return NUM_MOST_PROBABLE_MODES + ( rank < numShort ? 0 : 1 );
+}
+
+// A MIP mode's class: the length of its truncated binary code (the transposed flag is one bypass bin either way)
+static inline int mipModeBitsClass( const unsigned mode, const int numModes )
+{
+  return int( mode ) < truncBinNumShort( numModes ) ? 0 : 1;
+}
+
 void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& HadModeList,
@@ -227,6 +267,25 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   bool satdChecked[NUM_INTRA_MODE] = { false };
 
   const unsigned* mpmLst = m_searchMpmLst;   // derived for this CU in estIntraPredLumaQT
+
+  // the bits of each class (see lumaModeBitsClass) in the current candidate loop, unknownBits until its first mode is coded
+  const uint64_t unknownBits = std::numeric_limits<uint64_t>::max();
+  uint64_t classBits[NUM_MODE_BIT_CLASSES];
+  std::fill_n( classBits, NUM_MODE_BIT_CLASSES, unknownBits );
+  auto fracModeBitsOfClass = [&]( const int cls ) -> uint64_t
+  {
+#if !defined( _DEBUG )   // debug builds code every mode and check it against its class
+    if( classBits[cls] != unknownBits )
+    {
+      return classBits[cls];
+    }
+#endif
+    const uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
+    m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::IntraLumaMpmFlag(), intra_ctx_size ), ctxStartIntraCtx );
+    CHECKD( classBits[cls] != unknownBits && classBits[cls] != fracModeBits, "intra mode bits differ within a class" );
+    classBits[cls] = fracModeBits;
+    return fracModeBits;
+  };
 
   const int decMsk = ( 1 << m_pcEncCfg->m_IntraEstDecBit ) - 1;
 
@@ -294,10 +353,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
           continue;
         }
 
-        uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
-
-        //restore ctx
-        m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::IntraLumaMpmFlag(), intra_ctx_size ), ctxStartIntraCtx );
+        const uint64_t fracModeBits = fracModeBitsOfClass( lumaModeBitsClass( mode, mpmLst ) );
 
         double cost = ( double ) minSadHad + ( double ) fracModeBits * sqrtLambdaForFirstPass;
         DTRACE( g_trace_ctx, D_INTRA_COST, "IntraHAD: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode );
@@ -369,13 +425,16 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
     cu.mipFlag = true;
     cu.multiRefIdx = 0;
 
-    double mipHadCost[MAX_NUM_MIP_MODE] = { MAX_DOUBLE };
+    double mipHadCost[MAX_NUM_MIP_MODE];
+    std::fill_n( mipHadCost, MAX_NUM_MIP_MODE, MAX_DOUBLE );
 
     initIntraPatternChType(cu, cu.Y());
     initIntraMip( cu );
 
     const int transpOff    = getNumModesMip( cu.Y() );
     const int numModesFull = (transpOff << 1);
+    std::fill_n( classBits, NUM_MODE_BIT_CLASSES, unknownBits );   // MIP's own classes
+
     for( uint32_t uiModeFull = 0; uiModeFull < numModesFull; uiModeFull++ )
     {
       const bool     isTransposed = (uiModeFull >= transpOff ? true : false);
@@ -390,10 +449,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       // SAD is scaled by 2 to align with the scaling of HAD
       Distortion minSadHad = distParam.distFunc(distParam);
 
-      uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
-
-      //restore ctx
-      m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
+      const uint64_t fracModeBits = fracModeBitsOfClass( mipModeBitsClass( uiMode, transpOff ) );
 
       double cost = double(minSadHad) + double(fracModeBits) * sqrtLambdaForFirstPass;
       mipHadCost[uiModeFull] = cost;
@@ -665,7 +721,8 @@ bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, 
       // determine residual for partition
       cs.initSubStructure(*csTemp, partitioner.chType, cs.area, true);
       int doISP = (((cu.ispMode == 0) && noLFNST) || (useISPlfnst && mode && cu.ispMode && (bestLfnstIdx == 0)) || disableLFNST) ? -mode : mode;
-      xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP, disableMTS);
+      // the contexts are ctxStart's on entry (the reset below follows every call)
+      xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP, disableMTS, ctxStart);
 
       DTRACE(g_trace_ctx, D_INTRA_COST, "IntraCost T [x=%d,y=%d,w=%d,h=%d] %f (%d,%d,%d,%d,%d,%d) \n", cu.blocks[0].x,
         cu.blocks[0].y, width, height, csTemp->cost, testMode.modeId, testMode.ispMod,
@@ -704,7 +761,7 @@ bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, 
         }
       }
 
-      // reset context models
+      // reset context models (xIntraCodingLumaQT leaves its last test's contexts, not its best's: nothing reads them)
       m_CABACEstimator->getCtx() = ctxStart;
 
       csTemp->releaseIntermediateData();
@@ -841,6 +898,23 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
     initIntraPatternChType(cu, cu.Cr());
     loadLMLumaRecPels(cu, cu.Cb());
 
+    // keep the predictions for the RD checks when the CU's chroma block fits a slot (the RD checks reuse them only when
+    // it is one transform block) and the pre-selection does not predict with a chroma BDPCM left on the CU, which the
+    // RD checks of these modes reset
+    const bool keepPreds = areaCb.area() <= m_preselPredMaxArea && !cu.bdpcmM[CH_C];
+    const SizeType slotSize = areaCb.area(); // the Cr block has the Cb block's size
+    Pel* const     slots    = m_preselPreds.data();
+    int            numKept  = 0;
+    if( keepPreds )
+    {
+      // point the prediction and distortion views at slot 0 with the block's width as stride; per mode, only their
+      // buffer pointers move to the next slot
+      predCb = preselPred( 0, COMP_Cb, areaCb );
+      predCr = preselPred( 0, COMP_Cr, areaCr );
+      distParamSadCb.cur = distParamSatdCb.cur = predCb;
+      distParamSadCr.cur = distParamSatdCr.cur = predCr;
+    }
+
     for (int idx = uiMinMode; idx < uiMaxMode; idx++)
     {
       int mode = chromaCandModes[idx];
@@ -852,6 +926,15 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
       if ((mode == LM_CHROMA_IDX) || (mode == PLANAR_IDX) || (mode == DM_CHROMA_IDX)) // only pre-check regular modes and MDLM modes, not including DM ,Planar, and LM
       {
         continue;
+      }
+
+      if( keepPreds )
+      {
+        CHECKD( numKept == NUM_PRESEL_CHROMA_PREDS, "more pre-checked chroma modes than slots" );
+        Pel* slotCb = slots + 2 * numKept * slotSize;
+        distParamSadCb.cur.buf = distParamSatdCb.cur.buf = predCb.buf = slotCb;
+        distParamSadCr.cur.buf = distParamSatdCr.cur.buf = predCr.buf = slotCb + slotSize;
+        m_preselPredMode[numKept++] = mode;
       }
 
       cu.intraDir[1]    = mode; // temporary assigned, for SATD checking.
@@ -884,6 +967,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
       sad += std::min(sadCr, satdCr);
       satdSortedCost[idx] = sad;
     }
+    m_numPreselPreds = numKept;
 
     // sort the mode based on the cost from small to large.
     for (int i = uiMinMode; i <= uiMaxMode - 1; i++)
@@ -1003,6 +1087,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
         orgTUs[ j ]->copyComponentFrom( *saveCS.tus[ j ], area.compID );
       }
     }
+    m_numPreselPreds = 0;
   }
   cu.intraDir[1] = uiBestMode;
   cs.dist        = uiBestDist;
@@ -1493,7 +1578,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   }
 }
 
-void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode, bool disableMTS)
+void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode, bool disableMTS, const Ctx& ctxStart)
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 0, _TPROF, P_INTRA_RD_SEARCH_LUMA, &cs, partitioner.chType );
   const UnitArea& currArea  = partitioner.currArea();
@@ -1552,8 +1637,6 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     Distortion       singleDistTmpLuma = 0;
     uint64_t         singleTmpFracBits = 0;
     double           singleCostTmp     = 0;
-    const TempCtx    ctxStart          (m_CtxCache, m_CABACEstimator->getCtx());
-          TempCtx    ctxBest           (m_CtxCache);
     CodingStructure &saveCS            = *m_pSaveCS[cu.ispMode?0:1];
     TransformUnit *  tmpTU             = nullptr;
     int              bestLfnstIdx      = 0;
@@ -1747,7 +1830,9 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
 
           cuCtx.mtsLastScanPos = false;
           //----- determine rate and r-d cost -----
-        if ((sps.LFNST ? (modeId == EndMTS && modeId != 0 && checkTransformSkip) : (trModes[modeId].first != 0)) && !TU::getCbfAtDepth(tu, COMP_Y, currDepth))
+        // the bits of a later transform are only compared with the best so far, and can't help if its distortion alone doesn't beat that.
+        const bool lostOnDist = dSingleCost != MAX_DOUBLE && m_pcRdCost->calcRdCost( 0, singleDistTmpLuma ) >= dSingleCost;
+        if (lostOnDist || ((sps.LFNST ? (modeId == EndMTS && modeId != 0 && checkTransformSkip) : (trModes[modeId].first != 0)) && !TU::getCbfAtDepth(tu, COMP_Y, currDepth)))
         {
           singleCostTmp = MAX_DOUBLE;
         }
@@ -1861,8 +1946,6 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
 
               tmpTU->copyComponentFrom(tu, COMP_Y);
             }
-
-            ctxBest = m_CABACEstimator->getCtx();
           }
       
         }
@@ -1924,8 +2007,6 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
 
           tu.copyComponentFrom(*tmpTU, COMP_Y);
         }
-
-        m_CABACEstimator->getCtx() = ctxBest;
       }
 
       // otherwise this would've happened in useSubStructure
@@ -2048,7 +2129,26 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
       initIntraPatternChType(*currTU.cu, crArea);
     }
 
-    if (CU::isLMCMode(predMode))
+    // the pre-selection's prediction of this mode, made with the same reference samples, if it kept one
+    int keptIdx = -1;
+    if( samplesKept && !cu.bdpcmM[CH_C] )
+    {
+      for( int i = 0; i < m_numPreselPreds; i++ )
+      {
+        if( m_preselPredMode[i] == cu.intraDir[CH_C] )
+        {
+          keptIdx = i;
+          break;
+        }
+      }
+    }
+
+    if( keptIdx >= 0 )
+    {
+      piPredCb.copyFrom( preselPred( keptIdx, COMP_Cb, cbArea ) );
+      piPredCr.copyFrom( preselPred( keptIdx, COMP_Cr, crArea ) );
+    }
+    else if (CU::isLMCMode(predMode))
     {
       if( !samplesKept )
       {
@@ -2341,7 +2441,8 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         currTU.copyComponentFrom(tmpTUcur, COMP_Cb);
         currTU.copyComponentFrom(tmpTUcur, COMP_Cr);
 
-        m_CABACEstimator->getCtx() = ctxBestTUL;
+        // swapped, not copied: ctxBestTUL is not read again without joint CbCr
+        m_CABACEstimator->getCtx().swap( ctxBestTUL );
       }
     }
 
@@ -2356,8 +2457,9 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
 
         tmpTU.copyComponentFrom(tmpTUcur, COMP_Cb);
         tmpTU.copyComponentFrom(tmpTUcur, COMP_Cr);
-        m_CABACEstimator->getCtx() = ctxBestTUL;
-        ctxBest = m_CABACEstimator->getCtx();
+        // the best contexts go to ctxBest only (swapped, not copied): every joint candidate below starts from ctxStartTU, and
+        // when none is coded the contexts are restored from ctxBest at the end
+        static_cast<Ctx&>( ctxBest ).swap( ctxBestTUL );
       }
       // Test using joint chroma residual coding
       double     bestCostCbCr = bestCostCb + bestCostCr;
@@ -2529,7 +2631,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         cs.cus[0]->lfnstIdx = bestLfnstIdx;
         currTU.copyComponentFrom(tmpTU, COMP_Cb);
         currTU.copyComponentFrom(tmpTU, COMP_Cr);
-        m_CABACEstimator->getCtx() = ctxBest;
+        m_CABACEstimator->getCtx().swap( ctxBest );   // ctxBest is not read again
       }
       currTU.jointCbCr = (TU::getCbf(currTU, COMP_Cb) || TU::getCbf(currTU, COMP_Cr)) ? bestJointCbCr : 0;
     } // jointCbCr

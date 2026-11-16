@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/DepQuant.h"
 #include "CommonLib/arm/mem_neon.h"
 #include "CommonLib/arm/neon/permute_neon.h"
+#include "CommonLib/arm/neon/sum_neon.h"
 
 #include <string.h>
 
@@ -278,6 +279,53 @@ static inline void updateAllLvls_neon( const ScanInfo& scanInfo, const uint8_t* 
   }
 }
 
+// CommonCtx::updateTemplates for the 16 positions of a 4x4 SBB at once, as x86's templateSums16. absLevels points to the
+// SBB's start; nbSbb and shuffle give where the outside neighbours of its positions lie: each neighbour is a table
+// lookup in the 16 levels of one neighbouring SBB (index 0x80 gives 0, as for pshufb). All sums fit bytes: sum1st =
+// min( 255, sumAbs ) is a saturating byte sum, sumAbs1 <= 5 * 5 and sumNum <= 5, so sumNum << 5 stays in the byte.
+static inline void templateSums16_neon( const uint8_t* absLevels, const NbSbbStarts& nbSbb,
+                                        const NbOutShuffle16& shuffle, uint8x16_t& tplAcc, uint8x16_t& sum1st )
+{
+  uint8x16_t levels[NUM_NB_SBB];
+  for( int s = 0; s < NUM_NB_SBB; s++ )
+  {
+    levels[s] = nbSbb.start[s] >= 0 ? vld1q_u8( absLevels + nbSbb.start[s] ) : vdupq_n_u8( 0 );
+  }
+
+  // (x+1,y) and (x+2,y) lie in the right SBB, (x,y+1) and (x,y+2) in the one below, (x+1,y+1) in any of the three
+  const uint8x16_t idxRight0 = vld1q_u8( shuffle.idx[0][NB_SBB_RIGHT] );
+  const uint8x16_t idxRight1 = vld1q_u8( shuffle.idx[1][NB_SBB_RIGHT] );
+  const uint8x16_t idxRight2 = vld1q_u8( shuffle.idx[2][NB_SBB_RIGHT] );
+  const uint8x16_t idxBelow2 = vld1q_u8( shuffle.idx[2][NB_SBB_BELOW] );
+  const uint8x16_t idxDiag2  = vld1q_u8( shuffle.idx[2][NB_SBB_DIAG] );
+  const uint8x16_t idxBelow3 = vld1q_u8( shuffle.idx[3][NB_SBB_BELOW] );
+  const uint8x16_t idxBelow4 = vld1q_u8( shuffle.idx[4][NB_SBB_BELOW] );
+
+  const uint8x16_t diagRight = vvenc_vqtbl1q_u8( levels[NB_SBB_RIGHT], idxRight2 );
+  const uint8x16_t diagBelow = vvenc_vqtbl1q_u8( levels[NB_SBB_BELOW], idxBelow2 );
+  const uint8x16_t diagDiag  = vvenc_vqtbl1q_u8( levels[NB_SBB_DIAG], idxDiag2 );
+
+  uint8x16_t nbLevel[5];
+  nbLevel[0] = vvenc_vqtbl1q_u8( levels[NB_SBB_RIGHT], idxRight0 );
+  nbLevel[1] = vvenc_vqtbl1q_u8( levels[NB_SBB_RIGHT], idxRight1 );
+  nbLevel[2] = vorrq_u8( vorrq_u8( diagRight, diagBelow ), diagDiag );
+  nbLevel[3] = vvenc_vqtbl1q_u8( levels[NB_SBB_BELOW], idxBelow3 );
+  nbLevel[4] = vvenc_vqtbl1q_u8( levels[NB_SBB_BELOW], idxBelow4 );
+
+  uint8x16_t sumAbs  = vdupq_n_u8( 0 );
+  uint8x16_t sumAbs1 = vdupq_n_u8( 0 );
+  uint8x16_t sumNum  = vdupq_n_u8( 0 );
+  for( int k = 0; k < 5; k++ )
+  {
+    const uint8x16_t t = nbLevel[k];
+    sumAbs  = vqaddq_u8( sumAbs, t );
+    sumAbs1 = vaddq_u8( sumAbs1, vminq_u8( t, vaddq_u8( vandq_u8( t, vdupq_n_u8( 1 ) ), vdupq_n_u8( 4 ) ) ) );   // min( 4 + ( t & 1 ), t )
+    sumNum  = vaddq_u8( sumNum, vminq_u8( t, vdupq_n_u8( 1 ) ) );                                              // !!t
+  }
+  tplAcc = vorrq_u8( vshlq_n_u8( sumNum, 5 ), sumAbs1 );
+  sum1st = sumAbs;
+}
+
 void updateStatesEOS_neon( const ScanInfo& scanInfo, const Decisions& decisions, const StateMem& skip, StateMem& curr,
                            CommonCtx& commonCtx )
 {
@@ -313,23 +361,184 @@ void updateStatesEOS_neon( const ScanInfo& scanInfo, const Decisions& decisions,
   updateAllLvls_neon( scanInfo, absValBuf, commonCtx );
 
   memset( curr.absVal, 0, sizeof( curr.absVal ) );
-  memset( curr.tplAcc, 0, sizeof( curr.tplAcc ) );
-  memset( curr.sum1st, 0, sizeof( curr.sum1st ) );
 
+  // the context each state continues from, or -2 for none (the state is not used); each state's update below writes
+  // only its own refSbbCtxId, so reading all four first gives the same values
+  int refId[regSize];
   for( int i = 0; i < regSize; i++ )
   {
     const int prevId = decisions.prevId[i];
+    refId[i] = prevId <= -2 ? -2 : prevId < 0 ? -1 : prevId < 4 ? curr.refSbbCtxId[i] : prevId - 4;
+  }
 
-    if( prevId > -2 )
+  if( const NbSbbStarts* nbSbb = commonCtx.nbSbbStarts( scanInfo ) )
+  {
+    // 4x4 SBBs: the template sums of the four states in registers; vst4q stores state i into column i of [16][4]
+    uint8x16x4_t tplAcc, sum1st;
+    for( int i = 0; i < regSize; i++ )
     {
-      const int refId = prevId < 0 ? -1 : prevId < 4 ? curr.refSbbCtxId[i] : prevId - 4;
-      commonCtx.update( scanInfo, refId, i, curr );
+      tplAcc.val[i] = vdupq_n_u8( 0 );
+      sum1st.val[i] = vdupq_n_u8( 0 );
+      if( refId[i] > -2 )
+      {
+        if( const uint8_t* absLevels = commonCtx.updateSbbFlags( scanInfo, refId[i], i, curr ) )
+        {
+          templateSums16_neon( absLevels, *nbSbb, commonCtx.nbOutShuffle16(), tplAcc.val[i], sum1st.val[i] );
+        }
+      }
+    }
+    vst4q_u8( &curr.tplAcc[0][0], tplAcc );
+    vst4q_u8( &curr.sum1st[0][0], sum1st );
+  }
+  else
+  {
+    memset( curr.tplAcc, 0, sizeof( curr.tplAcc ) );
+    memset( curr.sum1st, 0, sizeof( curr.sum1st ) );
+
+    for( int i = 0; i < regSize; i++ )
+    {
+      if( refId[i] > -2 )
+      {
+        commonCtx.update( scanInfo, refId[i], i, curr );
+      }
     }
   }
 
   memset( curr.numSig, 0, sizeof( curr.numSig ) );
 
   updateNextCtx_neon( scanInfo, curr );
+}
+
+// DQIntern::dequantCoeffs, the NEON version of DQInternSimd::dequantCoeffs<vext> (DepQuantX86.h) with its fallbacks:
+// one 4x4 sub-block (scan group of 16) at a time in raster order, only the state chain runs in scan order.
+// The chain runs 8 levels per step: entry[ state << 8 | the parities of 8 scan positions (bit k = position k, run from k = 7
+// down to 0) ] = the state after them << 8 | ( the state before position k ) >> 1 in bit k.
+struct DequantStateChain8
+{
+  uint16_t entry[4 << 8];
+
+  DequantStateChain8()
+  {
+    for( int start = 0; start < 4; start++ )
+    {
+      for( int parities = 0; parities < 256; parities++ )
+      {
+        int state = start, stateBits = 0;
+        for( int k = 7; k >= 0; k-- )
+        {
+          stateBits |= ( state >> 1 ) << k;
+          state = ( 32040 >> ( ( state << 2 ) + ( ( ( parities >> k ) & 1 ) << 1 ) ) ) & 3;
+        }
+        entry[( start << 8 ) | parities] = uint16_t( ( state << 8 ) | stateBits );
+      }
+    }
+  }
+};
+
+// built on first use (a function-local static: no static initialisation order to rely on)
+static const uint16_t* dequantStateChain8()
+{
+  static const DequantStateChain8 table;
+  return table.entry;
+}
+
+// the sum of the 8 lanes (here distinct bits, so their OR)
+static inline unsigned addLanes_u16x8( const uint16x8_t v )
+{
+#if REAL_TARGET_AARCH64
+  return vaddvq_u16( v );
+#else
+  const uint64x2_t sums = vpaddlq_u32( vpaddlq_u16( v ) );
+  return unsigned( vgetq_lane_u64( sums, 0 ) + vgetq_lane_u64( sums, 1 ) );
+#endif
+}
+
+static void dequantCoeffs_neon( const TCoeffSig* qCoeff, TCoeff* tCoeff, const ScanElement* scan, int lastScanIdx,
+                                int width, int height, int shift, Intermediate_Int invQScale, const int* piDequantCoef,
+                                TCoeff minTCoeff, TCoeff maxTCoeff )
+{
+  // |qIdx| = | 2 level - sign( level ) ( state >> 1 ) | <= 65536 for 16-bit levels
+  const int     add      = shift < 0 ? 0 : ( 1 << shift ) >> 1;
+  const int64_t maxScale = int64_t( invQScale ) << std::max( -shift, 0 );
+  const int     numCoded = std::min( width, JVET_C0024_ZERO_OUT_TH ) * std::min( height, JVET_C0024_ZERO_OUT_TH );
+  if( piDequantCoef || width < 4 || height < 4 || lastScanIdx >= numCoded
+      || maxScale * 65536 + add > std::numeric_limits<int32_t>::max() )
+  {
+    DQIntern::dequantCoeffs( qCoeff, tCoeff, scan, lastScanIdx, width, height, shift, invQScale, piDequantCoef, minTCoeff,
+                             maxTCoeff );
+    return;
+  }
+
+  // as in the scalar code: a negative shift scales the step once, at the last position, when its level is nonzero
+  const int       scale  = shift < 0 && qCoeff[scan[lastScanIdx].idx] ? invQScale << -shift : invQScale;
+  const int32x4_t vScale = vdupq_n_s32( scale );
+  const int32x4_t vAdd   = vdupq_n_s32( add );
+  const int32x4_t vShift = vdupq_n_s32( -std::max( shift, 0 ) );
+  const int32x4_t vMin   = vdupq_n_s32( minTCoeff );
+  const int32x4_t vMax   = vdupq_n_s32( maxTCoeff );
+  const int16x8_t vOne   = vdupq_n_s16( 1 );
+  const int16x8_t vZero  = vdupq_n_s16( 0 );
+
+  // the diagonal scan inside a 4x4 sub-block, per raster position r = 4 y + x (rows 0-1, rows 2-3): its scan index, and
+  // 1 << that index (its bit in the scan-order masks)
+  static const uint16_t rasterToScan[16] = { 0, 2, 5, 9, 1, 4, 8, 12, 3, 7, 11, 14, 6, 10, 13, 15 };
+  static const uint16_t scanBit[16]      = { 1,  4,   32,   512,  2,    16,   256,   4096,
+                                             8,  128, 2048, 16384, 64, 1024, 8192, 32768 };
+  const uint16x8_t scanIdx01 = vld1q_u16( rasterToScan ), scanIdx23 = vld1q_u16( rasterToScan + 8 );
+  const uint16x8_t bit01     = vld1q_u16( scanBit ), bit23 = vld1q_u16( scanBit + 8 );
+
+  const uint16_t* stateChain8 = dequantStateChain8();
+  int             chain       = 0;   // the state between groups, << 8 (as in stateChain8's entries)
+  for( int group = lastScanIdx >> 4; group >= 0; group-- )
+  {
+    const int      firstIdx = group << 4;
+    const unsigned topLeft  = scan[firstIdx].idx;   // a group's diagonal scan starts at its sub-block's top-left
+    CHECKD( ( scan[firstIdx].x & 3 ) || ( scan[firstIdx].y & 3 ), "a scan group must be an aligned 4x4 sub-block" );
+    const TCoeffSig* src = qCoeff + topLeft;
+    TCoeff*          dst = tCoeff + topLeft;
+
+    // the levels, rows 0-1 and rows 2-3; those after lastScanIdx (in the first group) count as 0, as in the scalar loop
+    int16x8_t lvl01 = vcombine_s16( vld1_s16( src ), vld1_s16( src + width ) );
+    int16x8_t lvl23 = vcombine_s16( vld1_s16( src + 2 * width ), vld1_s16( src + 3 * width ) );
+    if( lastScanIdx - firstIdx < 15 )
+    {
+      const uint16x8_t lastInGroup = vdupq_n_u16( uint16_t( lastScanIdx - firstIdx ) );
+      lvl01 = vbicq_s16( lvl01, vreinterpretq_s16_u16( vcgtq_u16( scanIdx01, lastInGroup ) ) );
+      lvl23 = vbicq_s16( lvl23, vreinterpretq_s16_u16( vcgtq_u16( scanIdx23, lastInGroup ) ) );
+    }
+
+    // the parities as a 16-bit scan-order mask (each raster position adds its own bit), run through the chain 8 at a
+    // time from scan index 15 down; stateBits bit i: the state before scan index i, >> 1
+    const unsigned parities = addLanes_u16x8( vorrq_u16( vandq_u16( vtstq_s16( lvl01, vOne ), bit01 ),
+                                                         vandq_u16( vtstq_s16( lvl23, vOne ), bit23 ) ) );
+    unsigned entry     = stateChain8[chain | ( parities >> 8 )];
+    unsigned stateBits = ( entry & 0xff ) << 8;
+    entry              = stateChain8[( entry & 0x300 ) | ( parities & 0xff )];
+    stateBits         |= entry & 0xff;
+    chain              = entry & 0x300;
+
+    // -sign( level ) * ( state >> 1 ) per raster position: all ones where the state before it is 2 or 3
+    const uint16x8_t states = vdupq_n_u16( uint16_t( stateBits ) );
+    auto correction = [&]( const int16x8_t lvl, const uint16x8_t bit )
+    {
+      const int16x8_t negSign = vreinterpretq_s16_u16( vsubq_u16( vcgtq_s16( lvl, vZero ), vcltq_s16( lvl, vZero ) ) );
+      return vandq_s16( vreinterpretq_s16_u16( vtstq_u16( states, bit ) ), negSign );
+    };
+    const int16x8_t corr01 = correction( lvl01, bit01 );
+    const int16x8_t corr23 = correction( lvl23, bit23 );
+
+    // qIdx = 2 level - sign( level ) ( state >> 1 ) in 32 bits, then ( qIdx scale + add ) >> shift, clipped
+    auto dequantRow = [&]( const int16x4_t lvl, const int16x4_t corr, TCoeff* row )
+    {
+      const int32x4_t qIdx = vaddw_s16( vshll_n_s16( lvl, 1 ), corr );
+      const int32x4_t coef = vshlq_s32( vmlaq_s32( vAdd, qIdx, vScale ), vShift );
+      vst1q_s32( row, vminq_s32( vmaxq_s32( coef, vMin ), vMax ) );
+    };
+    dequantRow( vget_low_s16( lvl01 ), vget_low_s16( corr01 ), dst );
+    dequantRow( vget_high_s16( lvl01 ), vget_high_s16( corr01 ), dst + width );
+    dequantRow( vget_low_s16( lvl23 ), vget_low_s16( corr23 ), dst + 2 * width );
+    dequantRow( vget_high_s16( lvl23 ), vget_high_s16( corr23 ), dst + 3 * width );
+  }
 }
 
 static inline uint64x2_t vvenc_vcgtq_s64( int64x2_t a, int64x2_t b )
@@ -339,6 +548,66 @@ static inline uint64x2_t vvenc_vcgtq_s64( int64x2_t a, int64x2_t b )
 #else
   return vreinterpretq_u64_s64( vshrq_n_s64( vqsubq_s64( b, a ), 63 ) );
 #endif
+}
+
+// findFirstPos with the control flow of the x86 kernel: whole 4x4 subblocks from the last one backwards until one holds
+// a coefficient above the threshold, then coefficient by coefficient. A subblock's test is one compare of the largest
+// absolute value of its four rows; vabsq_s32 wraps INT32_MIN like _mm_abs_epi32 and the signed max keeps it the
+// smallest, so the test is true exactly when x86's is.
+void findFirstPos_neon( int& firstTestPos, const TCoeff* tCoeff, const TUParameters& tuPars, int defaultTh,
+                        bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight )
+{
+  if( firstTestPos >= 16 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 )
+  {
+    const int       sbbSize = tuPars.m_sbbSize;
+    const ptrdiff_t stride  = tuPars.m_width;
+
+    // move to the start of the current subblock
+    firstTestPos -= sbbSize - 1;
+
+    for( ; firstTestPos >= 0; firstTestPos -= sbbSize )
+    {
+      const ScanElement& sbbStart = tuPars.m_scanId2BlkPos[firstTestPos];
+      if( zeroOutForThres && ( sbbStart.x >= zeroOutWidth || sbbStart.y >= zeroOutHeight ) )
+      {
+        continue;
+      }
+
+      // the subblock is dense: 4 rows of 4 in raster order
+      const TCoeff*   row  = &tCoeff[sbbStart.idx];
+      const int32x4_t row0 = vld1q_s32( row );
+      const int32x4_t row1 = vld1q_s32( row + stride );
+      const int32x4_t row2 = vld1q_s32( row + 2 * stride );
+      const int32x4_t row3 = vld1q_s32( row + 3 * stride );
+
+      const int32x4_t max01  = vmaxq_s32( vabsq_s32( row0 ), vabsq_s32( row1 ) );
+      const int32x4_t max23  = vmaxq_s32( vabsq_s32( row2 ), vabsq_s32( row3 ) );
+      const int32x4_t maxAbs = vmaxq_s32( max01, max23 );
+      if( horizontal_max_s32x4( maxAbs ) > defaultTh )
+      {
+        break;
+      }
+    }
+
+    if( firstTestPos >= 0 )
+    {
+      // a coefficient was found: back to the end of its subblock for the coefficient-wise search
+      firstTestPos += sbbSize - 1;
+    }
+  }
+
+  for( ; firstTestPos >= 0; firstTestPos-- )
+  {
+    const ScanElement& pos = tuPars.m_scanId2BlkPos[firstTestPos];
+    if( zeroOutForThres && ( pos.x >= zeroOutWidth || pos.y >= zeroOutHeight ) )
+    {
+      continue;
+    }
+    if( abs( tCoeff[pos.idx] ) > defaultTh )
+    {
+      break;
+    }
+  }
 }
 
 void checkAllRdCostsOdd1_neon( const ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist,
@@ -443,7 +712,9 @@ void checkAllRdCostsOdd1_neon( const ScanPosType spt, const int64_t pq_a_dist, c
 template<>
 void DepQuant::_initDepQuantARM<NEON>()
 {
+  m_findFirstPos = DQInternSimd::findFirstPos_neon;
   m_checkAllRdCostsOdd1 = DQInternSimd::checkAllRdCostsOdd1_neon;
+  m_dequantCoeffs = DQInternSimd::dequantCoeffs_neon;
   m_updateStates = DQInternSimd::updateStates_neon;
   m_updateStatesEOS = DQInternSimd::updateStatesEOS_neon;
 }

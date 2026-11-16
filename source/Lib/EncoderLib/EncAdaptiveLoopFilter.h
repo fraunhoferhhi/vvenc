@@ -81,26 +81,11 @@ public:
 
   int ( *m_gnsSolveByChol )( AlfCovariance::TE LHS, alf_float_t* rhs, alf_float_t* x, int numEq );
 
-  AlfCovariance( bool enableOpt = true ) : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ), all0( true )
+  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ), all0( true )
   {
     m_gnsSolveByChol = &AlfCovariance::gnsSolveByChol;
-
-    if( enableOpt )
-    {
-#if ENABLE_SIMD_OPT_ALF
-#ifdef TARGET_SIMD_ARM
-      initAlfCovarianceARM();
-#endif
-#endif
-    }
   }
   ~AlfCovariance() { }
-
-#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_ALF
-  void initAlfCovarianceARM();
-  template<ARM_VEXT vext>
-  void _initAlfCovarianceARM();
-#endif
 
   void create( int size, int num_bins )
   {
@@ -389,6 +374,12 @@ private:
     int    clip[MAX_NUM_ALF_LUMA_COEFF];   // clipping indices chosen for that filter
   };
   AlfMergedPair          m_alfMergedPairs[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES];   // [i][j] for i < j
+  // alfEncoderCtb: each ASU's luma distortion with each filter set, [asuIdx * CTB_SET_DIST_STRIDE + column]: the fixed
+  // sets in columns 0 .. 15, APS set k in column 16 + k (a pass uses at most ALF_CTB_MAX_NUM_APS - 1 = 7 APS sets), and
+  // the new filter set in the last column
+  static constexpr int   CTB_SET_DIST_STRIDE     = NUM_FIXED_FILTER_SETS + ALF_CTB_MAX_NUM_APS;
+  static constexpr int   CTB_NEW_FILTER_DIST_COL = CTB_SET_DIST_STRIDE - 1;
+  std::vector<double>    m_ctbSetDist;
   CABACWriter*           m_CABACEstimator;
   CtxCache*              m_CtxCache;
   double                 m_lambda[MAX_NUM_COMP];
@@ -474,10 +465,18 @@ public:
                                    const Pel yLocal[4][4], const int numBins );
   void ( *m_getPreBlkStatsWeightedAccum )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                            const Pel yLocal[4][4], const alf_float_t weight[4][4], const int numBins );
+  // The inputs of linear ALF's statistics for a 4x4 block whose rows are not clipped at a virtual boundary: the sample
+  // differences of every filter tap into ELocal (calcLinCovariance4 of each row) and org - rec into yLocal.
+  void ( *m_getLinBlkInputs )( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride,
+                               const int halfFilterLength, const int transposeIdx );
   // m_getPreBlkStatsAccum for a block with all clipping bins in use and some of them equal (AlfEqualBinRuns), with the
   // identical result; nullptr where only m_getPreBlkStatsAccum is optimised
   void ( *m_getPreBlkStatsAccumEqualBins )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                             const Pel yLocal[4][4], const int equalBinsMask );
+  // the covariance sums of one 4x4 chroma block in getBlkStatsCcAlf (E of Cb, y and pixAcc of Cb and Cr) from its ELocal
+  // rows and yLocal residuals, with the identical result; nullptr where getBlkStatsCcAlf's own code is used
+  void ( *m_getBlkCovarianceCcAlf )( AlfCovariance& covarianceCb, AlfCovariance& covarianceCr, const int numCoeff,
+                                     const Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16], const Pel yLocal[2][4][4] );
 
                                            private:
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
@@ -510,7 +509,10 @@ public:
   template<bool clipToBdry, bool simd>
   void   calcCovariance4         ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
   template<bool clipToBdry, bool simd>
-  void   calcLinCovariance4      ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx,                      int clipTopRow, int clipBotRow );
+  static void calcLinCovariance4 ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx,                      int clipTopRow, int clipBotRow );
+  template<bool simd>
+  static void getLinBlkInputs    ( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride,
+                                   const int halfFilterLength, const int transposeIdx );
   void   getBlkStatsCcAlf        ( AlfCovariance& covarianceCb, AlfCovariance& covarianceCr, const AlfFilterShape& shape, const PelUnitBuf& orgYuv,
                                    const PelUnitBuf &recYuv, const UnitArea &areaDst, const UnitArea &area,
                                    const int yPos);
@@ -523,6 +525,9 @@ public:
   double deriveFilterCoeffs      ( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam);
   int    deriveFilterCoefficientsPredictionMode( AlfFilterShape& alfShape, int **filterSet, int** filterCoeffDiff, const int numFilters );
   double deriveCoeffQuant        ( int *filterClipp, int *filterCoeffQuant, const AlfCovariance& cov, const AlfFilterShape& shape, const int bitDepth, const bool optimizeClip );
+  double getCtbLumaSetDistortion ( const int asuIdx, const int filterSetIdx, const short* setCoeff, const short* setClipp, const bool doClip, const double invFactor ) const;
+  void   deriveCtbSetDistortions ( const int numAsus, const int numApsSets, const bool doClip, const double invFactor );
+  void   deriveCtbNewFilterDistortions( const int numAsus, const bool doClip, const double invFactor );
   double deriveCtbAlfEnableFlags ( CodingStructure& cs, ChannelType channel, const double chromaWeight,
                                    const int numClasses, const int numCoeff, const int numAsus, double& distUnfilter );
   void   roundFiltCoeff          ( int *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor );

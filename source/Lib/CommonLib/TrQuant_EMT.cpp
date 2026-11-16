@@ -96,11 +96,6 @@ inline void _fastInverseMM<2>( const TCoeff *src, TCoeff *dst, int shift, int li
       *dstPtr = Clip3( outputMinimum, outputMaximum, ( int ) ( *dstPtr + rnd_factor ) >> shift );
     }
   }
-
-  if( iSkipLine )
-  {
-    memset( dst + ( reducedLine << 1 ), 0, ( iSkipLine << 1 ) * sizeof( TCoeff ) );
-  }
 }
 
 template<>
@@ -111,8 +106,7 @@ inline void _fastInverseMM<4>( const TCoeff *src, TCoeff *dst, int shift, int li
   const int cutoff      = 4 - iSkipLine2;
 
 #if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.fastInvCore[0]( iT, src, dst, line, reducedLine, cutoff );
-  g_tCoeffOps.roundClip4( dst, 4, reducedLine, 4, outputMinimum, outputMaximum, rnd_factor, shift );
+  g_tCoeffOps.fastInvCore[0]( iT, src, dst, line, reducedLine, cutoff, outputMinimum, outputMaximum, rnd_factor, shift );
 #else
   memset( dst, 0, reducedLine * 4 * sizeof( TCoeff ) );
 
@@ -140,11 +134,6 @@ inline void _fastInverseMM<4>( const TCoeff *src, TCoeff *dst, int shift, int li
     }
   }
 #endif
-
-  if( iSkipLine )
-  {
-    memset( dst + ( reducedLine << 2 ), 0, ( iSkipLine << 2 ) * sizeof( TCoeff ) );
-  }
 }
 
 #endif
@@ -157,8 +146,7 @@ inline void _fastInverseMM( const TCoeff *src, TCoeff *dst, int shift, int line,
   const int  cutoff      = uiTrSize - iSkipLine2;
 
 #if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.fastInvCore[Log2( uiTrSize ) - 2]( iT, src, dst, line, reducedLine, cutoff );
-  g_tCoeffOps.roundClip8( dst, uiTrSize, reducedLine, uiTrSize, outputMinimum, outputMaximum, rnd_factor, shift );
+  g_tCoeffOps.fastInvCore[Log2( uiTrSize ) - 2]( iT, src, dst, line, reducedLine, cutoff, outputMinimum, outputMaximum, rnd_factor, shift );
 #else
   memset( dst, 0, reducedLine * uiTrSize * sizeof( TCoeff ) );
 
@@ -186,11 +174,6 @@ inline void _fastInverseMM( const TCoeff *src, TCoeff *dst, int shift, int line,
     }
   }
 #endif
-
-  if( iSkipLine )
-  {
-    memset( dst + ( reducedLine*uiTrSize ), 0, ( iSkipLine*uiTrSize ) * sizeof( TCoeff ) );
-  }
 }
 
 //Fast DCT-II transforms
@@ -249,10 +232,6 @@ static void fastInverseDCT2_B2_Core(const TCoeff *src, TCoeff *dst, int shift, i
 
     src++;
     dst += 2;
-  }
-  if (iSkipLine)
-  {
-    memset(dst, 0, (iSkipLine << 1) * sizeof(TCoeff));
   }
 }
 
@@ -333,11 +312,6 @@ static void fastInverseDCT2_B4_Core( const TCoeff *src, TCoeff *dst, int shift, 
     src++;
     dst += 4;
   }
-
-  if( iSkipLine )
-  {
-    memset( dst, 0, ( iSkipLine << 2 ) * sizeof( TCoeff ) );
-  }
 }
 
 
@@ -387,15 +361,30 @@ inline void _fastForwardMM( const TCoeff *src, TCoeff *dst, int shift, int line,
 template<int N>
 void fastForwardDCT2_MM( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 )
 {
-  const TMatrixCoeff* tc = N == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
+  const TMatrixCoeff* tc = N == 8  ? g_trCoreDCT2P8[TRANSFORM_FORWARD][0]
+                         : N == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
                          : N == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0]
                          :           g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
   _fastForwardMM<N>( src, dst, shift, line, iSkipLine, iSkipLine2, tc );
 }
 
+template void fastForwardDCT2_MM<8>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 template void fastForwardDCT2_MM<16>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 template void fastForwardDCT2_MM<32>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 template void fastForwardDCT2_MM<64>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
+
+template<int N>
+void fastInverseDCT2_MM( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum )
+{
+  const TMatrixCoeff* iT = N == 16 ? g_trCoreDCT2P16[TRANSFORM_INVERSE][0]
+                         : N == 32 ? g_trCoreDCT2P32[TRANSFORM_INVERSE][0]
+                         :           g_trCoreDCT2P64[TRANSFORM_INVERSE][0];
+  _fastInverseMM<N>( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum, iT );
+}
+
+template void fastInverseDCT2_MM<16>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum );
+template void fastInverseDCT2_MM<32>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum );
+template void fastInverseDCT2_MM<64>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum );
 
 
 
@@ -453,8 +442,10 @@ void fastForwardDCT2_B8( const TCoeff *src, TCoeff *dst, int shift, int line, in
       dst += line;
     }
   }
+#elif ENABLE_SIMD_TRAFO
+  g_tCoeffOps.fastFwdDCT2[5]( src, dst, shift, line, iSkipLine, iSkipLine2 );
 #else
-  _fastForwardMM< 8 >( src, dst, shift, line, iSkipLine, iSkipLine2, g_trCoreDCT2P8[TRANSFORM_FORWARD][0] );
+  fastForwardDCT2_MM<8>( src, dst, shift, line, iSkipLine, iSkipLine2 );
 #endif
 }
 
@@ -502,11 +493,6 @@ static void fastInverseDCT2_B8_Core(const TCoeff *src, TCoeff *dst, int shift, i
     }
     src++;
     dst += 8;
-  }
-
-  if( iSkipLine )
-  {
-    memset( dst, 0, ( iSkipLine << 3 ) * sizeof( TCoeff ) );
   }
 }
 
@@ -646,9 +632,7 @@ void fastForwardDCT2_B16(const TCoeff *src, TCoeff *dst, int shift, int line, in
 void fastInverseDCT2_B16( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum )
 {
 #if ENABLE_SIMD_TRAFO
-  const TMatrixCoeff *iT = g_trCoreDCT2P16[TRANSFORM_INVERSE][0];
-
-  _fastInverseMM<16>( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum, iT );
+  g_tCoeffOps.fastInvDCT2[3]( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum );
 #else
   int j, k;
   int E  [8], O  [8];
@@ -815,9 +799,7 @@ void fastForwardDCT2_B32( const TCoeff *src, TCoeff *dst, int shift, int line, i
 void fastInverseDCT2_B32(const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum)
 {
 #if ENABLE_SIMD_TRAFO
-  const TMatrixCoeff *iT = g_trCoreDCT2P32[TRANSFORM_INVERSE][0];
-
-  _fastInverseMM<32>( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum, iT );
+  g_tCoeffOps.fastInvDCT2[4]( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum );
 #else
   int j, k;
   int E[16], O[16];
@@ -1012,9 +994,7 @@ void fastForwardDCT2_B64(const TCoeff *src, TCoeff *dst, int shift, int line, in
 void fastInverseDCT2_B64(const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum)
 {
 #if ENABLE_SIMD_TRAFO
-  const TMatrixCoeff *iT = g_trCoreDCT2P64[TRANSFORM_INVERSE][0];
-
-  _fastInverseMM<64>( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum, iT );
+  g_tCoeffOps.fastInvDCT2[5]( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum );
 #else
   int rnd_factor = 1 << (shift - 1);
   const int uiTrSize = 64;
@@ -1982,7 +1962,8 @@ void clipCore( TCoeff *dst, unsigned width, unsigned height, unsigned stride, co
 
 
 template<unsigned trSize>
-void fastInvCore_( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows )
+void fastInvCore_( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows,
+                   const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift )
 {
   if( rows == 0 )
   {
@@ -2013,6 +1994,8 @@ void fastInvCore_( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsig
       srcPtr++;
     }
   }
+
+  clipCore( dst, trSize, reducedLines, trSize, outputMin, outputMax, round, shift );
 }
 
 
@@ -2052,7 +2035,6 @@ TCoeffOps::TCoeffOps()
   cpyResi8        = cpyResiCore;
   cpyCoeff4       = cpyCoeffCore;
   cpyCoeff8       = cpyCoeffCore;
-  roundClip4      = clipCore;
   roundClip8      = clipCore;
   fastInvCore[0]  = fastInvCore_< 4>;
   fastInvCore[1]  = fastInvCore_< 8>;
@@ -2072,13 +2054,18 @@ TCoeffOps::TCoeffOps()
   fastInvDCT2[0]    = fastInverseDCT2_B2_Core;
   fastInvDCT2[1]    = fastInverseDCT2_B4_Core;
   fastInvDCT2[2]    = fastInverseDCT2_B8_Core;
+  fastInvDCT2[3]    = fastInverseDCT2_MM<16>;
+  fastInvDCT2[4]    = fastInverseDCT2_MM<32>;
+  fastInvDCT2[5]    = fastInverseDCT2_MM<64>;
   fastFwdDCT2[0]    = fastForwardDCT2_B2_Core;
   fastFwdDCT2[1]    = fastForwardDCT2_B4_Core;
   fastFwdDCT2[2]    = fastForwardDCT2_MM<16>;
   fastFwdDCT2[3]    = fastForwardDCT2_MM<32>;
   fastFwdDCT2[4]    = fastForwardDCT2_MM<64>;
+  fastFwdDCT2[5]    = fastForwardDCT2_MM<8>;
   fastFwdDST7_4     = fastForwardDST7_B4_Core;
   fastFwdDCT8_4     = fastForwardDCT8_B4_Core;
+  memset( fastFwdPel, 0, sizeof( fastFwdPel ) );
 }
 
 void TCoeffOps::initTCoeffOps( bool enableOpt )

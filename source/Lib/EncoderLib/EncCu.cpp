@@ -659,8 +659,8 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
     if( m_modeCtrl.useModeResult( encTestMode, tempCS, partitioner, useEDO ) )
     {
       std::swap( tempCS, bestCS );
-      // store temp best CI for next CU coding
-      m_CurrCtx->best = m_CABACEstimator->getCtx();
+      // store temp best CI for next CU coding (swapped, not copied: the reset below overwrites the estimator's contexts)
+      m_CurrCtx->best.swap( m_CABACEstimator->getCtx() );
       bestCSUpdated = true;
     }
   }
@@ -1717,6 +1717,15 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
     if( !partitioner.isSepTree( *tempCS ) )
     {
       tempCS->lumaCost = m_cRdCost.calcRdCost( tempCS->fracBits, tempCS->dist );
+      // Without EDO the luma cost is a lower bound of the final cost (chroma and the CU's remaining bits only add to
+      // it): a test whose luma cost already reaches the best cost cannot win, so its chroma and tail are skipped.
+      // With EDO the winner test adds both CUs' deblocking offsets (EncModeCtrl::useModeResult), which still lets
+      // some of these tests win, so the full test stays there.
+      if( !m_EDO && bestCS && bestCS->cost < MAX_DOUBLE && tempCS->lumaCost >= bestCS->cost )
+      {
+        m_CABACEstimator->getCtx() = m_CurrCtx->start;
+        return;
+      }
     }
     if (m_pcEncCfg->m_usePbIntraFast && tempCS->dist == MAX_DISTORTION && tempCS->interHad == 0)
     {
@@ -2035,9 +2044,10 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
 
     if( pumpReducQP != 0 ) // subtract QP offset, reduces Intra-period pumping or overcoding
     {
-      encTestMode.qp = Clip3( 0, MAX_QP, encTestMode.qp - pumpReducQP );
+      const int minQP = BitAllocation::getMinAdaptedQP( &slice, m_pcEncCfg );
+      encTestMode.qp = Clip3( minQP, MAX_QP, encTestMode.qp - pumpReducQP );
       tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-      bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3( 0, MAX_QP, tempCS->baseQP - pumpReducQP );
+      bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3( minQP, MAX_QP, tempCS->baseQP - pumpReducQP );
 
       updateLambda( slice, pic->ctuQpaLambda[rsAddr], pic->ctuAdaptedQP[rsAddr], tempCS->baseQP, true );
     }
@@ -2133,7 +2143,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
       }
 
       PelUnitBuf *predBuf1   = nullptr, *predBuf2 = isCiip ? &ciipBuf : nullptr;
-      PelUnitBuf  dstPredBuf = tempCS->getPredBuf( *cu );
+      PelUnitBuf  dstPredBuf = tempCS->getPredBuf();
 
       if( isGeo )
       {
@@ -3705,6 +3715,10 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
 
   const UnitArea  areaTop  = UnitArea( format, Area( lumaPos.x,             lumaPos.y - verOffset, lumaSize.width, verOffset       ) );
   const UnitArea  areaLeft = UnitArea( format, Area( lumaPos.x - horOffset, lumaPos.y,             horOffset,      lumaSize.height ) );
+  // at a CTU top the area above lies in the CTU line above, which may be deblocked meanwhile: it is read as it was encoded
+  const Picture& pic            = *cs.picture;
+  const bool     topInLineAbove = ( lumaPos.y & cs.pcv->maxCUSizeMask ) == 0;
+  const auto     recoAbove      = [&]( const CompArea& blk ) -> CPelBuf { return topInLineAbove ? pic.getRecoAboveCtuTop( blk ) : pic.getRecoBuf( blk ); };
 
   for ( int compIdx = compStr; compIdx <= compEnd; compIdx++ )
   {
@@ -3736,7 +3750,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
       locArea.x -= cu->blocks[compIdx].x;
       locArea.y -= cu->blocks[compIdx].y;
       PelBuf dbReco = picDbBuf.getBuf( locArea );
-        dbReco.copyFrom( cs.picture->getRecoBuf( compArea ) );
+        dbReco.copyFrom( recoAbove( compArea ) );
       }
     }
 
@@ -3801,7 +3815,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
       {
         org = cs.picture->getFiltOrigBuf( compArea );
       }
-      CPelBuf reco   = cs.picture->getRecoBuf( compArea );
+      CPelBuf reco   = recoAbove( compArea );
       CPelBuf recoDb = picDbBuf.getBuf( locArea );
       distBeforeDb  += xGetDistortionDb( cs, org, reco,   compArea, true );
       distAfterDb   += xGetDistortionDb( cs, org, recoDb, compArea, false  );
@@ -3940,7 +3954,7 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
   const bool skipResidual = residualPass == 1;
   if( skipResidual || histBestSbt == MAX_UCHAR || !CU::isSbtMode( histBestSbt ) )
   {
-    m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual );
+    m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual, bestCS->cost );
     xEncodeDontSplit( *tempCS, partitioner );
     xCheckDQP       ( *tempCS, partitioner );
 
@@ -4083,7 +4097,7 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
       cu->sbtInfo = (sbtPos << 4) + sbtIdx;
 
       //try residual coding
-      m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual );
+      m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual, bestCS->cost );
       numRDOTried++;
 
       xEncodeDontSplit( *tempCS, partitioner );
@@ -4216,7 +4230,7 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
 uint64_t EncCu::xCalcPuMeBits( const CodingUnit &cu )
 {
   CHECK( !cu.mergeFlag, "Should only be used for merge!" );
-  CHECK( CU::isIBC( cu ), "Shound not be used for IBC" );
+  CHECK( CU::isIBC( cu ), "Should not be used for IBC" );
 
   m_CABACEstimator->resetBits();
   m_CABACEstimator->merge_flag(cu);
