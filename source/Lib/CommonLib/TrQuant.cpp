@@ -520,7 +520,10 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   const int  resiStride = resi.stride;
 
 #if ENABLE_SIMD_TRAFO
-  if( width & 3 )
+  // the first stage of a 2-D transform may read the residual as it is
+  const auto fwdPel = width > 1 && height > 1 ? g_tCoeffOps.fastFwdPel[trTypeHor][transformWidthIndex] : nullptr;
+
+  if( !fwdPel && ( width & 3 ) )
 #endif
   {
     for( int y = 0; y < height; y++ )
@@ -532,11 +535,11 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     }
   }
 #if ENABLE_SIMD_TRAFO
-  else if( width & 7 )
+  else if( !fwdPel && ( width & 7 ) )
   {
     g_tCoeffOps.cpyCoeff4( resiBuf, resiStride, block, width, height );
   }
-  else
+  else if( !fwdPel )
   {
     g_tCoeffOps.cpyCoeff8( resiBuf, resiStride, block, width, height );
   }
@@ -548,7 +551,16 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     const int shift_2nd =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
-    fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
+#if ENABLE_SIMD_TRAFO
+    if( fwdPel )
+    {
+      fwdPel( resiBuf, resiStride, tmp, shift_1st, height, skipWidth );
+    }
+    else
+#endif
+    {
+      fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
+    }
     fastFwdTrans[trTypeVer][transformHeightIndex](tmp, dstCoeff.buf, shift_2nd, width, skipWidth, skipHeight);
     // The kernels leave the rows past the cut-off as they were. The second stage never reads those of the first stage. In the
     // coefficients, the RDOQ check reads 32 rows and the comparison of transforms reads blocks up to 32 rows, so 64 rows need no clear.
@@ -582,6 +594,34 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   }
 }
 
+
+// How many lines and rows of a coefficient block can hold coefficients, from the last scan position. The groups go by rising
+// diagonals of the block, and within a diagonal from the bottom left. So all earlier groups lie on lower diagonals or to the left
+// on this one, and in the first group the coefficients go by diagonals in the same way. Both round up to a multiple of 4, as the
+// matrix kernels' rows have to be one, and the first stage's lines are the second stage's rows.
+static inline void getCoeffExtent( const int lastPos, const int width, const int height, int& numLines, int& numRows )
+{
+  const ScanElement& last    = getScanOrder( SCAN_GROUPED_4x4, Log2( width ), Log2( height ) )[std::max( lastPos, 0 )];
+  const uint32_t*    log2Sbb = g_log2SbbSize[Log2( width )][Log2( height )];
+  const int          groupX  = last.x >> log2Sbb[0];
+  const int          groupY  = last.y >> log2Sbb[1];
+  const int          rank    = groupX + groupY;
+
+  int lines, rows;
+  if( rank == 0 )
+  {
+    lines = std::min<int>( last.x + last.y + 1, 1 << log2Sbb[0] );
+    rows  = std::min<int>( last.x + last.y + 1, 1 << log2Sbb[1] );
+  }
+  else
+  {
+    lines = std::max( rank, groupX + 1 ) << log2Sbb[0];
+    rows  = ( rank + 1 ) << log2Sbb[1];
+  }
+
+  numLines = std::min( width,  ( lines + 3 ) & ~3 );
+  numRows  = std::min( height, ( rows  + 3 ) & ~3 );
+}
 
 void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pCoeff, PelBuf& pResidual )
 {
@@ -628,7 +668,24 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
     const int shift_2nd = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
+    // LFNST writes its own region, which the zero-out above already gives. Otherwise the coefficients stop at the last scan position.
+    if( !tu.cu->lfnstIdx )
+    {
+      int numLines, numRows;
+      getCoeffExtent( tu.lastPos[compID], width, height, numLines, numRows );
+      skipWidth  = std::max( skipWidth , width  - numLines );
+      skipHeight = std::max( skipHeight, height - numRows  );
+    }
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
+#if ENABLE_SIMD_TRAFO
+    // the matrix kernels stop at their cutoff, so only the butterflies read the lines the first stage skips
+    if( width <= 8 && skipWidth )
+#else
+    if( skipWidth )
+#endif
+    {
+      memset( tmp + ( width - skipWidth ) * height, 0, skipWidth * height * sizeof( TCoeff ) );
+    }
     fastInvTrans[trTypeHor][transformWidthIndex](tmp, block, shift_2nd, height, 0, skipWidth, clipMinimum, clipMaximum);
   }
   else if (width == 1)   // 1-D vertical transform

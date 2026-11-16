@@ -69,10 +69,10 @@ struct TCoeffOps
   void( *cpyResi4 )         ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
   void( *cpyCoeff8 )        ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );
   void( *cpyCoeff4 )        ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );
-  void( *fastInvCore[5] )   ( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows );
+  // the inverse matrix multiply over the first rows, then the rounding shift and the clip
+  void( *fastInvCore[5] )   ( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
   void( *fastFwdCore_2D[5] )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
   void( *fastFwdCore_1D[5] )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
-  void( *roundClip4 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
   void( *roundClip8 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
   // 1D transforms called directly by fastForward/InverseDCT2_B*: partial butterflies (fastInvDCT2, fastFwdDCT2[0..1])
   // and the whole forward DCT-II 16/32/64 (fastFwdDCT2[2..4])
@@ -81,6 +81,9 @@ struct TCoeffOps
   void( *fastFwdDCT2[5] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   void( *fastFwdDST7_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   void( *fastFwdDCT8_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
+  // The first stage of a 2-D forward transform reading the residual itself, by transform type and log2 of the size minus 1.
+  // Where there's none (nullptr), xT widens the residual and takes fastFwdTrans.
+  void( *fastFwdPel[NUM_TRANS_TYPE][6] )( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 );
 
 private:
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
