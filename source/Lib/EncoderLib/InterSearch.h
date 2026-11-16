@@ -101,6 +101,16 @@ struct BlkUniMvInfoBuffer
 {
   const BlkUniMvInfo* getBlkUniMvInfo(int i) const { return &m_uniMvList[(m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)]; }
         BlkUniMvInfo* getBlkUniMvInfo(int i)       { return &m_uniMvList[(m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)]; }
+  // calls fn with each entry from the newest, in the order of getBlkUniMvInfo( 0 ... m_uniMvListSize - 1 ), without its modulo
+  template<typename Fn>
+  void forEachNewestFirst( Fn&& fn ) const
+  {
+    for( int i = 0, idx = m_uniMvListIdx; i < m_uniMvListSize; i++ )
+    {
+      idx = idx == 0 ? m_uniMvListMaxSize - 1 : idx - 1;
+      fn( m_uniMvList[idx] );
+    }
+  }
 
   void insertUniMvCands( const Area& blkArea, const Mv* cMvTemp)
   {
@@ -555,6 +565,7 @@ private:
 
   // sub-functions for ME
   struct StartPositions;
+  struct BlockMvClip;
   template<typename OnCost>
   void xCostsOfStartPositions       ( const StartPositions& startPositions, const int first, const TZSearchStruct& cStruct, OnCost&& onCost );
   inline void xTZSearchHelp         ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
