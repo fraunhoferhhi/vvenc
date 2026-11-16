@@ -185,6 +185,11 @@ private:
   void _initTrQuantX86();
   void initTrQuantX86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_TRAFO
+  template<ARM_VEXT vext>
+  void _initTrQuantARM();
+  void initTrQuantARM();
+#endif
 };// END CLASS DEFINITION TrQuant
 
 } // namespace vvenc

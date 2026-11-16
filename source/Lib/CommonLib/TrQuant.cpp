@@ -255,6 +255,12 @@ TrQuant::TrQuant( bool enableOpt ) : m_scalingListEnabled(false), m_quant( nullp
     initTrQuantX86();
   }
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_TRAFO
+  if( enableOpt )
+  {
+    initTrQuantARM();
+  }
+#endif
 }
 
 TrQuant::~TrQuant()
