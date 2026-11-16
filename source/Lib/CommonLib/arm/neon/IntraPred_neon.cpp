@@ -632,6 +632,70 @@ static void IntraHorVerPDPC_neon( Pel* pDsty, const int dstStride, Pel* refSide,
   }
 }
 
+// CCLM downsampling of the luma samples for 4:2:0, as LMLumaDownsample420_Core: per chroma sample
+// ( a[2i - 1] + 2 a[2i] + a[2i + 1] + b[2i - 1] + 2 b[2i] + b[2i + 1] + 4 ) >> 3 of the two luma rows a and b. The sum
+// of 4 outputs in 32 bit, where it is exact for any 16-bit samples; vrshrn adds the rounding and narrows.
+static inline int16x4_t lmDownsample4_neon( const int16x4_t aLeft, const int16x4_t aCentre, const int16x4_t aRight,
+                                            const int16x4_t bLeft, const int16x4_t bCentre, const int16x4_t bRight )
+{
+  int32x4_t sum = vaddl_s16( aLeft, aRight );
+  sum           = vaddw_s16( sum, bLeft );
+  sum           = vaddw_s16( sum, bRight );
+  sum           = vmlaq_n_s32( sum, vaddl_s16( aCentre, bCentre ), 2 );
+  return vrshrn_n_s32( sum, 3 );
+}
+
+// vld2 from 2i - 1 splits a row into a[2i - 1] (val[0]) and a[2i] (val[1]); the right neighbours a[2i + 1] are val[0]
+// moved down one lane, and the last lane's a[2i + 1], one sample past the pairs vld2 read, comes from a duplicating
+// load; the 4-wide step takes them from a second vld2 from 2i. Without a left neighbour a[-1] and b[-1] stand for a[0]
+// and b[0]: the vectors read the samples left of the block all the same (as x86 does), and the first output of each row
+// is computed again.
+static void LMLumaDownsample420_neon( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride,
+                                      const int width, const int height, const bool leftAvailable )
+{
+  for( int y = 0; y < height; y++, src += 2 * srcStride, dst += dstStride )
+  {
+    const Pel* a = src;
+    const Pel* b = src + srcStride;
+    int        x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const int16x8x2_t aLeftCentre = vld2q_s16( a + 2 * x - 1 );
+      const int16x8x2_t bLeftCentre = vld2q_s16( b + 2 * x - 1 );
+      const int16x8_t   aNext       = vld1q_dup_s16( a + 2 * x + 15 );
+      const int16x8_t   bNext       = vld1q_dup_s16( b + 2 * x + 15 );
+      const int16x8_t   aRight      = vextq_s16( aLeftCentre.val[0], aNext, 1 );
+      const int16x8_t   bRight      = vextq_s16( bLeftCentre.val[0], bNext, 1 );
+
+      const int16x4_t low  = lmDownsample4_neon( vget_low_s16( aLeftCentre.val[0] ), vget_low_s16( aLeftCentre.val[1] ),
+                                                 vget_low_s16( aRight ), vget_low_s16( bLeftCentre.val[0] ),
+                                                 vget_low_s16( bLeftCentre.val[1] ), vget_low_s16( bRight ) );
+      const int16x4_t high = lmDownsample4_neon( vget_high_s16( aLeftCentre.val[0] ), vget_high_s16( aLeftCentre.val[1] ),
+                                                 vget_high_s16( aRight ), vget_high_s16( bLeftCentre.val[0] ),
+                                                 vget_high_s16( bLeftCentre.val[1] ), vget_high_s16( bRight ) );
+      vst1q_s16( dst + x, vcombine_s16( low, high ) );
+    }
+    if( x + 4 <= width )
+    {
+      const int16x4x2_t aLeftCentre  = vld2_s16( a + 2 * x - 1 );
+      const int16x4x2_t aCentreRight = vld2_s16( a + 2 * x );
+      const int16x4x2_t bLeftCentre  = vld2_s16( b + 2 * x - 1 );
+      const int16x4x2_t bCentreRight = vld2_s16( b + 2 * x );
+      vst1_s16( dst + x, lmDownsample4_neon( aLeftCentre.val[0], aLeftCentre.val[1], aCentreRight.val[1],
+                                             bLeftCentre.val[0], bLeftCentre.val[1], bCentreRight.val[1] ) );
+      x += 4;
+    }
+    for( ; x < width; x++ )
+    {
+      dst[x] = ( 2 * a[2 * x] + a[2 * x + 1] + a[2 * x - 1] + 2 * b[2 * x] + b[2 * x + 1] + b[2 * x - 1] + 4 ) >> 3;
+    }
+    if( !leftAvailable )
+    {
+      dst[0] = ( 3 * a[0] + a[1] + 3 * b[0] + b[1] + 4 ) >> 3;
+    }
+  }
+}
+
 template<>
 void IntraPrediction::_initIntraPredictionARM<NEON>()
 {
@@ -641,6 +705,7 @@ void IntraPrediction::_initIntraPredictionARM<NEON>()
   IntraAnglePDPC        = IntraAnglePDPC_neon;
   IntraPredSampleFilter = IntraPredSampleFilter_neon;
   IntraHorVerPDPC       = IntraHorVerPDPC_neon;
+  LMLumaDownsample420   = LMLumaDownsample420_neon;
 }
 
 } // namespace vvenc
