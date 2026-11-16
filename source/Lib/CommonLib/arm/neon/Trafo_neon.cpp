@@ -394,11 +394,6 @@ static void fastInverseDCT2_B8_neon( const TCoeff* src, TCoeff* dst, int shift, 
     invDCT2_B8_4lines_neon( iT, paddedSrc, 4, paddedDst, vshift, vmin, vmax );
     memcpy( dst + 8 * j, paddedDst, 8 * ( reducedLine - j ) * sizeof( TCoeff ) );
   }
-
-  if( iSkipLine )
-  {
-    memset( dst + 8 * reducedLine, 0, 8 * iSkipLine * sizeof( TCoeff ) );
-  }
 }
 
 template<unsigned trSize>
@@ -647,11 +642,6 @@ static void fastInverseDCT2_EvenOdd_neon( const TCoeff* src, TCoeff* dst, int sh
 
       storeInvEvenOdd_neon<N>( dst + i * N, j, e, o, negShift );
     }
-  }
-
-  if( iSkipLine )
-  {
-    memset( dst + reducedLine * N, 0, iSkipLine * N * sizeof( TCoeff ) );
   }
 }
 
