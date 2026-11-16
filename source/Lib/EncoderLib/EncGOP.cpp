@@ -320,7 +320,11 @@ bool EncGOP::waitForFreeEncoders()
     return false;
   }
   CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-  m_gopEncCond.wait( lock );
+  // Return as soon as a picture finished since the last return. A finish after the GOP pass released the lock and
+  // before this wait notifies nobody; without the predicate the main thread would sleep until the next finish while
+  // the freed encoder and the pictures waiting for that one stay idle.
+  m_gopEncCond.wait( lock, [this] { return m_numPicsFinished != m_numPicsFinishedWaited; } );
+  m_numPicsFinishedWaited = m_numPicsFinished;
   return true;
 }
 
@@ -650,6 +654,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
         if( param->pic->picApsGlobal )
           param->pic->picApsGlobal->initalized = true;
         param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
+        param->gopEncoder->m_numPicsFinished++;
         param->gopEncoder->m_gopEncCond.notify_one();
       }
       delete param;
