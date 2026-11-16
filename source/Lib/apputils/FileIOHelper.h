@@ -45,6 +45,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include <cstdio>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -70,6 +71,42 @@ struct vvencYUVBuffer;
 namespace apputils {
 
 typedef int16_t LPel;
+
+// Standard input for the y4m and yuv readers, read in blocks of 64 KiB. libc++'s std::cin reads a pipe one byte at a
+// time (a getc with its lock per byte, about 60 ms per 1080p picture), so every read of stdin goes through this one
+// stream instead: bytes it has buffered are no longer in stdin, so no reader may use std::cin beside it.
+class StdinBuf : public std::streambuf
+{
+public:
+  StdinBuf() { setg( m_buf, m_buf, m_buf ); }
+
+protected:
+  int_type underflow() override
+  {
+    if( gptr() < egptr() )
+    {
+      return traits_type::to_int_type( *gptr() );
+    }
+    const size_t numRead = std::fread( m_buf, 1, sizeof( m_buf ), stdin );
+    if( numRead == 0 )
+    {
+      return traits_type::eof();
+    }
+    setg( m_buf, m_buf, m_buf + numRead );
+    return traits_type::to_int_type( *gptr() );
+  }
+
+private:
+  char m_buf[1 << 16];
+};
+
+// inline (not static): one buffer for the whole program, whichever file calls it
+inline std::istream& stdinStream()
+{
+  static StdinBuf     buf;
+  static std::istream stream( &buf );
+  return stream;
+}
 
 // ====================================================================================================================
 
@@ -128,7 +165,7 @@ public:
       }
     }
 
-    std::istream& inStream = ( fileName == "-" ) ? std::cin : cfHandle;
+    std::istream& inStream = ( fileName == "-" ) ? stdinStream() : cfHandle;
 
     // y4m header syntax example
     // YUV4MPEG2 W1920 H1080 F50:1 Ip A128:117 C420p10
