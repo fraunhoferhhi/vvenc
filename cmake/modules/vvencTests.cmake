@@ -21,6 +21,8 @@ add_test( NAME Test_vvenclibtest-timestamps              COMMAND vvenclibtest 6 
 
 if( NOT BUILD_SHARED_LIBS )
   add_test( NAME Test_vvenc_unit_test COMMAND vvenc_unit_test --fast )
+  # a hang guard: a lost thread pool wake-up makes the test hang (test_ThreadPool.cpp); it takes 1-3 minutes in CI
+  set_tests_properties( Test_vvenc_unit_test PROPERTIES TIMEOUT 900 )
 endif()
 
 set( CLEANUP_TEST_FILES "" )
