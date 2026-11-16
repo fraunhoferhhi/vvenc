@@ -2142,7 +2142,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
       }
 
       PelUnitBuf *predBuf1   = nullptr, *predBuf2 = isCiip ? &ciipBuf : nullptr;
-      PelUnitBuf  dstPredBuf = tempCS->getPredBuf( *cu );
+      PelUnitBuf  dstPredBuf = tempCS->getPredBuf();
 
       if( isGeo )
       {
