@@ -420,7 +420,27 @@ public:
         if ( ( y444 & mask_y_dest ) == 0 )
         {
           // process current destination line
-          if ( csx_file < csx_dest )
+          if ( csx_file == csx_dest )
+          {
+            // the same horizontal subsampling in file and buffer (every plane of VVenC's 4:2:0 and 4:0:0 buffers): an
+            // index without a shift lets the compiler vectorize the widening, which the loops below, with a shift
+            // known only at run time, prevent
+            if ( ! is16bit )
+            {
+              for ( int x = 0; x < width; x++ )
+              {
+                dst[ x ] = buf[ x ];
+              }
+            }
+            else
+            {
+              for ( int x = 0; x < width; x++ )
+              {
+                dst[ x ] = LPel( buf[ x * 2 + 0 ] ) | ( LPel( buf[ x * 2 + 1 ] ) << 8 );
+              }
+            }
+          }
+          else if ( csx_file < csx_dest )
           {
             // eg file is 444, dest is 422.
             const int sx = csx_dest - csx_file;
