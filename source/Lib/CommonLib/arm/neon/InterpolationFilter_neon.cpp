@@ -83,6 +83,9 @@ static inline int16x8_t interpolate_2tap_8( int16x8_t s0, int16x8_t s1, int16x8_
   return vshlq_s16( sum, shift );
 }
 
+// Fused horizontal and vertical passes, per 8-column strip and then the last 4 columns: the previous row's horizontal
+// result stays in a register, so each row is filtered once and no intermediate buffer is needed.
+// src and dst must not overlap: dst rows are written while later src rows are still read.
 void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, const int srcStride, Pel* dst,
                                 const int dstStride, int width, int height, TFilterCoeff const* ch,
                                 TFilterCoeff const* cv )
@@ -107,92 +110,52 @@ void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, const int 
   const int16x4_t coeffH = load_s16x2( ch );
   const int16x4_t coeffV = load_s16x2( cv );
 
-  Pel tmpArr[( MAX_CU_SIZE + 4 ) * ( MAX_CU_SIZE + 5 )];
-
-  // Horizontal pass.
-  Pel* tmp = tmpArr;
-  int h = height;
-  do
-  {
-    int x = 0;
-    for( ; x + 8 <= width; x += 8 )
-    {
-      int16x8_t s0 = vld1q_s16( src + x );
-      int16x8_t s1 = vld1q_s16( src + x + 1 );
-      int16x8_t s2 = vld1q_s16( src + x + srcStride );
-      int16x8_t s3 = vld1q_s16( src + x + srcStride + 1 );
-
-      int16x8_t h0 = interpolate_2tap_8( s0, s1, offsetH_vec, shiftH_vec, coeffH );
-      int16x8_t h1 = interpolate_2tap_8( s2, s3, offsetH_vec, shiftH_vec, coeffH );
-
-      vst1q_s16( tmp + x, h0 );
-      vst1q_s16( tmp + x + width, h1 );
-    }
-
-    // Process the last 4 of the line.
-    int16x4_t s0 = vld1_s16( src + x );
-    int16x4_t s1 = vld1_s16( src + x + 1 );
-    int16x4_t s2 = vld1_s16( src + x + srcStride );
-    int16x4_t s3 = vld1_s16( src + x + srcStride + 1 );
-
-    int16x4_t h0 = interpolate_2tap_4( s0, s1, offsetH_vec, shiftH_vec, coeffH );
-    int16x4_t h1 = interpolate_2tap_4( s2, s3, offsetH_vec, shiftH_vec, coeffH );
-
-    vst1_s16( tmp + x, h0 );
-    vst1_s16( tmp + x + width, h1 );
-
-    src += 2 * srcStride;
-    tmp += 2 * width;
-    h -= 2;
-  } while( h != 0 );
-
-  // Process h + 1 line for the vertical pass.
   int x = 0;
   for( ; x + 8 <= width; x += 8 )
   {
-    int16x8_t s0 = vld1q_s16( src + x );
-    int16x8_t s1 = vld1q_s16( src + x + 1 );
-    int16x8_t h0 = interpolate_2tap_8( s0, s1, offsetH_vec, shiftH_vec, coeffH );
+    const Pel* s = src + x;
+    Pel* d = dst + x;
+    int16x8_t hPrev = interpolate_2tap_8( vld1q_s16( s ), vld1q_s16( s + 1 ), offsetH_vec, shiftH_vec, coeffH );
+    int h = height;
+    do
+    {
+      int16x8_t a0 = vld1q_s16( s + srcStride );
+      int16x8_t a1 = vld1q_s16( s + srcStride + 1 );
+      int16x8_t b0 = vld1q_s16( s + 2 * srcStride );
+      int16x8_t b1 = vld1q_s16( s + 2 * srcStride + 1 );
 
-    vst1q_s16( tmp + x, h0 );
+      int16x8_t h1 = interpolate_2tap_8( a0, a1, offsetH_vec, shiftH_vec, coeffH );
+      int16x8_t h2 = interpolate_2tap_8( b0, b1, offsetH_vec, shiftH_vec, coeffH );
+
+      vst1q_s16( d, interpolate_2tap_8( hPrev, h1, offsetV_vec, shiftV_vec, coeffV ) );
+      vst1q_s16( d + dstStride, interpolate_2tap_8( h1, h2, offsetV_vec, shiftV_vec, coeffV ) );
+
+      hPrev = h2;
+      s += 2 * srcStride;
+      d += 2 * dstStride;
+      h -= 2;
+    } while( h != 0 );
   }
 
-  int16x4_t s0 = vld1_s16( src + x );
-  int16x4_t s1 = vld1_s16( src + x + 1 );
-  int16x4_t h0 = interpolate_2tap_4( s0, s1, offsetH_vec, shiftH_vec, coeffH );
-
-  vst1_s16( tmp + x, h0 );
-
-  // Vertical pass.
-  tmp = tmpArr;
+  // The last 4 columns.
+  src += x;
+  dst += x;
+  int16x4_t hPrev = interpolate_2tap_4( vld1_s16( src ), vld1_s16( src + 1 ), offsetH_vec, shiftH_vec, coeffH );
   do
   {
-    int x = 0;
-    for( ; x + 8 <= width; x += 8 )
-    {
-      int16x8_t s0 = vld1q_s16( tmp + x );
-      int16x8_t s1 = vld1q_s16( tmp + x + width );
-      int16x8_t s2 = vld1q_s16( tmp + x + width * 2 );
+    int16x4_t a0 = vld1_s16( src + srcStride );
+    int16x4_t a1 = vld1_s16( src + srcStride + 1 );
+    int16x4_t b0 = vld1_s16( src + 2 * srcStride );
+    int16x4_t b1 = vld1_s16( src + 2 * srcStride + 1 );
 
-      int16x8_t v0 = interpolate_2tap_8( s0, s1, offsetV_vec, shiftV_vec, coeffV );
-      int16x8_t v1 = interpolate_2tap_8( s1, s2, offsetV_vec, shiftV_vec, coeffV );
+    int16x4_t h1 = interpolate_2tap_4( a0, a1, offsetH_vec, shiftH_vec, coeffH );
+    int16x4_t h2 = interpolate_2tap_4( b0, b1, offsetH_vec, shiftH_vec, coeffH );
 
-      vst1q_s16( dst + x, v0 );
-      vst1q_s16( dst + x + dstStride, v1 );
-    }
+    vst1_s16( dst, interpolate_2tap_4( hPrev, h1, offsetV_vec, shiftV_vec, coeffV ) );
+    vst1_s16( dst + dstStride, interpolate_2tap_4( h1, h2, offsetV_vec, shiftV_vec, coeffV ) );
 
-    // Process the last 4 of the line.
-    int16x4_t s0 = vld1_s16( tmp + x );
-    int16x4_t s1 = vld1_s16( tmp + x + width );
-    int16x4_t s2 = vld1_s16( tmp + x + width * 2 );
-
-    int16x4_t v0 = interpolate_2tap_4( s0, s1, offsetV_vec, shiftV_vec, coeffV );
-    int16x4_t v1 = interpolate_2tap_4( s1, s2, offsetV_vec, shiftV_vec, coeffV );
-
-    vst1_s16( dst + x, v0 );
-    vst1_s16( dst + x + dstStride, v1 );
-
-    tmp += 2 * width;
+    hPrev = h2;
+    src += 2 * srcStride;
     dst += 2 * dstStride;
     height -= 2;
   } while( height != 0 );
