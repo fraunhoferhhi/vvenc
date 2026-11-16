@@ -4156,6 +4156,58 @@ static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigne
   return true;
 }
 
+// sumSquaredErrorParts against sumSquaredError of each part, in the shapes of xCalcMinDistSbt; 10-bit samples, and the
+// extremes of 12 bits, where a part of 16 x 16 samples nearly fills its 32 bits
+static bool check_sumSquaredErrorParts( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::sumSquaredErrorParts\n" );
+  static const int shapes[][2] = { { 16, 4 }, { 8, 4 }, { 4, 4 }, { 2, 4 }, { 4, 2 }, { 2, 2 }, { 4, 1 }, { 2, 1 } };
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 10, /*is_signed=*/false };
+  MinMaxGenerator<Pel> extremePixels{ 12, /*is_signed=*/false };
+
+  for( unsigned c = 0; c < num_cases; c++ )
+  {
+    for( const auto& shape : shapes )
+    {
+      const int lengthX = shape[0];
+      const int numX    = shape[1];
+      const int lengthY = 2 << rng.get( 0, 3 );
+      const int numY    = 1 << rng.get( 0, 2 );
+      const int stride  = lengthX * numX + rng.get( 0, 40 );
+      std::vector<Pel> a( stride * lengthY * numY ), b( stride * lengthY * numY );
+      if( c % 3 == 2 )
+      {
+        std::generate( a.begin(), a.end(), extremePixels );
+        std::generate( b.begin(), b.end(), extremePixels );
+      }
+      else
+      {
+        std::generate( a.begin(), a.end(), pixels );
+        std::generate( b.begin(), b.end(), pixels );
+      }
+
+      uint32_t sums[4][4];
+      opt->sumSquaredErrorParts( a.data(), stride, b.data(), stride, lengthX, lengthY, numX, numY, sums );
+
+      for( int j = 0; j < numY; j++ )
+      {
+        for( int i = 0; i < numX; i++ )
+        {
+          std::ostringstream sstm;
+          sstm << "sumSquaredErrorParts lengthX=" << lengthX << " numX=" << numX << " lengthY=" << lengthY << " numY=" << numY << " part " << j << " " << i;
+          const int offset = j * lengthY * stride + i * lengthX;
+          if( !compare_value( sstm.str(), ref->sumSquaredError( &a[offset], stride, &b[offset], stride, lengthX, lengthY ), uint64_t( sums[j][i] ) ) )
+          {
+            return false;
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
 // padHorizontal: the whole buffer is compared, so writes outside the margins are caught as well
 static bool check_padHorizontal( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
 {
@@ -4572,6 +4624,7 @@ static bool test_PelBufferOps()
   passed = check_width2Ops( &ref, &opt, num_cases ) && passed;
   passed = check_pictureChecksum( &ref, &opt, num_cases ) && passed;
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
+  passed = check_sumSquaredErrorParts( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
   passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
