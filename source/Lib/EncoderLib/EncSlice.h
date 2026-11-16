@@ -178,6 +178,7 @@ private:
   void    xInitSliceLambdaQP  ( Slice* slice );
   double  xCalculateLambda    ( const Slice* slice, const int depth, const double refQP, const double dQP, int& iQP );
   void    xProcessCtus        ( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr );
+  bool    xCcAlfStatsUnused   ( const ProcessCtuState* processStates, const int ctuRsAddr ) const;
   template<bool checkReadyState=false>
   static bool xProcessCtuTask ( int taskIdx, void* taskParam );
 

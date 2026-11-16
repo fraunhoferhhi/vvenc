@@ -929,6 +929,20 @@ inline bool checkCtuTaskNbBotRgt( const PPS& pps, const int& ctuPosX, const int&
   return ctuPosX + rightOffset < pps.pcv->widthInCtus && ctuPosY + 1 < pps.pcv->heightInCtus && ( override || pps.canFilterCtuBdry( ctuPosX, ctuPosY, rightOffset, 1 ) ) && processStates[ ctuRsAddr + rightOffset + pps.pcv->widthInCtus ] <= tskType;
 }
 
+// With IFP, below the derivation lines the CCALF statistics are read only by selectCcAlfFilterForCtuLine. They are unused
+// once the derivation has turned CCALF off for Cb and Cr, and are skipped then.
+bool EncSlice::xCcAlfStatsUnused( const ProcessCtuState* processStates, const int ctuRsAddr ) const
+{
+  if( !m_pcEncCfg->m_ifpLines )
+    return false;
+  // above the derivation lines the statistics feed the derivation; below them they are needed until its decision is known
+  if( ctuRsAddr <= (int)m_ccalfDeriveCtu || processStates[ m_ccalfDeriveCtu ] < CCALF_RECONSTRUCT )
+    return false;
+  // the flags are final here: the derivation task sets them before its atomic state store to CCALF_RECONSTRUCT
+  const CcAlfFilterParam& ccAlfParam = m_pALF->getCcAlfFilterParam();
+  return !ccAlfParam.ccAlfFilterEnabled[COMP_Cb - 1] && !ccAlfParam.ccAlfFilterEnabled[COMP_Cr - 1];
+}
+
 template<bool checkReadyState>
 bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
 {
@@ -1318,16 +1332,17 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
 
     case CCALF_GET_STATISTICS:
       {
-        if( checkCtuTaskNbTop   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) return false;
-        if( checkCtuTaskNbBot   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) return false;
-
+        // No wait for the lines above and below: the statistics read their luma from the pre-ALF copy, complete since
+        // ALF_GET_STATISTICS waited for SAO below, and their chroma only inside this line
         if( checkReadyState )
           return true;
+
+        const bool statsUnused = encSlice->xCcAlfStatsUnused( processStates, ctuRsAddr );
 
         ITT_TASKSTART( itt_domain_encode, itt_handle_ccalf_stat );
 
         // ALF pre-processing
-        if( slice.sps->ccalfEnabled )
+        if( slice.sps->ccalfEnabled && !statsUnused )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L);
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
@@ -1408,8 +1423,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
         {
           // ensure line-by-line reconstruction due to line synchronization
           if( checkCtuTaskNbTop( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CCALF_RECONSTRUCT ) ) return false;
-          // check bottom due to rec. buffer usage in ccalf statistics
-          if( checkCtuTaskNbBot( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CCALF_GET_STATISTICS ) ) return false;
         }
 
         if( checkReadyState )
