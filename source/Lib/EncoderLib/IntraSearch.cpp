@@ -1089,14 +1089,14 @@ void IntraSearch::xEncIntraHeader( CodingStructure &cs, Partitioner &partitioner
 
 TransformUnit& IntraSearch::xCurrTU( CodingStructure& cs, Partitioner& partitioner ) const
 {
+  if( cs.tus.size() == 1 )
+  {
+    return *cs.tus[0];
+  }
   const int subTu = m_ispTestedModes[0].subTuCounter;
   if( subTu >= 0 && isLuma( partitioner.chType ) )
   {
     return *cs.tus[subTu];
-  }
-  if( cs.tus.size() == 1 )
-  {
-    return *cs.tus[0];
   }
   return *cs.getTU( partitioner.currArea().blocks[partitioner.chType], partitioner.chType );
 }
