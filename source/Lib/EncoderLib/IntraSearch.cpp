@@ -369,7 +369,8 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
     cu.mipFlag = true;
     cu.multiRefIdx = 0;
 
-    double mipHadCost[MAX_NUM_MIP_MODE] = { MAX_DOUBLE };
+    double mipHadCost[MAX_NUM_MIP_MODE];
+    std::fill_n( mipHadCost, MAX_NUM_MIP_MODE, MAX_DOUBLE );
 
     initIntraPatternChType(cu, cu.Y());
     initIntraMip( cu );
