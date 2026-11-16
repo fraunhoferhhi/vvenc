@@ -3912,6 +3912,12 @@ static bool check_SADFourPositions( RdCost* ref, RdCost* opt, unsigned num_cases
       const Distortion full = ref->m_afpDistortFunc[0][DF_SAD + log2Width]( dtParam );
       passed = compare_value( sstm.str(), full, sads[k] ) && passed;
       passed = compare_value( sstm.str() + " above maximumDistortionForEarlyExit", full > threshold, sadsWithThreshold[k] > threshold ) && passed;
+      // a position at or below the threshold may become the search's new best: it must have its whole SAD, not a partial
+      // one from an exit taken because other positions were above already
+      if( full <= threshold )
+      {
+        passed = compare_value( sstm.str() + " at or below maximumDistortionForEarlyExit", full, sadsWithThreshold[k] ) && passed;
+      }
     }
   }
   return passed;
