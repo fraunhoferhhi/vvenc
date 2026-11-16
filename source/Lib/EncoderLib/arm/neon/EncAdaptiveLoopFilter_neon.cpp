@@ -48,6 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
 #include "EncoderLib/arm/EncAdaptiveLoopFilter_neon.h"
 #include "CommonLib/arm/neon/sum_neon.h"
+#include "CommonLib/arm/mem_neon.h"
 #include <arm_neon.h>
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_ALF
@@ -313,9 +314,76 @@ void getPreBlkStatsAccum_neon( AlfCovariance& alfCovariance, const AlfFilterShap
   CHECK( true, "Unsupported ALF filter shape or number of bins" );
 }
 
+// The filter taps of linear ALF's statistics in the order of calcLinCovariance4, per transposeIdx: the offset { dy, dx }
+// of one sample of each symmetric pair (the other one is at { -dy, -dx }). transposeIdx 1 swaps dy and dx of
+// transposeIdx 0, 2 mirrors dx of transposeIdx 0, 3 swaps dy and dx of transposeIdx 2. The sample itself comes after
+// the last tap.
+static const int8_t g_alfLinTaps7x7[4][12][2] = {
+  { { -3, 0 }, { -2, -1 }, { -2, 0 }, { -2, 1 }, { -1, -2 }, { -1, -1 }, { -1, 0 }, { -1, 1 }, { -1, 2 }, { 0, -3 }, { 0, -2 }, { 0, -1 } },
+  { { 0, -3 }, { -1, -2 }, { 0, -2 }, { 1, -2 }, { -2, -1 }, { -1, -1 }, { 0, -1 }, { 1, -1 }, { 2, -1 }, { -3, 0 }, { -2, 0 }, { -1, 0 } },
+  { { -3, 0 }, { -2, 1 }, { -2, 0 }, { -2, -1 }, { -1, 2 }, { -1, 1 }, { -1, 0 }, { -1, -1 }, { -1, -2 }, { 0, -3 }, { 0, -2 }, { 0, -1 } },
+  { { 0, -3 }, { 1, -2 }, { 0, -2 }, { -1, -2 }, { 2, -1 }, { 1, -1 }, { 0, -1 }, { -1, -1 }, { -2, -1 }, { -3, 0 }, { -2, 0 }, { -1, 0 } },
+};
+static const int8_t g_alfLinTaps5x5[4][6][2] = {
+  { { -2, 0 }, { -1, -1 }, { -1, 0 }, { -1, 1 }, { 0, -2 }, { 0, -1 } },
+  { { 0, -2 }, { -1, -1 }, { 0, -1 }, { 1, -1 }, { -2, 0 }, { -1, 0 } },
+  { { -2, 0 }, { -1, 1 }, { -1, 0 }, { -1, -1 }, { 0, -2 }, { 0, -1 } },
+  { { 0, -2 }, { 1, -1 }, { 0, -1 }, { -1, -1 }, { -2, 0 }, { -1, 0 } },
+};
+
+// EncAdaptiveLoopFilter::m_getLinBlkInputs as getLinBlkInputs (calcLinCovariance4 of each of the 4 rows), for all 16
+// samples of the 4x4 block at once: yLocal = org - rec, and per tap the 16 values rec[dy][dx] + rec[-dy][-dx] -
+// 2 * rec[0][0], stored row after row (16 Pels per tap in ELocal), then the samples themselves. The values wrap in
+// 16 bits as the C code's Pel arithmetic.
+template<int NumTaps>
+static void getLinBlkInputs4x4_neon( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const ptrdiff_t orgStride,
+                                     const Pel* rec, const ptrdiff_t recStride, const int8_t taps[NumTaps][2] )
+{
+  int16x8_t curRows[2];
+  int16x8_t orgRows[2];
+  load_s16x4x4( rec, recStride, curRows );
+  load_s16x4x4( org, orgStride, orgRows );
+  vst1q_s16( &yLocal[0][0], vsubq_s16( orgRows[0], curRows[0] ) );
+  vst1q_s16( &yLocal[2][0], vsubq_s16( orgRows[1], curRows[1] ) );
+
+  int16x8_t cur2Rows[2];
+  cur2Rows[0] = vshlq_n_s16( curRows[0], 1 );
+  cur2Rows[1] = vshlq_n_s16( curRows[1], 1 );
+
+  for( int k = 0; k < NumTaps; k++ )
+  {
+    const ptrdiff_t offset = taps[k][0] * recStride + taps[k][1];
+    int16x8_t posRows[2];
+    int16x8_t negRows[2];
+    load_s16x4x4( rec + offset, recStride, posRows );
+    load_s16x4x4( rec - offset, recStride, negRows );
+    vst1q_s16( ELocal + 16 * k + 0, vsubq_s16( vaddq_s16( posRows[0], negRows[0] ), cur2Rows[0] ) );
+    vst1q_s16( ELocal + 16 * k + 8, vsubq_s16( vaddq_s16( posRows[1], negRows[1] ), cur2Rows[1] ) );
+  }
+
+  vst1q_s16( ELocal + 16 * NumTaps + 0, curRows[0] );
+  vst1q_s16( ELocal + 16 * NumTaps + 8, curRows[1] );
+}
+
+static void getLinBlkInputs_neon( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec,
+                                  const int recStride, const int halfFilterLength, const int transposeIdx )
+{
+  // the 7x7 luma and 5x5 chroma diamonds
+  if( halfFilterLength == 3 )
+  {
+    getLinBlkInputs4x4_neon<12>( ELocal, yLocal, org, orgStride, rec, recStride, g_alfLinTaps7x7[transposeIdx] );
+  }
+  else
+  {
+    CHECKD( halfFilterLength != 2, "Unsupported ALF filter length" );
+    getLinBlkInputs4x4_neon<6>( ELocal, yLocal, org, orgStride, rec, recStride, g_alfLinTaps5x5[transposeIdx] );
+  }
+}
+
 template<>
 void EncAdaptiveLoopFilter::_initEncAdaptiveLoopFilterARM<NEON>()
 {
+  m_getLinBlkInputs = getLinBlkInputs_neon;
   m_getPreBlkStatsAccum = getPreBlkStatsAccum_neon;
   m_getPreBlkStatsAccumEqualBins = getPreBlkStatsAccumEqualBins_neon;
   m_getBlkCovarianceCcAlf        = getBlkCovarianceCcAlf_neon;
