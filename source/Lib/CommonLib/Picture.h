@@ -219,7 +219,8 @@ public:
   std::vector<OutputBitstream>  sliceDataStreams;
 
   bool                          isInitDone;
-  std::atomic_bool              isReconstructed;
+  std::atomic_bool              isReconstructed;    // usable as a reference: reconstruction, motion and ALF APSs final
+  std::atomic_bool              isEncoded;          // finalizePicture done too: slice data written, picture encoder free
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
