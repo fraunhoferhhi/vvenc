@@ -75,6 +75,20 @@ Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
 Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
                              const ptrdiff_t iStrideCur );
 
+// The normalization ( uint32_t )( sad / sqrt( n ) * 2 ) of the n = 16 * 8 and n = 4 * 8 SATDs without the double
+// division: ( sad * M ) >> 42 with M = ceil( 2^43 / c ), c the double sqrt( n ). The result is identical for every sad
+// below 7095941 (checked exhaustively), and these SATDs stay far below: the transform is orthogonal up to sqrt( n ), so
+// the sum of absolute coefficients is at most n * sqrt( n ) * 2047 < 3 million.
+static constexpr uint32_t HAD_SCALE_MAX_SAD   = 7095940;
+static constexpr uint64_t HAD_SCALE_16x8_MULT = 777472127994ull;    // n = 128
+static constexpr uint64_t HAD_SCALE_8x4_MULT  = 1554944255988ull;   // n = 32
+
+static inline uint32_t xScaleHAD( const uint32_t sad, const uint64_t mult )
+{
+  CHECKD( sad > HAD_SCALE_MAX_SAD, "SATD outside the range of the fixed-point normalization" );
+  return uint32_t( ( uint64_t( sad ) * mult ) >> 42 );
+}
+
 #endif // defined( TARGET_SIMD_ARM )
 
 } // namespace vvenc
