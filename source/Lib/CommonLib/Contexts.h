@@ -48,6 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDef.h"
 #include "Slice.h"
 
+#include <utility>
 #include <vector>
 
 //! \ingroup CommonLib
@@ -291,6 +292,8 @@ public:
 public:
   void copyFrom   ( const CtxStore& src )                        { checkInit(); ::memcpy( m_Ctx,               src.m_Ctx,               sizeof( BinProbModel ) * ContextSetCfg::NumberOfContexts ); }
   void copyFrom   ( const CtxStore& src, const CtxSet& ctxSet )  { checkInit(); ::memcpy( m_Ctx+ctxSet.Offset, src.m_Ctx+ctxSet.Offset, sizeof( BinProbModel ) * ctxSet.Size ); }
+  // exchanges the contexts of two stores without copying them (both get a buffer first, a default-constructed store has none)
+  void swap       ( CtxStore& other )                            { checkInit(); other.checkInit(); m_CtxBuffer.swap( other.m_CtxBuffer ); std::swap( m_Ctx, other.m_Ctx ); }
   void init       ( int qp, int initId );
   void setWinSizes( const std::vector<uint8_t>&   log2WindowSizes );
   void loadPStates( const std::vector<uint16_t>&  probStates );
@@ -338,6 +341,12 @@ public:
   {
     m_CtxStore  .copyFrom( ctx.m_CtxStore);
     return *this;
+  }
+
+  // for a save whose source is overwritten before it is read again: O(1) instead of a copy of every context
+  void swap( Ctx& other )
+  {
+    m_CtxStore  .swap( other.m_CtxStore );
   }
 
   SubCtx operator= ( SubCtx&& subCtx )

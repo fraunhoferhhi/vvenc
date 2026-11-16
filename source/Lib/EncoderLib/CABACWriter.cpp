@@ -2155,7 +2155,14 @@ void CABACWriter::transform_unit( const TransformUnit& tu, CUCtx& cuCtx, Partiti
 
   if( cbfLuma )
   {
-    residual_coding( tu, COMP_Y, &cuCtx );
+    if( m_tuResiBits )
+    {
+      addEstFracBits( m_tuResiBits[COMP_Y] );
+    }
+    else
+    {
+      residual_coding( tu, COMP_Y, &cuCtx );
+    }
   }
   if( !lumaOnly )
   {
@@ -2163,7 +2170,14 @@ void CABACWriter::transform_unit( const TransformUnit& tu, CUCtx& cuCtx, Partiti
     {
       if( cbf[ compID ] )
       {
-        residual_coding( tu, compID, &cuCtx );
+        if( m_tuResiBits )
+        {
+          addEstFracBits( m_tuResiBits[compID] );
+        }
+        else
+        {
+          residual_coding( tu, compID, &cuCtx );
+        }
       }
     }
   }

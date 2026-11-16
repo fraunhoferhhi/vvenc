@@ -69,18 +69,22 @@ struct TCoeffOps
   void( *cpyResi4 )         ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
   void( *cpyCoeff8 )        ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );
   void( *cpyCoeff4 )        ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );
-  void( *fastInvCore[5] )   ( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows );
+  // the inverse matrix multiply over the first rows, then the rounding shift and the clip
+  void( *fastInvCore[5] )   ( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
   void( *fastFwdCore_2D[5] )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
   void( *fastFwdCore_1D[5] )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
-  void( *roundClip4 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
   void( *roundClip8 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
-  // 1D transforms called directly by fastForward/InverseDCT2_B*: partial butterflies (fastInvDCT2, fastFwdDCT2[0..1])
-  // and the whole forward DCT-II 16/32/64 (fastFwdDCT2[2..4])
-  void( *fastInvDCT2[3] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum ); // [0]: 2-pt, [1]: 4-pt, [2]: 8-pt
+  // 1D transforms called directly by fastForward/InverseDCT2_B*: partial butterflies (fastInvDCT2[0..2],
+  // fastFwdDCT2[0..1]) and the whole DCT-II 16/32/64 (fastInvDCT2[3..5], fastFwdDCT2[2..4])
+  // [0]: 2-pt, [1]: 4-pt, [2]: 8-pt (partial butterflies), [3]: 16-pt, [4]: 32-pt, [5]: 64-pt (by default fastInverseDCT2_MM)
+  void( *fastInvDCT2[6] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum );
   // [0]: 2-pt, [1]: 4-pt (partial butterflies), [2]: 16-pt, [3]: 32-pt, [4]: 64-pt (by default fastForwardDCT2_MM)
-  void( *fastFwdDCT2[5] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
+  void( *fastFwdDCT2[6] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 ); // [5]: 8-pt (by default fastForwardDCT2_MM)
   void( *fastFwdDST7_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   void( *fastFwdDCT8_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
+  // The first stage of a 2-D forward transform reading the residual itself, by transform type and log2 of the size minus 1.
+  // Where there's none (nullptr), xT widens the residual and takes fastFwdTrans.
+  void( *fastFwdPel[NUM_TRANS_TYPE][6] )( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 );
 
 private:
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
@@ -99,10 +103,15 @@ extern TCoeffOps g_tCoeffOps;
 
 #endif
 
-// Forward DCT-II of size N (16, 32 or 64) as a matrix multiply (through g_tCoeffOps.fastFwdCore_* with SIMD): the
-// default of TCoeffOps::fastFwdDCT2[2..4] and the fallback of their SIMD versions.
+// Forward DCT-II of size N (8, 16, 32 or 64) as a matrix multiply (through g_tCoeffOps.fastFwdCore_* with SIMD): the
+// default of TCoeffOps::fastFwdDCT2[2..5] and the fallback of their SIMD versions.
 template<int N>
 void fastForwardDCT2_MM( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
+
+// Inverse DCT-II of size N (16, 32 or 64) as a matrix multiply (through g_tCoeffOps.fastInvCore and roundClip8 with
+// SIMD): the default of TCoeffOps::fastInvDCT2[3..5].
+template<int N>
+void fastInverseDCT2_MM( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum );
 
 // Zeroes columns reducedLine .. line - 1 of the first cutoff rows, which a forward 1D transform leaves out (dst holds the
 // transform's rows of line coefficients each). The rows from cutoff on stay as they are: TrQuant::xT clears those that are read.

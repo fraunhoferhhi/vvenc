@@ -61,6 +61,19 @@ namespace vvenc {
 typedef Pel Torg;
 typedef Pel Tcur;
 
+#ifdef USE_AVX2
+// The sum of a vector's eight 32-bit lanes, wrapping as 32-bit adds do: the two 128-bit halves added, then within the half by
+// two shuffles and adds. This takes fewer shuffle uops than two hadds and a cross-lane permute (on Intel the shuffles share
+// port 5 with the kernels' own shuffles).
+static ALWAYS_INLINE int32_t xSumOfLanes32_AVX2( const __m256i v )
+{
+  __m128i sum4 = _mm_add_epi32( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
+  sum4         = _mm_add_epi32( sum4, _mm_shuffle_epi32( sum4, 0x4e ) );
+  sum4         = _mm_add_epi32( sum4, _mm_shuffle_epi32( sum4, 0xb1 ) );
+  return _mm_cvtsi128_si32( sum4 );
+}
+#endif
+
 template<X86_VEXT vext >
 Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
 {
@@ -91,9 +104,7 @@ Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
       pSrc1   += iStrideSrc1;
       pSrc2   += iStrideSrc2;
     }
-    Sum = _mm256_hadd_epi32( Sum, Sum );
-    Sum = _mm256_hadd_epi32( Sum, Sum );
-    uiRet = ( _mm_cvtsi128_si32( _mm256_castsi256_si128( Sum ) ) + _mm_cvtsi128_si32( _mm256_castsi256_si128( _mm256_permute2x128_si256( Sum, Sum, 0x11 ) ) ) ) >> uiShift;
+    uiRet = xSumOfLanes32_AVX2( Sum ) >> uiShift;
 #endif
   }
   else if( ( iCols & 7 ) == 0 )
@@ -1962,15 +1973,24 @@ static inline bool xAllMagnitudesBelow_AVX2( const __m256i r[8], const int16_t l
   return _mm256_testz_si256( bits, _mm256_set1_epi16( -limit ) ) != 0;
 }
 
+// The sum of the four 32-bit values of each 128-bit lane, in every value of that lane. Two in-lane shuffles and adds:
+// fewer uops and less latency than two phaddd.
+static inline __m256i xSumInLanes_AVX2( __m256i v )
+{
+  v = _mm256_add_epi32( v, _mm256_shuffle_epi32( v, 0x4e ) );    // plus the other 64-bit half of the lane
+  return _mm256_add_epi32( v, _mm256_shuffle_epi32( v, 0xb1 ) ); // plus the neighbouring 32-bit value
+}
+
 // a + b as 32 bits, for the first 16-bit value of a and of b in each lane, in the first 32-bit value of that lane.
 static inline __m256i xAddFirstValues16_AVX2( const __m256i a, const __m256i b )
 {
   return _mm256_madd_epi16( _mm256_unpacklo_epi16( a, b ), _mm256_set1_epi16( 1 ) );
 }
 
-// The SATDs of two 8x8 blocks of residuals, one per 128-bit lane (register k holds row k of both), added up as the
-// 16x16 and 32x32 kernels do: ( SATD + 2 ) >> 2 per block.
-static ALWAYS_INLINE uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
+// The SATDs of two 8x8 blocks of residuals, one per 128-bit lane (register k holds row k of both), as the 16x16 and
+// 32x32 kernels add them up: ( SATD + 2 ) >> 2 per block, in the first 32-bit value of its lane (the other values
+// are not meaningful).
+static ALWAYS_INLINE __m256i xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
 {
   // the vertical transform and the first horizontal stage on 16-bit values
   xHadamardStage16_AVX2( rows, 4 );
@@ -2005,21 +2025,21 @@ static ALWAYS_INLINE uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
     xAddMaxAbsOfPairs32_AVX2( low, iSum );
     xAddMaxAbsOfPairs32_AVX2( high, iSum );
   }
-  const uint32_t absDc[2] = { (uint32_t) abs( _mm256_extract_epi32( dc, 0 ) ), (uint32_t) abs( _mm256_extract_epi32( dc, 4 ) ) };
+  // the sum of absolute values after the last horizontal stage, of each block in every value of its lane
+  iSum = xSumInLanes_AVX2( _mm256_slli_epi32( iSum, 1 ) );
 
-  iSum = _mm256_slli_epi32( iSum, 1 );      // the sum of absolute values after the last horizontal stage
-  iSum = _mm256_hadd_epi32( iSum, iSum );
-  iSum = _mm256_hadd_epi32( iSum, iSum );   // the sum of each block in the first value of its lane
+  // per block, in the first value of its lane: ( sum - |DC| + ( |DC| >> 2 ) + 2 ) >> 2, 32-bit modular with logical
+  // shifts as the scalar uint32 code
+  const __m256i absDc  = _mm256_abs_epi32( dc );
+  const __m256i blocks = _mm256_add_epi32( _mm256_sub_epi32( iSum, absDc ), _mm256_srli_epi32( absDc, 2 ) );
+  return _mm256_srli_epi32( _mm256_add_epi32( blocks, _mm256_set1_epi32( 2 ) ), 2 );
+}
 
-  uint32_t sad = 0;
-  for( int lane = 0; lane < 2; lane++ )
-  {
-    uint32_t tmp = lane ? _mm256_extract_epi32( iSum, 4 ) : _mm256_extract_epi32( iSum, 0 );
-    tmp -= absDc[lane];
-    tmp += absDc[lane] >> 2;
-    sad += ( tmp + 2 ) >> 2;
-  }
-  return sad;
+// The sum of the per-block values of xCalcHAD8x8Pair_AVX2 results (added up as vectors): the first value of each lane.
+static inline uint32_t xSumHAD8x8Pairs_AVX2( const __m256i blocks )
+{
+  const __m256i sum = _mm256_add_epi32( blocks, _mm256_permute2x128_si256( blocks, blocks, 0x11 ) );
+  return _mm_cvtsi128_si32( _mm256_castsi256_si128( sum ) );
 }
 
 // The SATD of a 16x8 or an 8x16 block. rows[] holds its residuals as two 8x8 blocks, one per 128-bit lane: for 16x8,
@@ -2069,12 +2089,9 @@ static ALWAYS_INLINE uint32_t xCalcHAD16x8Lanes_AVX2( __m256i rows[8] )
     xAddMaxAbsOfPairs32_AVX2( sum, iSum );
     xAddMaxAbsOfPairs32_AVX2( dif, iSum );
   }
-  iSum = _mm256_slli_epi32( iSum, 1 );      // the sum of absolute values after the last horizontal stage
-  iSum = _mm256_hadd_epi32( iSum, iSum );
-  iSum = _mm256_hadd_epi32( iSum, iSum );
-  iSum = _mm256_add_epi32( iSum, _mm256_permute2x128_si256( iSum, iSum, 0x11 ) );
-
-  uint32_t sad = _mm_cvtsi128_si32( _mm256_castsi256_si128( iSum ) );
+  // The 32-bit adds of the eight partial sums wrap as the uint32 arithmetic does, so doubling the total equals doubling each
+  // partial sum.
+  uint32_t sad = ( uint32_t ) xSumOfLanes32_AVX2( iSum ) << 1;   // the sum of absolute values after the last horizontal stage
   sad -= absDc;
   sad += absDc >> 2;
   return xScaleHAD( sad, HAD_SCALE_16x8_MULT );
@@ -2090,6 +2107,7 @@ static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, c
 
   // The 32x32 block is subsampled to 16x16 by averaging 2x2 samples, and the SATD of the 16x16 block is the sum of
   // its four 8x8 SATDs, two rows of two blocks.
+  __m256i blocks = _mm256_setzero_si256();
   for( int l = 0; l < 2; l++ )
   {
     __m256i rows[8];
@@ -2124,8 +2142,9 @@ static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, c
       piCur += iStrideCur * 2;
       piOrg += iStrideOrg * 2;
     }
-    sad += xCalcHAD8x8Pair_AVX2( rows );
+    blocks = _mm256_add_epi32( blocks, xCalcHAD8x8Pair_AVX2( rows ) );
   }
+  sad = xSumHAD8x8Pairs_AVX2( blocks );
 
 #endif
   return ( sad << 2 );
@@ -2139,6 +2158,7 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
   CHECK( iBitDepth > 10, "Only bitdepths up to 10 supported!" );
 
   // the SATD of a 16x16 block is the sum of its four 8x8 SATDs, two rows of two blocks
+  __m256i blocks = _mm256_setzero_si256();
   for( int l = 0; l < 2; l++ )
   {
     __m256i rows[8];
@@ -2148,8 +2168,9 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
       piCur += iStrideCur;
       piOrg += iStrideOrg;
     }
-    sad += xCalcHAD8x8Pair_AVX2( rows );
+    blocks = _mm256_add_epi32( blocks, xCalcHAD8x8Pair_AVX2( rows ) );
   }
+  sad = xSumHAD8x8Pairs_AVX2( blocks );
 
 #endif
   return ( sad );

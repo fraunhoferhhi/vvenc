@@ -57,6 +57,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncHRD.h"
 #include "GOPCfg.h"
 
+#include <algorithm>
+#include <limits>
 #include <list>
 
 //! \ingroup EncoderLib
@@ -320,7 +322,11 @@ bool EncGOP::waitForFreeEncoders()
     return false;
   }
   CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-  m_gopEncCond.wait( lock );
+  // Return as soon as a picture finished since the last return. A finish after the GOP pass released the lock and
+  // before this wait notifies nobody; without the predicate the main thread would sleep until the next finish while
+  // the freed encoder and the pictures waiting for that one stay idle.
+  m_gopEncCond.wait( lock, [this] { return m_numPicsFinished != m_numPicsFinishedWaited; } );
+  m_numPicsFinishedWaited = m_numPicsFinished;
   return true;
 }
 
@@ -347,6 +353,72 @@ void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, Pi
   }
 }
 
+// Whether a reference picture of pic has not started yet (it is still in the processing list).
+static bool hasUnstartedRef( const Picture& pic, const std::list<Picture*>& procList )
+{
+  const Slice& slice = *pic.slices[ 0 ];
+  for( int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++ )
+  {
+    for( int i = 0; i < slice.numRefIdx[ refList ]; i++ )
+    {
+      if( std::find( procList.begin(), procList.end(), slice.refPicList[ refList ][ i ] ) != procList.end() )
+      {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// The ready picture to start next: the key pictures (temporal layer 0 or 1) of the list front's GOP and the next one
+// first, the lower layer first, then the others in list order. The key pictures are the long ones every later picture
+// depends on; started early, they overlap the previous GOP's upper layers instead of running nearly alone after them.
+// Only one GOP ahead: ranking further ahead would keep overtaking the next picture to output (the output would stall).
+// With IFP a picture may start before its references are reconstructed, but only after they have started (else every
+// picture encoder could wait on rows nobody codes), and after any picture whose references are reconstructed: a chain
+// of row-locked pictures must not hold every picture encoder while independent work waits.
+template<typename IsReady>
+static std::list<Picture*>::iterator findNextPicToStart( std::list<Picture*>& procList, bool ifp, IsReady isReady )
+{
+  // ranks: 0 and 1 the key pictures' layers, NON_KEY the others; ROW_LOCKED is added for a row-locked start
+  const int NON_KEY = 2, ROW_LOCKED = 3;
+  if( procList.empty() )
+  {
+    return procList.end();
+  }
+  const int maxRankedGop = procList.front()->gopEntry->m_gopNum + 1;   // the last GOP whose key pictures go first
+  auto best     = procList.end();
+  int  bestRank = std::numeric_limits<int>::max();
+  for( auto it = procList.begin(); it != procList.end(); ++it )
+  {
+    const Picture* pic     = *it;
+    const int      tlRank  = pic->gopEntry->m_gopNum <= maxRankedGop ? std::min<int>( pic->TLayer, NON_KEY ) : NON_KEY;
+    // the rank is at least tlRank; equal ranks keep the first in list order
+    if( tlRank >= bestRank || ! isReady( pic ) )
+    {
+      continue;
+    }
+    const bool rowLocked = ifp && ! pic->slices[ 0 ]->checkAllRefPicsReconstructed();
+    if( rowLocked && hasUnstartedRef( *pic, procList ) )
+    {
+      continue;
+    }
+    const int rank = ( rowLocked ? ROW_LOCKED : 0 ) + tlRank;
+    if( rank < bestRank )
+    {
+      best     = it;
+      bestRank = rank;
+      if( rank == 0 )
+      {
+        break;
+      }
+    }
+  }
+  CHECKD( best != procList.end() && ifp && ! ( *best )->slices[ 0 ]->checkAllRefPicsReconstructed()
+            && hasUnstartedRef( **best, procList ), "a row-locked picture must not start before its references" );
+  return best;
+}
+
 void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
 {
   // in lockstep mode, process all pictures in processing list
@@ -357,7 +429,15 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
   // rate cap and MT: finish the previous GOP before processing the next one
   const bool rateCapPrevGopConstr = m_pcEncCfg->m_rateCap && !m_rcUpdateList.empty();
 
-  if( m_procList.empty() && (!m_gopEncListInput.empty() || !m_rcInputReorderList.empty()) && !rateCapPrevGopConstr )
+  // New pictures join the processing list on every pass and start by temporal layer (findNextPicToStart): fetched only
+  // when the list was empty, they waited until every picture before them had started, and the long key pictures of the
+  // next GOP ran nearly alone. Kept as before: one picture encoder (its start order is the coding order, which AMaxBT
+  // follows), lock-step RC, rate cap, IFP coding one GOP at a time (NumParallelGOPs 0), and the I pictures' temporal
+  // pumping reduction, whose CTU QP memory (sized only then) the key pictures fill and the next I picture reads.
+  const bool ctuQpMemory      = m_globalCtuQpVector.size() > 1;
+  const bool fetchOnEveryPass = m_pcEncCfg->m_maxParallelFrames > 0 && ! lockStepMode && ! m_pcEncCfg->m_rateCap
+                                && ! ( m_pcEncCfg->m_ifpLines && ! m_pcEncCfg->m_numParallelGOPs ) && ! ctuQpMemory;
+  if( ( m_procList.empty() || fetchOnEveryPass ) && (!m_gopEncListInput.empty() || !m_rcInputReorderList.empty()) && !rateCapPrevGopConstr )
   {
     xGetProcessingLists( m_procList, m_rcUpdateList, lockStepMode );
   }
@@ -389,11 +469,13 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
         //                                     remaining frames of this scene-cut-GOP.
         const std::list<Picture *>* rcUpdateList = &m_rcUpdateList;
         const VVEncCfg* encCfg = m_pcEncCfg;
-        auto picItr            = find_if( m_procList.begin(), m_procList.end(), [encCfg, rcUpdateList]( auto pic ) {
-          return ( encCfg->m_ifp || pic->slices[ 0 ]->checkAllRefPicsReconstructed() )
-            && ( !encCfg->m_alf || ( !pic->refApsGlobal || pic->refApsGlobal->initalized ) )
-            && ( !encCfg->m_rateCap || !encCfg->m_maxParallelFrames || !pic->isSceneCutGOP || (!rcUpdateList->front()->isSceneCutCheckAdjQP && !rcUpdateList->front()->gopEntry->m_isStartOfGop ) )
-            ; } );
+        auto isReady = [encCfg, rcUpdateList]( const Picture* cand ) {
+          return ( encCfg->m_ifp || cand->slices[ 0 ]->checkAllRefPicsReconstructed() )
+            && ( !encCfg->m_alf || ( !cand->refApsGlobal || cand->refApsGlobal->initalized ) )
+            && ( !encCfg->m_rateCap || !encCfg->m_maxParallelFrames || !cand->isSceneCutGOP || (!rcUpdateList->front()->isSceneCutCheckAdjQP && !rcUpdateList->front()->gopEntry->m_isStartOfGop ) )
+            ; };
+        auto picItr = fetchOnEveryPass ? findNextPicToStart( m_procList, m_pcEncCfg->m_ifp, isReady )
+                                       : find_if( m_procList.begin(), m_procList.end(), isReady );
 
         const bool nextPicReady = picItr != m_procList.end();
 
@@ -402,7 +484,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
         {
           // non-blocking stage: wait on top level, let other stages do their jobs
           // in non-lockstep mode, check if next picture can be output
-          if( isNonBlocking() || ( ! lockStepMode && m_gopEncListOutput.front()->isReconstructed ) )
+          if( isNonBlocking() || ( ! lockStepMode && m_gopEncListOutput.front()->isEncoded ) )
           {
             break;
           }
@@ -462,7 +544,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
   // the output of a picture is connected to evaluation of the lock-step-chunk
   // if the next picture to output belongs to the current chunk, do output (evaluation) when all pictures of the chunk are finished
 
-  if( m_gopEncListOutput.empty() || !m_gopEncListOutput.front()->isReconstructed ||
+  if( m_gopEncListOutput.empty() || !m_gopEncListOutput.front()->isEncoded ||
     ( lockStepMode && !m_pcEncCfg->m_ifpLines && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xLockStepPicsFinished() ) )
   {
     return;
@@ -600,6 +682,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   if( ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && pic->gopEntry->m_skipFirstPass )
   {
     pic->isReconstructed = true;
+    pic->isEncoded       = true;
     m_freePicEncoderList.push_back( picEncoder );
     return;
   }
@@ -643,13 +726,25 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
     static auto finishTask = []( int, void* task_param )
     {
       FinishTaskParam* param = static_cast<FinishTaskParam*>( task_param );
-      param->picEncoder->finalizePicture( *param->pic );
+      // The pictures that reference this one may start as soon as what they read is final: the reconstruction and
+      // motion (done by the CTU tasks) and the ALF APSs. Writing the slice data, the distortion and the cleanup run on
+      // this one thread after that and do not change the reconstruction, motion or APSs.
+      param->picEncoder->finalizeReference( *param->pic );
       {
         std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
         param->pic->isReconstructed = true;
         if( param->pic->picApsGlobal )
           param->pic->picApsGlobal->initalized = true;
+        // counted like a finish, so that waitForFreeEncoders returns for it: the pictures referencing this one may start
+        param->gopEncoder->m_numPicsFinished++;
+        param->gopEncoder->m_gopEncCond.notify_one();
+      }
+      param->picEncoder->finalizePicture( *param->pic );
+      {
+        std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
+        param->pic->isEncoded = true;
         param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
+        param->gopEncoder->m_numPicsFinished++;
         param->gopEncoder->m_gopEncCond.notify_one();
       }
       delete param;
@@ -660,8 +755,10 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   }
   else
   {
+    picEncoder->finalizeReference( *pic );
     picEncoder->finalizePicture( *pic );
     pic->isReconstructed = true;
+    pic->isEncoded       = true;
     if( pic->picApsGlobal ) pic->picApsGlobal->initalized = true;
     m_freePicEncoderList.push_back( picEncoder );
   }
@@ -681,7 +778,7 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
       {
         if( pic->poc != m_pocRecOut )
           continue;
-        if( ! pic->isReconstructed )
+        if( ! pic->isEncoded )
           return;
 
         const PPS& pps = *(pic->cs->pps);
@@ -703,7 +800,7 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
     // no output needed, simply unmark pictures
     for( auto pic : picList )
     {
-      if( pic->isReconstructed && pic->isNeededForOutput )
+      if( pic->isEncoded && pic->isNeededForOutput )
         pic->isNeededForOutput = false;
     }
   }
@@ -726,7 +823,7 @@ void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
       pic->releaseEncodingBuffers();
       freeList.push_back( pic );
     }
-    else if( pic->isReconstructed && isUnused && ! writeReadsReco )
+    else if( pic->isEncoded && isUnused && ! writeReadsReco )
     {
       pic->releaseEncodingBuffers();
     }
@@ -895,7 +992,7 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noMtsConstraintFlag                          = !(m_pcEncCfg->m_MTSImplicit || m_pcEncCfg->m_MTS);
   ci.noSbtConstraintFlag                          = m_pcEncCfg->m_SBT == 0;
   ci.noAffineMotionConstraintFlag                 = ! m_pcEncCfg->m_Affine;
-  ci.noBcwConstraintFlag                          = true;
+  ci.noBcwConstraintFlag                          = m_pcEncCfg->m_BCW == 0;
   ci.noIbcConstraintFlag                          = m_pcEncCfg->m_IBCMode == 0;
   ci.noCiipConstraintFlag                         = m_pcEncCfg->m_CIIP == 0;
   ci.noGeoConstraintFlag                          = m_pcEncCfg->m_Geo == 0;
@@ -904,7 +1001,7 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noBDPCMConstraintFlag                        = m_pcEncCfg->m_useBDPCM==0;
   ci.noJointCbCrConstraintFlag                    = ! m_pcEncCfg->m_JointCbCrMode;
   ci.noMrlConstraintFlag                          = ! m_pcEncCfg->m_MRL;
-  ci.noIspConstraintFlag                          = true;
+  ci.noIspConstraintFlag                          = m_pcEncCfg->m_ISP == 0;
   ci.noMipConstraintFlag                          = ! m_pcEncCfg->m_MIP;
   ci.noQpDeltaConstraintFlag                      = false;
   ci.noDepQuantConstraintFlag                     = ! m_pcEncCfg->m_DepQuantEnabled;
@@ -1392,9 +1489,9 @@ void EncGOP::xSetupPicAps( Picture* pic )
 
   // The list is kept near this size; the +2 covers up to two GOPs of processing delay (Threads=1 mode). The pictures in
   // flight are not bounded by this size (GOP read-ahead, look-ahead stages), so an entry is deleted only after its last
-  // use: no picture set up later references it, and its own picture is finished (initalized), as finalizePicture still
-  // writes into it. (Pictures skipped in a first pass never finish, but they have no entry: the first pass runs without
-  // ALF.)
+  // use: no picture set up later references it, and its own picture has filled it (initalized: finalizeReference wrote
+  // it before, nothing writes it after). (Pictures skipped in a first pass never finish, but they have no entry: the
+  // first pass runs without ALF.)
   const size_t maxListSize = std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 2 );
   if( m_globalApsList.size() > maxListSize )
   {
@@ -1611,13 +1708,13 @@ void EncGOP::xUpdateRcIfp()
   // non-deterministic behavior: RC update on any finished frame
 
 #if IFP_RC_DETERMINISTIC
-  if( m_rcUpdateList.front()->isReconstructed && m_rcUpdateList.back()->encRCPic && ( m_rcUpdateList.front()->isFlush || m_rcUpdateList.size() == m_pcEncCfg->m_maxParallelFrames ) )
+  if( m_rcUpdateList.front()->isEncoded && m_rcUpdateList.back()->encRCPic && ( m_rcUpdateList.front()->isFlush || m_rcUpdateList.size() == m_pcEncCfg->m_maxParallelFrames ) )
   {   
 #endif
     for( auto it = m_rcUpdateList.begin(); it != m_rcUpdateList.end(); )
     {
       auto pic = *it;
-      if( pic->isReconstructed )
+      if( pic->isEncoded )
       {
         pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
         pic->refCounter--;
@@ -1731,22 +1828,26 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
   }
   else
   {
-    // regular coding mode (non-RC)
+    // regular coding mode (non-RC); the processing list may still hold pictures (fetched on every pass)
+    const size_t numBefore = procList.size();
     // in case of IFP, using the reordered list brings an additional speedup
     if( m_pcEncCfg->m_ifpLines )
     {
       const size_t inputListSize = m_gopEncListInput.size();
 
-      // in case of GOP parallel processing, we do not put all the frames from the current GOP in proc.list.
-      // the reason for this is that we want to add frames from the next GOP as soon as possible.
-      const size_t targetProcListSize = procList.size() + (m_pcEncCfg->m_numParallelGOPs ? m_pcEncCfg->m_maxParallelFrames: inputListSize);
+      // in case of GOP parallel processing, we do not put all the frames from the current GOP in proc.list, but top it
+      // up to MaxParallelFrames pictures on every pass: we want to add frames from the next GOP as soon as possible.
+      const size_t targetProcListSize = m_pcEncCfg->m_numParallelGOPs ? std::max<size_t>( numBefore, m_pcEncCfg->m_maxParallelFrames )
+                                                                      : numBefore + inputListSize;
 
       while( !m_gopEncListInput.empty() && procList.size() < targetProcListSize )
       {
         if( !getReorderedProcList( m_gopEncListInput, procList, (int)procList.size() + m_pcEncCfg->m_maxParallelFrames, true, !m_pcEncCfg->m_numParallelGOPs ) )
           break;
       }
-      if( m_gopEncListInput.size() == inputListSize )
+      // nothing to process and nothing added: no picture can ever start (pictures still in the list may just have to
+      // start first, so that their dependents become accessible)
+      if( m_gopEncListInput.size() == inputListSize && numBefore == 0 )
         msg.log( VVENC_WARNING, "Processing list derivation: attempting to run in a deadlock" );
     }
     else
@@ -1765,8 +1866,8 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
     }
     if( m_pcEncCfg->m_RCTargetBitrate > 0 || m_pcEncCfg->m_rateCap || m_pcEncCfg->m_ifpLines )
     {
-      // update-list is used for RC, RateCapping or IFP
-      std::copy( procList.begin(), procList.end(), std::back_inserter( rcUpdateList ) );
+      // update-list is used for RC, RateCapping or IFP: it takes the newly added pictures
+      std::copy( std::next( procList.begin(), static_cast<std::ptrdiff_t>( numBefore ) ), procList.end(), std::back_inserter( rcUpdateList ) );
     }
   }
   CHECK( ! rcUpdateList.empty() && m_gopEncListOutput.empty(), "first picture in RC update and in output list have to be the same" );
@@ -1777,7 +1878,7 @@ void EncGOP::xUpdateRateCap()
   for( auto it = m_rcUpdateList.begin(); it != m_rcUpdateList.end(); )
   {
     auto pic = *it;
-    if( pic->isReconstructed )
+    if( pic->isEncoded )
     {
       const unsigned uibits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
 

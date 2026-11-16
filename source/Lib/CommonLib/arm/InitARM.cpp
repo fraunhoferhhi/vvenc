@@ -78,15 +78,6 @@ void AdaptiveLoopFilter::initAdaptiveLoopFilterARM()
   }
 }
 
-void AlfCovariance::initAlfCovarianceARM()
-{
-  auto vext = read_arm_extension_flags();
-  if( vext >= NEON )
-  {
-    _initAlfCovarianceARM<NEON>();
-  }
-}
-
 void EncAdaptiveLoopFilter::initEncAdaptiveLoopFilterARM()
 {
   auto vext = read_arm_extension_flags();
@@ -239,6 +230,15 @@ void TCoeffOps::initTCoeffOpsARM()
   }
 #endif  // TARGET_SIMD_ARM_SVE
 }
+
+void TrQuant::initTrQuantARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initTrQuantARM<NEON>();
+  }
+}
 #endif  // ENABLE_SIMD_TRAFO
 
 #if ENABLE_SIMD_OPT_BDOF
@@ -249,6 +249,12 @@ void InterPredInterpolation::initInterPredictionARM()
   {
     _initInterPredictionARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE && ENABLE_SIMD_OPT_MCIF
+  if( vext >= SVE )
+  {
+    _initInterPredictionARM<SVE>();
+  }
+#endif
 }
 #endif
 

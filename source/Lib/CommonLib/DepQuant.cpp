@@ -593,7 +593,8 @@ namespace DQIntern
       const unsigned      lastShift   = ( compID == COMP_Y ? (log2Size+1)>>2 : Clip3<unsigned>(0,2,size>>3) );
       const unsigned      lastOffset  = ( compID == COMP_Y ? ( prefixCtx[log2Size] ) : 0 );
       uint32_t            sumFBits    = 0;
-      unsigned            maxCtxId    = g_uiGroupIdx[std::min<unsigned>(JVET_C0024_ZERO_OUT_TH, size) - 1];
+      const unsigned      numPos      = std::min<unsigned>( JVET_C0024_ZERO_OUT_TH, size );
+      const unsigned      maxCtxId    = g_uiGroupIdx[ numPos - 1 ];
       for( unsigned ctxId = 0; ctxId < maxCtxId; ctxId++ )
       {
         const BinFracBits bits  = fracBitsAccess.getFracBitsArray( ctxSetLast( lastOffset + ( ctxId >> lastShift ) ) );
@@ -601,9 +602,29 @@ namespace DQIntern
         sumFBits               +=            bits.intBits[1];
       }
       ctxBits  [ maxCtxId ]     = sumFBits + ( maxCtxId>3 ? ((maxCtxId-2)>>1)<<SCALE_BITS : 0 ) + bitOffset;
-      for (unsigned pos = 0; pos < std::min<unsigned>(JVET_C0024_ZERO_OUT_TH, size); pos++)
+
+      // lastBits[ pos ] = ctxBits[ g_uiGroupIdx[ pos ] ] for the first numPos positions, written as the runs of
+      // g_uiGroupIdx (Rom.cpp: groups 0 to 3 one position each, 4 and 5 two, 6 and 7 four, 8 and 9 eight), which end at
+      // positions 4, 8, 16 and 32; numPos is 2, 4, 8, 16 or 32
+      CHECKD( numPos < 2 || ( numPos & ( numPos - 1 ) ) != 0, "a last-position run would be cut" );
+      for( unsigned pos = 0; pos < std::min( numPos, 4u ); pos++ )
       {
-        lastBits[ pos ]         = ctxBits[ g_uiGroupIdx[ pos ] ];
+        lastBits[ pos ]         = ctxBits[ pos ];
+      }
+      if( numPos >= 8 )
+      {
+        std::fill_n( lastBits +  4, 2, int32_t( ctxBits[ 4 ] ) );
+        std::fill_n( lastBits +  6, 2, int32_t( ctxBits[ 5 ] ) );
+      }
+      if( numPos >= 16 )
+      {
+        std::fill_n( lastBits +  8, 4, int32_t( ctxBits[ 6 ] ) );
+        std::fill_n( lastBits + 12, 4, int32_t( ctxBits[ 7 ] ) );
+      }
+      if( numPos >= 32 )
+      {
+        std::fill_n( lastBits + 16, 8, int32_t( ctxBits[ 8 ] ) );
+        std::fill_n( lastBits + 24, 8, int32_t( ctxBits[ 9 ] ) );
       }
     }
   }
@@ -764,7 +785,30 @@ namespace DQIntern
     kept.params    = *this;
   }
 
-  void Quantizer::dequantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef) const
+  void dequantCoeffs( const TCoeffSig* qCoeff, TCoeff* tCoeff, const ScanElement* scan, int lastScanIdx, int /*width*/, int /*height*/,
+                      int shift, Intermediate_Int invQScale, const int* piDequantCoef, TCoeff minTCoeff, TCoeff maxTCoeff )
+  {
+    const Intermediate_Int add = (shift < 0) ? 0 : ((1 << shift) >> 1);
+    for( int state = 0, scanIdx = lastScanIdx; scanIdx >= 0; scanIdx-- )
+    {
+      const unsigned   rasterPos = scan[scanIdx].idx;
+      const TCoeffSig& level     = qCoeff[ rasterPos ];
+      // zero levels are not skipped by a (often mispredicted) branch: their qIdx is 0, so they give the 0 of the memset
+      if (piDequantCoef)
+        invQScale = piDequantCoef[rasterPos];//scalingfactor*levelScale
+      if (shift < 0 && level && (piDequantCoef || scanIdx == lastScanIdx))
+      {
+        invQScale <<= -shift;
+      }
+      const int        sign      = (level > 0) - (level < 0);   // -1, 0 or 1
+      Intermediate_Int qIdx      = 2 * level - sign * (state >> 1);
+      int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
+      tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
+      state = ( 32040 >> ((state<<2)+((level&1)<<1)) ) & 3;   // the 16-bit value "32040" represent the state transition table
+    }
+  }
+
+  void Quantizer::dequantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef, DequantCoeffsFunc dequant ) const
   {
 
     //----- set basic parameters -----
@@ -796,27 +840,10 @@ namespace DQIntern
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
     const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
-    Intermediate_Int  shift                 = IQUANT_SHIFT + 1 - qpPer - transformShift + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
-    Intermediate_Int  invQScale             = g_invQuantScales[needsSqrt2ScaleAdjustment?1:0][ qpRem ];
-    Intermediate_Int  add                   = (shift < 0) ? 0 : ((1 << shift) >> 1);
+    const int         shift                 = IQUANT_SHIFT + 1 - qpPer - transformShift + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
+    const int         invQScale             = g_invQuantScales[needsSqrt2ScaleAdjustment?1:0][ qpRem ];
     //----- dequant coefficients -----
-    for( int state = 0, scanIdx = lastScanIdx; scanIdx >= 0; scanIdx-- )
-    {
-      const unsigned   rasterPos = scan[scanIdx].idx;
-      const TCoeffSig& level     = qCoeff[ rasterPos ];
-      // zero levels are not skipped by a (often mispredicted) branch: their qIdx is 0, so they give the 0 of the memset
-      if (enableScalingLists)
-        invQScale = piDequantCoef[rasterPos];//scalingfactor*levelScale
-      if (shift < 0 && level && (enableScalingLists || scanIdx == lastScanIdx))
-      {
-        invQScale <<= -shift;
-      }
-      const int        sign      = (level > 0) - (level < 0);   // -1, 0 or 1
-      Intermediate_Int qIdx      = 2 * level - sign * (state >> 1);
-      int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
-      tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
-      state = ( 32040 >> ((state<<2)+((level&1)<<1)) ) & 3;   // the 16-bit value "32040" represent the state transition table
-    }
+    dequant( qCoeff, tCoeff, scan, lastScanIdx, area.width, area.height, shift, invQScale, enableScalingLists ? piDequantCoef : nullptr, minTCoeff, maxTCoeff );
   }
 
   bool Quantizer::preQuantCoeff( const TCoeff absCoeff, PQData* pqData, int quanCoeff ) const
@@ -1280,7 +1307,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
 
 void DepQuant::xDequantDQ( const TransformUnit& tu,  CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP, bool enableScalingLists, int* piDequantCoef )
 {
-  m_quant.dequantBlock( tu, compID, cQP, recCoeff, enableScalingLists, piDequantCoef );
+  m_quant.dequantBlock( tu, compID, cQP, recCoeff, enableScalingLists, piDequantCoef, m_dequantCoeffs );
 }
 
 DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool enableOpt ) : QuantRDOQ2( other, useScalingLists, enableOpt ), RateEstimator(), m_commonCtx()
@@ -1307,6 +1334,7 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool ena
   m_checkAllRdCostsGe4  = DQIntern::checkAllRdCosts;   // the scalar checks add the Rice code's bits themselves
   m_checkAllRdCostsOdd1 = DQIntern::checkAllRdCostsOdd1;
   m_updateStatesEOS     = DQIntern::updateStatesEOS;
+  m_dequantCoeffs       = DQIntern::dequantCoeffs;
   m_updateStates        = DQIntern::updateStates;
   m_findFirstPos        = DQIntern::findFirstPos;
   m_populateTrellis     = xPopulateTrellis<PointerKernels>;

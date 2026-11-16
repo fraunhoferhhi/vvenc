@@ -316,6 +316,70 @@ private:
 };
 
 
+// Forced inline: the get*Buf( CompArea ) accessors call it for every block, and with the buffer type a constant at each of them
+// the type selection folds away
+ALWAYS_INLINE PelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType type )
+{
+  if (!blk.valid())
+  {
+    return PelBuf();
+  }
+
+  const ComponentID compID = blk.compID;
+
+  PelStorage* buf = type == PIC_PREDICTION ? &m_pred : ( type == PIC_RESIDUAL ? &m_resi : ( type == PIC_RECONSTRUCTION ? &m_reco : nullptr ) );
+  if (type == PIC_ORIGINAL)
+  {
+    buf = m_org;
+  }
+
+  CHECK( !buf, "Unknown buffer requested" );
+
+  CHECKD( !area.blocks[compID].contains( blk ), "Buffer not contained in self requested" );
+
+  CompArea cFinal = blk;
+  cFinal.relativeTo( area.blocks[compID] );
+
+  if( !parent && ( type == PIC_RESIDUAL || type == PIC_PREDICTION ) )
+  {
+    cFinal.x &= ( pcv->maxCUSizeMask >> getComponentScaleX( blk.compID, blk.chromaFormat ) );
+    cFinal.y &= ( pcv->maxCUSizeMask >> getComponentScaleY( blk.compID, blk.chromaFormat ) );
+  }
+
+  return buf->getBuf( cFinal );
+}
+
+ALWAYS_INLINE const CPelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType type ) const
+{
+  if (!blk.valid())
+  {
+    return PelBuf();
+  }
+
+  const ComponentID compID = blk.compID;
+
+  const PelStorage* buf = type == PIC_PREDICTION ? &m_pred : ( type == PIC_RESIDUAL ? &m_resi : ( type == PIC_RECONSTRUCTION ? &m_reco : nullptr ) );
+  if (type == PIC_ORIGINAL)
+  {
+    buf = m_org;
+  }
+
+  CHECK( !buf, "Unknown buffer requested" );
+
+  CHECKD( !area.blocks[compID].contains( blk ), "Buffer not contained in self requested" );
+
+  CompArea cFinal = blk;
+  cFinal.relativeTo( area.blocks[compID] );
+
+  if( !parent && ( type == PIC_RESIDUAL || type == PIC_PREDICTION ) )
+  {
+    cFinal.x &= ( pcv->maxCUSizeMask >> getComponentScaleX( blk.compID, blk.chromaFormat ) );
+    cFinal.y &= ( pcv->maxCUSizeMask >> getComponentScaleY( blk.compID, blk.chromaFormat ) );
+  }
+
+  return buf->getBuf( cFinal );
+}
+
 static inline uint32_t getNumberValidTBlocks(const PreCalcValues& pcv) { return (pcv.chrFormat==CHROMA_400) ? 1 : MAX_NUM_COMP; }
 
 } // namespace vvenc
