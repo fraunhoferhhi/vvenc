@@ -179,6 +179,11 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
 
   int step = optimize_clip ? (numBins+1)/2 : 0;
 
+  // After a win, the trial of that coefficient back by the same step is the factorisation already solved, with the
+  // error the win beat, so it can't win. With a regularised matrix (solver not valid) kE may differ, so it runs.
+  int solvedK   = -1;
+  int solvedInc = 0;
+
   while( step > 0 )
   {
     alf_float_t err_min = err_best;
@@ -187,7 +192,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
 
     for( int k = 0; k < size-1; ++k )
     {
-      if( clip[k] - step >= clip_max[k] )
+      if( clip[k] - step >= clip_max[k] && !( solver.valid && k == solvedK && solvedInc == -step ) )
       {
         clip[k] -= step;
         ky[k] = y[clip[k]][k];
@@ -212,7 +217,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
         }
         clip[k] += step;
       }
-      if( clip[k] + step < numBins )
+      if( clip[k] + step < numBins && !( solver.valid && k == solvedK && solvedInc == step ) )
       {
         clip[k] += step;
         ky[k] = y[clip[k]][k];
@@ -248,6 +253,8 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
 
     if( idx_min >= 0 )
     {
+      solvedK   = idx_min;
+      solvedInc = -inc_min;
       err_best = err_min;
       clip[idx_min] += inc_min;
       ky[idx_min] = y[clip[idx_min]][idx_min];
