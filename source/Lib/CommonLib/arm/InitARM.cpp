@@ -78,15 +78,6 @@ void AdaptiveLoopFilter::initAdaptiveLoopFilterARM()
   }
 }
 
-void AlfCovariance::initAlfCovarianceARM()
-{
-  auto vext = read_arm_extension_flags();
-  if( vext >= NEON )
-  {
-    _initAlfCovarianceARM<NEON>();
-  }
-}
-
 void EncAdaptiveLoopFilter::initEncAdaptiveLoopFilterARM()
 {
   auto vext = read_arm_extension_flags();
