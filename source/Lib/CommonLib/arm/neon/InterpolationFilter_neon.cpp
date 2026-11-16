@@ -198,29 +198,6 @@ void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, const int 
   } while( height != 0 );
 }
 
-static inline int16x4_t filter_horiz_4x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
-{
-  int16x8_t vsrca0 = vld1q_s16( src + 0 );
-  int16x8_t vsrca1 = vld1q_s16( src + 1 );
-  int16x8_t vsrca2 = vld1q_s16( src + 2 );
-  int16x8_t vsrca3 = vld1q_s16( src + 3 );
-
-  int32x4_t a0 = vmull_s16( vget_low_s16( vsrca0 ), vget_low_s16( ch ) );
-  int32x4_t a1 = vmull_s16( vget_low_s16( vsrca1 ), vget_low_s16( ch ) );
-  int32x4_t a2 = vmull_s16( vget_low_s16( vsrca2 ), vget_low_s16( ch ) );
-  int32x4_t a3 = vmull_s16( vget_low_s16( vsrca3 ), vget_low_s16( ch ) );
-
-  a0 = vmlal_s16( a0, vget_high_s16( vsrca0 ), vget_high_s16( ch ) );
-  a1 = vmlal_s16( a1, vget_high_s16( vsrca1 ), vget_high_s16( ch ) );
-  a2 = vmlal_s16( a2, vget_high_s16( vsrca2 ), vget_high_s16( ch ) );
-  a3 = vmlal_s16( a3, vget_high_s16( vsrca3 ), vget_high_s16( ch ) );
-
-  int32x4_t vsuma = horizontal_add_4d_s32x4( a0, a1, a2, a3 );
-  vsuma           = vaddq_s32( vsuma, voffset1 );
-  vsuma           = vshlq_s32( vsuma, invshift1st );
-  return vqmovn_s32( vsuma );
-}
-
 static inline int16x8_t filter_horiz_8x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
   int16x4_t lo = filter_horiz_4x1_N8_neon( src + 0, ch, voffset1, invshift1st );
@@ -234,81 +211,6 @@ static inline int16x8x2_t filter_horiz_16x1_N8_neon( Pel const* src, int16x8_t c
   result.val[0] = filter_horiz_8x1_N8_neon( src + 0, ch, voffset1, invshift1st );
   result.val[1] = filter_horiz_8x1_N8_neon( src + 8, ch, voffset1, invshift1st );
   return result; // explicit return since MSVC for arm64 does not support direct return with typecast
-}
-
-template<bool isLast>
-void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
-                            int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
-{
-  CHECKD( width != 4, "Width must be 4" );
-  CHECKD( height != 4, "Height must be 4" );
-  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
-
-  OFFSET( src, srcStride, -3, -2 );
-
-  const int headRoom = IF_INTERNAL_PREC - clpRng.bd;
-  const int shift1st = IF_FILTER_PREC - headRoom;
-  const int shift2nd = IF_FILTER_PREC + headRoom;
-
-  const int offset1st = -IF_INTERNAL_OFFS * ( 1 << shift1st );
-  int offset2nd;
-  if( isLast )
-  {
-    offset2nd = ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC );
-  }
-  else
-  {
-    offset2nd = 0;
-  }
-  const int32x4_t voffset1 = vdupq_n_s32( offset1st );
-  const int32x4_t voffset2 = vdupq_n_s32( offset2nd );
-  const int16x4_t vibdimax = vdup_n_s16( clpRng.max() );
-
-  int16x8_t ch = vld1q_s16( coeffH );
-  int16x8_t cv = vld1q_s16( coeffV );
-
-  int32x4_t invshift1st = vdupq_n_s32( -shift1st );
-  int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
-
-  int16x4_t vsrcv[9];
-  vsrcv[0] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[1] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[2] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[3] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[4] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[5] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[6] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[7] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[8] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-
-  int h = 0;
-  do
-  {
-    int32x4_t vsum0 = filter_vert_4x1_N6_neon( vsrcv + h, cv, voffset2 );
-
-    int16x4_t vsum01;
-    if( isLast ) // clip
-    {
-      uint16x4_t usum01 = vqmovun_s32( vshlq_s32( vsum0, invshift2nd ) );
-      vsum01 = vmin_s16( vibdimax, vreinterpret_s16_u16( usum01 ) );
-    }
-    else
-    {
-      vsum01 = vqshrn_n_s32( vsum0, IF_FILTER_PREC );
-    }
-
-    vst1_s16( dst, vsum01 );
-
-    dst += dstStride;
-  } while( ++h != 4 );
 }
 
 template<bool isLast>
