@@ -129,6 +129,7 @@ private:
   WaitCounter*                 m_ctuTasksDoneCounter;
   std::vector<ProcessCtuState> m_processStates;
   int                          m_ctuEncDelay;
+  PelStorage                   m_ctuLineBottoms;                     ///< the encoded picture's unfiltered CTU line bottoms (Picture::m_ctuLineBottoms)
 
   LoopFilter*                  m_pLoopFilter;
   EncAdaptiveLoopFilter*       m_pALF;
