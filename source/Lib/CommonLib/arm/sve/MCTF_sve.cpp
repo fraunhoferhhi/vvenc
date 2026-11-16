@@ -264,6 +264,26 @@ int motionErrorLumaFrac_loRes_sve( const Pel* org, const ptrdiff_t origStride, c
   return func( org, origStride, buf, buffStride, w, h, xFilter, yFilter, bitDepth, besterror );
 }
 
+// The squared differences of the column kernel, eight per row in one 16-bit dot product into 64-bit lanes. For 10-bit
+// samples the sum is below 2^30, exact as the NEON kernel's 32-bit sums; for wider samples the int result wraps as
+// they do.
+struct SquareSumSve
+{
+  int64x2_t acc = vdupq_n_s64( 0 );
+
+  void add( const int16x8_t diff ) { acc = vvenc_sdotq_s16( acc, diff, diff ); }
+  int sum() const { return ( int )vaddvq_s64( acc ); }
+};
+
+static void motionErrorLumaFracColumn_loRes_sve( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
+                                                 const ptrdiff_t buffStride, const int w, const int h,
+                                                 const int16_t* xFilter, const int num, const int16_t* const* yFilter,
+                                                 const int* rowOffset, const int bitDepth, int* error )
+{
+  motionErrorLumaFracColumn_loRes_common<SquareSumSve>( org, origStride, buf, buffStride, w, h, xFilter, num, yFilter,
+                                                        rowOffset, bitDepth, error );
+}
+
 void applyPlanarCorrection_sve( const Pel* refPel, const ptrdiff_t refStride, Pel* dstPel, const ptrdiff_t dstStride,
                                 const int32_t w, const int32_t h, const ClpRng& clpRng, const uint16_t motionError )
 {
@@ -604,6 +624,7 @@ void MCTF::_initMCTF_ARM<SVE>()
 {
   m_motionErrorLumaInt8 = motionErrorLumaInt_sve;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_sve;
+  m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_sve;
   m_applyPlanarCorrection = applyPlanarCorrection_sve;
   m_applyBlock = applyBlock_sve;
   m_calcVar = calcVar_sve;
