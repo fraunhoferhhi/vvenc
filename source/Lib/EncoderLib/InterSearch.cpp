@@ -870,6 +870,13 @@ inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
   xTZSearchFlush( rcStruct );
 }
 
+// The stride of the buffers of the fractional search, which hold a block and the extra column of its half-pel positions. At widths 4 and 8 it
+// is twice the width, so that one filter call on the kernel of the next width can fill block and column (see columnInFirstCall).
+static inline int fracSearchStride( const int width )
+{
+  return width <= 8 ? 2 * width : width + 1;
+}
+
 Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
                                             Mv baseRefMv,
                                             int iFrac, Mv& rcMvFrac,
@@ -884,7 +891,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
   const Pel* piRefPos;
-  int iRefStride = pcPatternKey->width + 1;
+  int iRefStride = fracSearchStride( pcPatternKey->width );
   m_pcRdCost->setDistParam( m_cDistParam, *pcPatternKey, m_filteredBlock[0][0][0], iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
 
   const ClpRng& clpRng = m_lumaClpRng;
@@ -892,8 +899,12 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   int height = pattern->height;
   int srcStride = pattern->stride;
 
-  int intStride = width + 1;
-  int dstStride = width + 1;
+  int intStride = fracSearchStride( width );
+  int dstStride = fracSearchStride( width );
+  // At widths 4 and 8 the stride has room for the block and its extra column, and one call at the whole stride fills both on the
+  // kernel of the next width. Wider blocks keep the column as a second call, as a rounded width would leave their kernel.
+  const bool columnInFirstCall = intStride > width + 1;
+  const int  firstCallWidth    = columnInFirstCall ? intStride : width;
   Pel* intPtr;
   Pel* dstPtr;
   int filterSize     = useAltHpelIf ? ( reduceTap >= 1 ? NTAPS_AFFINE : NTAPS_LUMA )
@@ -928,9 +939,11 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
         {
           // the integer position needs no interpolation: its SAD reads the reference itself (see piRefPos below)
 
-          // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-          m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[ 2 ][ 0 ], intStride, width, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-          m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[ 2 ][ 0 ] + width, intStride, 1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[ 2 ][ 0 ], intStride, firstCallWidth, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          if( !columnInFirstCall )
+          {
+            m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[ 2 ][ 0 ] + width, intStride, 1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          }
         }
         else if( 1 == i )
         {
@@ -942,17 +955,18 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
         {
           intPtr = m_filteredBlockTmp[ 2 ][ 0 ] + halfFilterSize * intStride;
           dstPtr = m_filteredBlock[ 0 ][ 2 ][ 0 ];
-          // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-          m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride, 1, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          // The rows follow each other in both buffers, so all of them are one long row. It copies the block and its extra column.
+          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, intStride * height, 1, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
         }
         else if( 5 == i )
         {
           intPtr = m_filteredBlockTmp[ 2 ][ 0 ] + ( halfFilterSize - 1 ) * intStride;
           dstPtr = m_filteredBlock[ 2 ][ 2 ][ 0 ];
-          // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-          m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride, 1, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, firstCallWidth, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          if( !columnInFirstCall )
+          {
+            m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride, 1, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          }
         }
       }
     }
@@ -3126,8 +3140,12 @@ void InterSearch::xExtDIFUpSamplingH(CPelBuf* pattern, bool useAltHpelIf)
   int srcStride        = pattern->stride;
   const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
-  int intStride = width + 1;
-  int dstStride = width + 1;
+  int intStride = fracSearchStride( width );
+  int dstStride = fracSearchStride( width );
+  // At widths 4 and 8 the stride has room for the block and its extra column, and one call at the whole stride fills both on the
+  // kernel of the next width. Wider blocks keep the column as a second call, as a rounded width would leave their kernel.
+  const bool columnInFirstCall = intStride > width + 1;
+  const int  firstCallWidth    = columnInFirstCall ? intStride : width;
   Pel* intPtr;
   Pel* dstPtr;
   int filterSize     = useAltHpelIf ? ( reduceTap >= 1 ? NTAPS_AFFINE : NTAPS_LUMA )
@@ -3140,24 +3158,27 @@ void InterSearch::xExtDIFUpSamplingH(CPelBuf* pattern, bool useAltHpelIf)
 
   // the integer position needs no interpolation: xPatternRefinement's SAD reads the reference itself
 
-  // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-  m_if.filterHor( COMP_Y, srcPtr,         srcStride, m_filteredBlockTmp[2][0],         intStride, width, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-  m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[2][0] + width, intStride,     1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[2][0], intStride, firstCallWidth, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  if( !columnInFirstCall )
+  {
+    m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[2][0] + width, intStride,     1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  }
 
   dstPtr = m_filteredBlock[2][0][0];
   xFilterVerFromReference( pattern, -1, dstPtr, dstStride, height + 1, 2, useAltHpelIf );
 
   intPtr = m_filteredBlockTmp[2][0] + halfFilterSize * intStride;
   dstPtr = m_filteredBlock[0][2][0];
-  // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-  m_if.filterVer( COMP_Y, intPtr,         intStride, dstPtr,         dstStride, width, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-  m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride,     1, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  // The rows follow each other in both buffers, so all of them are one long row. It copies the block and its extra column.
+  m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, intStride * height, 1, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
 
   intPtr = m_filteredBlockTmp[2][0] + (halfFilterSize - 1) * intStride;
   dstPtr = m_filteredBlock[2][2][0];
-  // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-  m_if.filterVer( COMP_Y, intPtr,         intStride, dstPtr,         dstStride, width, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-  m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride,     1, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, firstCallWidth, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  if( !columnInFirstCall )
+  {
+    m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride,     1, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  }
 }
 
 
@@ -3181,8 +3202,8 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
   const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
   Pel const* srcPtr;
-  int intStride = width + 1;
-  int dstStride = width + 1;
+  int intStride = fracSearchStride( width );
+  int dstStride = fracSearchStride( width );
   Pel* intPtr;
   Pel* dstPtr;
 
