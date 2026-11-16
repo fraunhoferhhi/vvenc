@@ -728,6 +728,90 @@ void downsample2x2_neon( const Pel* src, const ptrdiff_t srcStride, Pel* dst, co
   }
 }
 
+// CCLM's linear model, as linTfCore: dst = ( scale * src >> shift ) + offset, clipped to [0, max] with bClip. The
+// product and the arithmetic shift are in 32 bit as there. With the clip, vqmovun narrows to 0..65535 and the min to
+// max completes the C code's clip (ClpRng::min() is 0). Without it, vqmovn narrows with saturation like x86's packs,
+// which equals the C code whenever the value fits 16 bits.
+static inline int32x4_t linTf4Wide_neon( const int16x4_t src, const int32x4_t scale, const int32x4_t negShift,
+                                         const int32x4_t offset )
+{
+  const int32x4_t product = vmulq_s32( vmovl_s16( src ), scale );
+  return vaddq_s32( vshlq_s32( product, negShift ), offset );
+}
+
+static void linTf4_neon( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, int scale,
+                         unsigned shift, int offset, const ClpRng& clpRng, bool bClip )
+{
+  CHECKD( width & 3, "Width must be a multiple of 4" );
+
+  const int32x4_t vscale    = vdupq_n_s32( scale );
+  const int32x4_t vnegShift = vdupq_n_s32( -static_cast<int>( shift ) );
+  const int32x4_t voffset   = vdupq_n_s32( offset );
+
+  if( bClip )
+  {
+    const uint16x4_t vmax = vdup_n_u16( clpRng.max() );
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 4 )
+      {
+        const int16x4_t  s = vld1_s16( src + x );
+        const uint16x4_t d = vqmovun_s32( linTf4Wide_neon( s, vscale, vnegShift, voffset ) );
+        vst1_s16( dst + x, vreinterpret_s16_u16( vmin_u16( d, vmax ) ) );
+      }
+    }
+  }
+  else
+  {
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 4 )
+      {
+        const int16x4_t s = vld1_s16( src + x );
+        vst1_s16( dst + x, vqmovn_s32( linTf4Wide_neon( s, vscale, vnegShift, voffset ) ) );
+      }
+    }
+  }
+}
+
+static void linTf8_neon( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, int scale,
+                         unsigned shift, int offset, const ClpRng& clpRng, bool bClip )
+{
+  CHECKD( width & 7, "Width must be a multiple of 8" );
+
+  const int32x4_t vscale    = vdupq_n_s32( scale );
+  const int32x4_t vnegShift = vdupq_n_s32( -static_cast<int>( shift ) );
+  const int32x4_t voffset   = vdupq_n_s32( offset );
+
+  if( bClip )
+  {
+    const uint16x8_t vmax = vdupq_n_u16( clpRng.max() );
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        const int16x8_t  s    = vld1q_s16( src + x );
+        const uint16x4_t low  = vqmovun_s32( linTf4Wide_neon( vget_low_s16( s ), vscale, vnegShift, voffset ) );
+        const uint16x4_t high = vqmovun_s32( linTf4Wide_neon( vget_high_s16( s ), vscale, vnegShift, voffset ) );
+        vst1q_s16( dst + x, vreinterpretq_s16_u16( vminq_u16( vcombine_u16( low, high ), vmax ) ) );
+      }
+    }
+  }
+  else
+  {
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        const int16x8_t s    = vld1q_s16( src + x );
+        const int16x4_t low  = vqmovn_s32( linTf4Wide_neon( vget_low_s16( s ), vscale, vnegShift, voffset ) );
+        const int16x4_t high = vqmovn_s32( linTf4Wide_neon( vget_high_s16( s ), vscale, vnegShift, voffset ) );
+        vst1q_s16( dst + x, vcombine_s16( low, high ) );
+      }
+    }
+  }
+}
+
 template<int W>
 void addAvg_strided_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
                           int width, int height, unsigned rshift, int offset, const ClpRng& clpRng );
@@ -1670,6 +1754,8 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   blockStats4x4       = blockStats4x4_neon;
   highPassCorrelation = highPassCorrelation_neon;
   downsample2x2       = downsample2x2_neon;
+  linTf4              = linTf4_neon;
+  linTf8              = linTf8_neon;
   addAvg4  = addAvg_strided_neon<4>;
   removeHighFreq8 = removeHighFreq8_neon;
   sub8            = sub8_neon;
