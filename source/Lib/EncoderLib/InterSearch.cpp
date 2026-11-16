@@ -5568,8 +5568,10 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   const bool skipRepeatedTests = !m_pcEncCfg->m_ifpLines;
   AffineCpmvTestedSet testedMvs( mvNum );
 
-  // Read back what searches of this block found at MVs they tested. Not with IFP, for the same reason, and not at the
-  // Affine levels above 3, which come back to almost no MVs. The prediction is made only when a gradient step needs it:
+  // Read back what searches of this block found at MVs they tested. Not with IFP: a result read back leaves predBuf
+  // unwritten, and with IFP the gradient below can read predBuf left by the previous search (when the start MV is out
+  // of range, as above), which would then hold the prediction of other MVs than the ones being looked at. Not at Affine
+  // levels above 3 either, which come back to almost no MVs. The prediction is made only when a gradient step needs it:
   // predIsCurrent says predBuf holds the MVs being looked at.
   const bool useResults = skipRepeatedTests && m_pcEncCfg->m_Affine <= 3;
   if( useResults )
