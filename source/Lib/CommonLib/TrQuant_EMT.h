@@ -79,7 +79,7 @@ struct TCoeffOps
   // [0]: 2-pt, [1]: 4-pt, [2]: 8-pt (partial butterflies), [3]: 16-pt, [4]: 32-pt, [5]: 64-pt (by default fastInverseDCT2_MM)
   void( *fastInvDCT2[6] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum );
   // [0]: 2-pt, [1]: 4-pt (partial butterflies), [2]: 16-pt, [3]: 32-pt, [4]: 64-pt (by default fastForwardDCT2_MM)
-  void( *fastFwdDCT2[5] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
+  void( *fastFwdDCT2[6] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 ); // [5]: 8-pt (by default fastForwardDCT2_MM)
   void( *fastFwdDST7_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   void( *fastFwdDCT8_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   // The first stage of a 2-D forward transform reading the residual itself, by transform type and log2 of the size minus 1.
@@ -103,8 +103,8 @@ extern TCoeffOps g_tCoeffOps;
 
 #endif
 
-// Forward DCT-II of size N (16, 32 or 64) as a matrix multiply (through g_tCoeffOps.fastFwdCore_* with SIMD): the
-// default of TCoeffOps::fastFwdDCT2[2..4] and the fallback of their SIMD versions.
+// Forward DCT-II of size N (8, 16, 32 or 64) as a matrix multiply (through g_tCoeffOps.fastFwdCore_* with SIMD): the
+// default of TCoeffOps::fastFwdDCT2[2..5] and the fallback of their SIMD versions.
 template<int N>
 void fastForwardDCT2_MM( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 
