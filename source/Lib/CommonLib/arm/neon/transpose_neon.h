@@ -99,6 +99,19 @@ static inline void transpose_8x8_u16( const uint16x8_t* rows, uint16x8_t* column
   columns[7] = c37.val[1];
 }
 
+// Transpose 32-bit 4x4 in place: a0 becomes the old a0[0] a1[0] a2[0] a3[0], a1 the old lanes 1, and so on.
+static inline void transpose_4x4_u32( uint32x4_t& a0, uint32x4_t& a1, uint32x4_t& a2, uint32x4_t& a3 )
+{
+  // a01.val[0]: a0[0] a1[0] a0[2] a1[2], a01.val[1]: a0[1] a1[1] a0[3] a1[3]; a23 alike
+  const uint32x4x2_t a01 = vtrnq_u32( a0, a1 );
+  const uint32x4x2_t a23 = vtrnq_u32( a2, a3 );
+
+  a0 = vcombine_u32( vget_low_u32( a01.val[0] ), vget_low_u32( a23.val[0] ) );
+  a1 = vcombine_u32( vget_low_u32( a01.val[1] ), vget_low_u32( a23.val[1] ) );
+  a2 = vcombine_u32( vget_high_u32( a01.val[0] ), vget_high_u32( a23.val[0] ) );
+  a3 = vcombine_u32( vget_high_u32( a01.val[1] ), vget_high_u32( a23.val[1] ) );
+}
+
 static inline void transpose_concat_8x4_s16( int16x8_t a0, int16x8_t a1, int16x8_t a2, int16x8_t a3,
                                              int16x8_t& b0, int16x8_t& b1, int16x8_t& b2, int16x8_t& b3 )
 {
