@@ -249,6 +249,12 @@ void InterPredInterpolation::initInterPredictionARM()
   {
     _initInterPredictionARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE && ENABLE_SIMD_OPT_MCIF
+  if( vext >= SVE )
+  {
+    _initInterPredictionARM<SVE>();
+  }
+#endif
 }
 #endif
 
