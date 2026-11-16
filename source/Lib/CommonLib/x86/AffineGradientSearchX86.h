@@ -292,27 +292,13 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
 
 #if USE_AVX2
 
-  // The normal equations of the affine motion search, computed per 4x4 block.
-  //
-  // Per pixel the scalar version (AffineGradientSearch::xEqualCoeffComputer) adds the products iC[p] * iC[q] and
-  // iC[p] * 8 * residue, where every iC[p] is a sum of terms coef * cx^i * cy^j * d with d one of the two gradients
-  // and cx = 4 * ( x / 4 ) + 2, cy = 4 * ( y / 4 ) + 2: constant within each 4x4 block. So every matrix entry is a
-  // weighted sum of five per-block sums, S = sum of d0 * d0, d0 * d1, d1 * d1, d0 * residue and d1 * residue, weighted
-  // by cx^i * cy^j with i + j <= 2. The block sums come from _mm256_madd_epi16 (16 pixels per instruction); the
-  // weights are applied once per block instead of once per pixel. All sums are exact integers (int32 within a block,
-  // int64 above), so the result is identical to the per-pixel sums of the scalar version.
+  // The normal equations of the affine motion search, computed per 4x4 block (the scheme is described at
+  // eqCoeffMatrixFromBlockTotals in AffineGradientSearch.h). The block sums come from _mm256_madd_epi16 (16 pixels per
+  // instruction); the weights are applied once per block instead of once per pixel.
   //
   // Ranges: the block sums are exact in 32 bits while the gradients and the residue stay within +-8192 (16 * 8192 *
   // 8192 = 2^30); real encodes have shown values up to 13 bits (the unit test checks those). A weighted sum over a
   // 128x128 block stays below 2^55.
-
-  enum EqCoeffSum { SUM_D0D0, SUM_D0D1, SUM_D1D1, SUM_D0R, SUM_D1R, NUM_EQ_COEFF_SUMS };
-  static constexpr int NUM_EQ_COEFF_POWERS = 6;   // cx^i * cy^j for (i, j) = (0,0) (1,0) (2,0) (0,1) (1,1) (0,2)
-
-  static inline int eqCoeffPower( int i, int j )
-  {
-    return j == 0 ? i : ( j == 1 ? 3 + i : 5 );
-  }
 
   // The five sums of the four 4x4 blocks of 16 pixels and 4 rows starting at the given pointers, one block per 64-bit
   // lane: blockSum[sum] holds block k's sum in both 32-bit halves of lane k.
@@ -350,10 +336,6 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
     const __m128i halves = _mm_add_epi64( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
     return _mm_cvtsi128_si64( _mm_add_epi64( halves, _mm_unpackhi_epi64( halves, halves ) ) );
   }
-
-  // One term coef * cx^i * cy^j * d of an iC[p], with d the gradient grad (0 or 1); an iC[p] has one or two terms.
-  struct EqCoeffTerm  { int coef, i, j, grad; };
-  struct EqCoeffTerms { int num; EqCoeffTerm term[2]; };
 
   template<bool b6Param>
   static void simdEqualCoeffComputer_avx2(Pel* const pResidue, const int residueStride, Pel **const ppDerivate, const int derivateBufStride, const int width, const int height, int64_t(*pEqualCoeff)[7])
@@ -404,63 +386,17 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
       }
     }
 
-    // weighted[s][power]: the sum over the block of cx^i * cy^j * S. With B_b the sums of band b and N bands:
-    //   sum_b ( N - b ) B_b = runSum1, sum_b ( N - b )^2 B_b = 2 runSum2 - runSum1, hence
-    //   sum_b b B_b = N total - runSum1 and sum_b b^2 B_b = N^2 total - 2 N runSum1 + 2 runSum2 - runSum1,
-    // and cy = 4 b + 2, cy^2 = 16 b^2 + 16 b + 4. All exact in 64 bits (below 2^55 for 128x128 and 14-bit inputs).
-    int64_t weighted[NUM_EQ_COEFF_SUMS][NUM_EQ_COEFF_POWERS];
-    const int64_t numBands = height / 4;
+    EqCoeffBlockTotals totals;
     for( int s = 0; s < NUM_EQ_COEFF_SUMS; s++ )
     {
-      const int64_t sum0 = eqCoeffLaneSum( total[s][0] ), sumCx = eqCoeffLaneSum( total[s][1] ), sumCx2 = eqCoeffLaneSum( total[s][2] );
-      const int64_t run0 = eqCoeffLaneSum( runSum1[s][0] ), runCx = eqCoeffLaneSum( runSum1[s][1] ), run2 = eqCoeffLaneSum( runSum2[s] );
-      const int64_t sumB   = numBands * sum0 - run0;    // sum_b b B_b
-      const int64_t sumBCx = numBands * sumCx - runCx;  // sum_b b B_b, weighted by cx
-      const int64_t sumB2  = numBands * numBands * sum0 - 2 * numBands * run0 + 2 * run2 - run0;
-      weighted[s][eqCoeffPower( 0, 0 )] = sum0;
-      weighted[s][eqCoeffPower( 1, 0 )] = sumCx;
-      weighted[s][eqCoeffPower( 2, 0 )] = sumCx2;
-      weighted[s][eqCoeffPower( 0, 1 )] = 4 * sumB + 2 * sum0;
-      weighted[s][eqCoeffPower( 1, 1 )] = 4 * sumBCx + 2 * sumCx;
-      weighted[s][eqCoeffPower( 0, 2 )] = 16 * sumB2 + 16 * sumB + 4 * sum0;
+      totals.sum[s]    = eqCoeffLaneSum( total[s][0] );
+      totals.sumCx[s]  = eqCoeffLaneSum( total[s][1] );
+      totals.sumCx2[s] = eqCoeffLaneSum( total[s][2] );
+      totals.run[s]    = eqCoeffLaneSum( runSum1[s][0] );
+      totals.runCx[s]  = eqCoeffLaneSum( runSum1[s][1] );
+      totals.run2[s]   = eqCoeffLaneSum( runSum2[s] );
     }
-
-    // the iC[p] of the scalar version as terms: 6 parameters iC = { d0, cx d0, d1, cx d1, cy d0, cy d1 },
-    // 4 parameters iC = { d0, cx d0 + cy d1, d1, cy d0 - cx d1 }
-    static constexpr int n = b6Param ? 6 : 4;
-    static constexpr EqCoeffTerms terms6[6] = { { 1, { { 1, 0, 0, 0 } } }, { 1, { { 1, 1, 0, 0 } } }, { 1, { { 1, 0, 0, 1 } } },
-                                                { 1, { { 1, 1, 0, 1 } } }, { 1, { { 1, 0, 1, 0 } } }, { 1, { { 1, 0, 1, 1 } } } };
-    static constexpr EqCoeffTerms terms4[4] = { { 1, { { 1, 0, 0, 0 } } }, { 2, { { 1, 1, 0, 0 }, { 1, 0, 1, 1 } } },
-                                                { 1, { { 1, 0, 0, 1 } } }, { 2, { { 1, 0, 1, 0 }, { -1, 1, 0, 1 } } } };
-    const EqCoeffTerms* terms = b6Param ? terms6 : terms4;
-    static constexpr EqCoeffSum gradProduct[2][2] = { { SUM_D0D0, SUM_D0D1 }, { SUM_D0D1, SUM_D1D1 } };
-
-    for( int col = 0; col < n; col++ )
-    {
-      for( int row = col; row < n; row++ )
-      {
-        int64_t sum = 0;
-        for( int a = 0; a < terms[col].num; a++ )
-        {
-          const EqCoeffTerm& t = terms[col].term[a];
-          for( int b = 0; b < terms[row].num; b++ )
-          {
-            const EqCoeffTerm& u = terms[row].term[b];
-            sum += t.coef * u.coef * weighted[gradProduct[t.grad][u.grad]][eqCoeffPower( t.i + u.i, t.j + u.j )];
-          }
-        }
-        // as the previous SIMD versions: the entry and its mirror both take the sum of the upper entry
-        pEqualCoeff[col + 1][row] += sum;
-        pEqualCoeff[row + 1][col]  = pEqualCoeff[col + 1][row];
-      }
-      int64_t sum = 0;
-      for( int a = 0; a < terms[col].num; a++ )
-      {
-        const EqCoeffTerm& t = terms[col].term[a];
-        sum += t.coef * weighted[t.grad == 0 ? SUM_D0R : SUM_D1R][eqCoeffPower( t.i, t.j )];
-      }
-      pEqualCoeff[col + 1][n] += sum * 8;   // the scalar version's residue * (1 << 3)
-    }
+    eqCoeffMatrixFromBlockTotals<b6Param>( totals, height / 4, pEqualCoeff );
   }
 #endif
 
