@@ -198,11 +198,40 @@ void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, const int 
   } while( height != 0 );
 }
 
+// The horizontal stage of the 8-tap filters for 8 outputs, tap by tap: offset + sum of ch[t] * src[x + t] over t = 0 .. 7,
+// in 32 bits for the low and the high four outputs, shifted and narrowed to 16 bits.
 static inline int16x8_t filter_horiz_8x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x4_t lo = filter_horiz_4x1_N8_neon( src + 0, ch, voffset1, invshift1st );
-  int16x4_t hi = filter_horiz_4x1_N8_neon( src + 4, ch, voffset1, invshift1st );
-  return vcombine_s16( lo, hi );
+  const int16x8_t vsrc0 = vld1q_s16( src + 0 );
+  const int16x8_t vsrc1 = vld1q_s16( src + 1 );
+  const int16x8_t vsrc2 = vld1q_s16( src + 2 );
+  const int16x8_t vsrc3 = vld1q_s16( src + 3 );
+  const int16x8_t vsrc4 = vld1q_s16( src + 4 );
+  const int16x8_t vsrc5 = vld1q_s16( src + 5 );
+  const int16x8_t vsrc6 = vld1q_s16( src + 6 );
+  const int16x8_t vsrc7 = vld1q_s16( src + 7 );
+
+  int32x4_t vsuma = vmlal_lane_s16( voffset1, vget_low_s16( vsrc0 ), vget_low_s16( ch ), 0 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc1 ), vget_low_s16( ch ), 1 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc2 ), vget_low_s16( ch ), 2 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc3 ), vget_low_s16( ch ), 3 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc4 ), vget_high_s16( ch ), 0 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc5 ), vget_high_s16( ch ), 1 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc6 ), vget_high_s16( ch ), 2 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc7 ), vget_high_s16( ch ), 3 );
+
+  int32x4_t vsumb = vmlal_lane_s16( voffset1, vget_high_s16( vsrc0 ), vget_low_s16( ch ), 0 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc1 ), vget_low_s16( ch ), 1 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc2 ), vget_low_s16( ch ), 2 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc3 ), vget_low_s16( ch ), 3 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc4 ), vget_high_s16( ch ), 0 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc5 ), vget_high_s16( ch ), 1 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc6 ), vget_high_s16( ch ), 2 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc7 ), vget_high_s16( ch ), 3 );
+
+  vsuma = vshlq_s32( vsuma, invshift1st );
+  vsumb = vshlq_s32( vsumb, invshift1st );
+  return vcombine_s16( vqmovn_s32( vsuma ), vqmovn_s32( vsumb ) );
 }
 
 static inline int16x8x2_t filter_horiz_16x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
@@ -392,29 +421,45 @@ void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride
   } while( --height != 0 );
 }
 
+// The horizontal stage of the 4-tap filters for 4 outputs, tap by tap: offset + sum of ch[t] * src[x + t] over
+// t = 0 .. 3, shifted and narrowed to 16 bits.
 static inline int16x4_t filter_horiz_4x1_N4_neon( Pel const* src, int16x4_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x4_t vsrca0 = vld1_s16( src + 0 );
-  int16x4_t vsrca1 = vld1_s16( src + 1 );
-  int16x4_t vsrca2 = vld1_s16( src + 2 );
-  int16x4_t vsrca3 = vld1_s16( src + 3 );
+  const int16x4_t vsrc0 = vld1_s16( src + 0 );
+  const int16x4_t vsrc1 = vld1_s16( src + 1 );
+  const int16x4_t vsrc2 = vld1_s16( src + 2 );
+  const int16x4_t vsrc3 = vld1_s16( src + 3 );
 
-  int32x4_t a0 = vmull_s16( vsrca0, ch );
-  int32x4_t a1 = vmull_s16( vsrca1, ch );
-  int32x4_t a2 = vmull_s16( vsrca2, ch );
-  int32x4_t a3 = vmull_s16( vsrca3, ch );
+  int32x4_t vsum = vmlal_lane_s16( voffset1, vsrc0, ch, 0 );
+  vsum           = vmlal_lane_s16( vsum, vsrc1, ch, 1 );
+  vsum           = vmlal_lane_s16( vsum, vsrc2, ch, 2 );
+  vsum           = vmlal_lane_s16( vsum, vsrc3, ch, 3 );
 
-  int32x4_t vsuma = horizontal_add_4d_s32x4( a0, a1, a2, a3 );
-  vsuma           = vaddq_s32( vsuma, voffset1 );
-  vsuma           = vshlq_s32( vsuma, invshift1st );
-  return vqmovn_s32( vsuma );
+  vsum = vshlq_s32( vsum, invshift1st );
+  return vqmovn_s32( vsum );
 }
 
+// The same for 8 outputs, in 32 bits for the low and the high four.
 static inline int16x8_t filter_horiz_8x1_N4_neon( Pel const* src, int16x4_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x4_t lo = filter_horiz_4x1_N4_neon( src + 0, ch, voffset1, invshift1st );
-  int16x4_t hi = filter_horiz_4x1_N4_neon( src + 4, ch, voffset1, invshift1st );
-  return vcombine_s16( lo, hi );
+  const int16x8_t vsrc0 = vld1q_s16( src + 0 );
+  const int16x8_t vsrc1 = vld1q_s16( src + 1 );
+  const int16x8_t vsrc2 = vld1q_s16( src + 2 );
+  const int16x8_t vsrc3 = vld1q_s16( src + 3 );
+
+  int32x4_t vsuma = vmlal_lane_s16( voffset1, vget_low_s16( vsrc0 ), ch, 0 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc1 ), ch, 1 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc2 ), ch, 2 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc3 ), ch, 3 );
+
+  int32x4_t vsumb = vmlal_lane_s16( voffset1, vget_high_s16( vsrc0 ), ch, 0 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc1 ), ch, 1 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc2 ), ch, 2 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc3 ), ch, 3 );
+
+  vsuma = vshlq_s32( vsuma, invshift1st );
+  vsumb = vshlq_s32( vsumb, invshift1st );
+  return vcombine_s16( vqmovn_s32( vsuma ), vqmovn_s32( vsumb ) );
 }
 
 static inline int16x8x2_t filter_horiz_16x1_N4_neon( Pel const* src, int16x4_t ch, int32x4_t voffset1, int32x4_t invshift1st )
