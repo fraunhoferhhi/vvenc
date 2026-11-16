@@ -2640,10 +2640,12 @@ void FGAnalyzer::limitCutoff( ComponentID compId, int avgH, int avgV )
 }
 
 // Smooths the cut-offs over consecutive intervals with a [1 2 1] filter ([3 1] at the ends), in place as in VTM.
+// A single interval has no neighbour to smooth with: the [3 1] end filter would read the unused second interval's
+// values (0 from init, or stale ones from an earlier picture) and lower the cut-offs, below 2 at worst.
 void FGAnalyzer::limitCutoffConsecutive( ComponentID compId )
 {
   SeiFgc::CompModel& cm = m_compModel[ compId ];
-  if( !cm.presentFlag )
+  if( !cm.presentFlag || cm.numIntensityIntervals < 2 )
   {
     return;
   }
