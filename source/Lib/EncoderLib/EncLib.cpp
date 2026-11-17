@@ -288,6 +288,12 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_gopEncoder->init( m_encCfg, m_preProcess->getGOPCfg(), *m_rateCtrl, m_threadPool, false );
   m_encStages.push_back( m_gopEncoder );
   m_maxNumPicShared += minQueueSize;
+  // the stages that wait for their own pool tasks start the GOP encoder's ready pictures meanwhile
+  if( m_encCfg.m_stageParallelProc )
+  {
+    if( m_MCTF )   m_MCTF  ->setStartStage( m_gopEncoder );
+    if( m_cuTree ) m_cuTree->setStartStage( m_gopEncoder );
+  }
 
   // additional pictures due to structural delay
   m_maxNumPicShared += m_preProcess->getGOPCfg()->getNumReorderPics()[ m_encCfg.m_maxTLayer ];
