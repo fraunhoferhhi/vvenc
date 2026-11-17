@@ -973,7 +973,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ?      0.0 : 0.5 ;
   if( c->m_maxParallelFrames < 0 )
   {
-    c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
+    const bool rateCapped     = c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX;
+    const bool noTiles        = !c->m_picPartitionFlag && c->m_numTileCols <= 1 && c->m_numTileRows <= 1 && c->m_tileColumnWidth[0] == 0 && c->m_tileRowHeight[0] == 0;
+    const bool manyFramesHelp = c->m_ifp == 0 && c->m_entropyCodingSyncEnabled == 0 && noTiles
+                                && c->m_numThreads >= 5 * getNumThreadsDefault( c ) / 2 && c->m_CTUSize == 128
+                                && c->m_RCTargetBitrate == 0 && !rateCapped && c->m_GOPSize >= 8 && c->m_IntraPeriod != 1;
+    c->m_maxParallelFrames    = std::min( c->m_numThreads, manyFramesHelp ? 8 : 4 );
   }
 
   if( c->m_ifpLines > 0 && !c->m_ifp )
