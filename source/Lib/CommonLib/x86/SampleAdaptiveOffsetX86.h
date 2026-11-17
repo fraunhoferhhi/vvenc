@@ -998,9 +998,115 @@ void calcSaoStatisticsBo_SIMD(int width,int endX,int endY,Pel*  srcLine,Pel*  or
   }
 }
 
+#ifdef USE_AVX2
+// Edge offset statistics of numRows rows, 16 samples per 256-bit register (width a multiple of 16), for all four edge
+// directions: a sample's class is sign( s - s[nbA] ) + sign( s - s[nbB] ) + 2, with nbA / nbB the offsets of its two
+// neighbours along the direction. count[c] and diff[c] (c = 0..4, SAO_CLASS_EO_PLAIN = 2) get the number of samples of
+// class c and their sum of org - rec ADDED, as the scalar functions do. The first sample of each row (skipFirst) and the
+// last numSkipLast samples (at most 15) take no class; their neighbours are still read, as in the SSE functions, so one
+// sample left and right of the row must be readable.
+static void calcSaoStatisticsEo_AVX2( const Pel* srcLine, const Pel* orgLine, const int srcStride, const int orgStride,
+                                      const int width, const int numRows, const ptrdiff_t nbA, const ptrdiff_t nbB,
+                                      const bool skipFirst, const int numSkipLast, int64_t* count, int64_t* diff )
+{
+  CHECKD( numSkipLast < 0 || numSkipLast > 15, "the excluded samples must lie in the last 16" );
+  // the class counts are 16 bit per lane, and a lane counts at most one sample per 16 of each row
+  CHECKD( width / 16 * std::max( numRows, 0 ) > 32767, "16-bit class counts could overflow" );
+
+  const __m256i one = _mm256_set1_epi16( 1 );
+  const __m256i two = _mm256_set1_epi16( 2 );
+  // -1 in the lanes of the excluded samples: their class becomes 0xffff, which no class compare matches
+  const __m256i firstExcluded = _mm256_insert_epi16( _mm256_setzero_si256(), skipFirst ? -1 : 0, 0 );
+  static const int16_t lastExcludedTable[32] = { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+                                                 -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+  const __m256i lastExcluded = _mm256_loadu_si256( ( const __m256i* ) &lastExcludedTable[numSkipLast] );
+
+  // The plain class (2), the most frequent, is not compared: its sums are those of all samples minus the other four
+  // classes'. The four classes compared, in order:
+  static const int edgeClasses[4] = { 0, 1, 3, 4 };
+  __m256i diffSum [4];   // 32-bit sums of org - rec per class
+  __m256i countSum[4];   // 16-bit counts per class
+  __m256i diffSumAll = _mm256_setzero_si256();
+  for( int i = 0; i < 4; i++ )
+  {
+    diffSum [i] = _mm256_setzero_si256();
+    countSum[i] = _mm256_setzero_si256();
+  }
+
+  for( int y = 0; y < numRows; y++, srcLine += srcStride, orgLine += orgStride )
+  {
+    for( int x = 0; x < width; x += 16 )
+    {
+      const __m256i rec  = _mm256_loadu_si256( ( const __m256i* ) &srcLine[x] );
+      const __m256i recA = _mm256_loadu_si256( ( const __m256i* ) &srcLine[x + nbA] );
+      const __m256i recB = _mm256_loadu_si256( ( const __m256i* ) &srcLine[x + nbB] );
+      __m256i delta      = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) &orgLine[x] ), rec );
+
+      // sign_epi16( 1, d ) is the sign of d: -1, 0 or 1
+      __m256i edgeClass = _mm256_add_epi16( _mm256_sign_epi16( one, _mm256_sub_epi16( rec, recA ) ),
+                                            _mm256_sign_epi16( one, _mm256_sub_epi16( rec, recB ) ) );
+      edgeClass = _mm256_add_epi16( edgeClass, two );
+      if( x == 0 || x == width - 16 )
+      {
+        __m256i excluded = _mm256_setzero_si256();
+        if( x == 0 )
+        {
+          excluded = firstExcluded;
+        }
+        if( x == width - 16 )
+        {
+          excluded = _mm256_or_si256( excluded, lastExcluded );
+        }
+        edgeClass = _mm256_or_si256( edgeClass, excluded );
+        delta     = _mm256_andnot_si256( excluded, delta );
+      }
+
+      diffSumAll = _mm256_add_epi32( diffSumAll, _mm256_madd_epi16( delta, one ) );
+      for( int i = 0; i < 4; i++ )
+      {
+        const __m256i inClass = _mm256_cmpeq_epi16( edgeClass, _mm256_set1_epi16( edgeClasses[i] ) );
+        diffSum [i] = _mm256_add_epi32( diffSum[i], _mm256_madd_epi16( _mm256_and_si256( inClass, delta ), one ) );
+        countSum[i] = _mm256_sub_epi16( countSum[i], inClass );   // inClass is -1 for the samples of the class
+      }
+    }
+  }
+
+  // the sum of the eight 32-bit lanes
+  auto sumLanes = []( const __m256i v )
+  {
+    __m128i s = _mm_add_epi32( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
+    s = _mm_add_epi32( s, _mm_shuffle_epi32( s, 0x4e ) );
+    s = _mm_add_epi32( s, _mm_shuffle_epi32( s, 0xb1 ) );
+    return _mm_cvtsi128_si32( s );
+  };
+  int countPlain = numRows > 0 ? numRows * ( width - ( skipFirst ? 1 : 0 ) - numSkipLast ) : 0;
+  int diffPlain  = sumLanes( diffSumAll );
+  for( int i = 0; i < 4; i++ )
+  {
+    const int c        = edgeClasses[i];
+    const int classSum = sumLanes( diffSum[i] );
+    const int classNum = sumLanes( _mm256_madd_epi16( countSum[i], one ) );   // the 16-bit counts widened in pairs
+    diff [c]   += classSum;
+    count[c]   += classNum;
+    diffPlain  -= classSum;
+    countPlain -= classNum;
+  }
+  diff [SAO_CLASS_EO_PLAIN] += diffPlain;
+  count[SAO_CLASS_EO_PLAIN] += countPlain;
+  _mm256_zeroupper();
+}
+#endif
+
 template <X86_VEXT vext>
 void calcSaoStatisticsEo0_SIMD(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff)
 {
+#ifdef USE_AVX2
+  if( vext >= AVX2 && ( width & 15 ) == 0 )
+  {
+    calcSaoStatisticsEo_AVX2( srcLine, orgLine, srcStride, orgStride, width, endY, -1, 1, startX != 0, width - endX, count, diff );
+    return;
+  }
+#endif
   int iNaRight=width-endX;
 
   int iNaWidth = startX + iNaRight;
@@ -1154,6 +1260,14 @@ void calcSaoStatisticsEo0_SIMD(int width,int startX,int endX,int endY,Pel*  srcL
 template <X86_VEXT vext>
 void calcSaoStatisticsEo90_SIMD(int width,int endX,int startY,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine)
 {
+#ifdef USE_AVX2
+  if( vext >= AVX2 && ( width & 15 ) == 0 )
+  {
+    // srcLine is the row startY already (the caller skips an unavailable row above)
+    calcSaoStatisticsEo_AVX2( srcLine, orgLine, srcStride, orgStride, width, endY - startY, -srcStride, srcStride, false, width - endX, count, diff );
+    return;
+  }
+#endif
   if ( width % 16 == 0 )
   {
     int iNaRight=width-endX;
@@ -1321,6 +1435,15 @@ void calcSaoStatisticsEo90_SIMD(int width,int endX,int startY,int endY,Pel*  src
 template <X86_VEXT vext>
 void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine,int8_t *signDownLine)
 {
+#ifdef USE_AVX2
+  if( vext >= AVX2 && ( width & 15 ) == 0 )
+  {
+    // the caller did the first row and passes the stats offset by SAO_CLASS_EO_PLAIN (indexed by class - 2); the signs
+    // of the row above are recomputed, so signUpLine is not needed
+    calcSaoStatisticsEo_AVX2( srcLine, orgLine, srcStride, orgStride, width, endY - 1, -1 - srcStride, 1 + srcStride, startX != 0, width - endX, count - 2, diff - 2 );
+    return;
+  }
+#endif
   if ( width % 16 == 0 )
   {
     int iNaRight=width-endX;
@@ -1470,6 +1593,14 @@ void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  sr
 template <X86_VEXT vext>
 void calcSaoStatisticsEo45_SIMD(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine)
 {
+#ifdef USE_AVX2
+  if( vext >= AVX2 && ( width & 15 ) == 0 )
+  {
+    // as Eo135: first row done by the caller, stats offset by SAO_CLASS_EO_PLAIN, signs of the row above recomputed
+    calcSaoStatisticsEo_AVX2( srcLine, orgLine, srcStride, orgStride, width, endY - 1, 1 - srcStride, srcStride - 1, startX != 0, width - endX, count - 2, diff - 2 );
+    return;
+  }
+#endif
   Pel* pRec = srcLine;
   Pel* pOrg = orgLine;
   Pel* srcLineBelow = srcLine + srcStride;
