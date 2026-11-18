@@ -411,7 +411,9 @@ typedef struct vvencMCTF
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
   int                 MCTFUnitSize;
-  int                 mctfUnused;                                                        // TODO: remove unused memory from configuration
+  int                 MCTFLevelTilt;                                                     // MCTF filter strength raised for the three upper temporal levels
+                                                                                         // (-1: auto, default: on with film grain analysis (fga) in random access; 0: off; 1: on, random access only;
+                                                                                         // also raises explicit MCTFStrength values)
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
