@@ -446,6 +446,12 @@ public:
   int                       remRegBins;
 
 private:
+  struct SizeInfo;
+  struct SizeInfoTable;
+  static const SizeInfoTable s_sizeInfo;
+
+  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm, CtxTpl* tplBuf, int scanPosLast, const SizeInfo& size );
+
   // constant
   const ComponentID         m_compID;
   const ChannelType         m_chType;
