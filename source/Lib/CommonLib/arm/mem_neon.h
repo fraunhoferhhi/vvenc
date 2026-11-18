@@ -97,6 +97,14 @@ static inline int16x4_t load_s16x2x2( const int16_t* src, ptrdiff_t stride )
   return vreinterpret_s16_s32( ret );
 }
 
+// Four rows of two samples as one vector: row k in lanes 2 k and 2 k + 1.
+static inline int16x8_t load_s16x2x4( const int16_t* src, ptrdiff_t stride )
+{
+  const int16x4_t rows01 = load_s16x2x2( src, stride );
+  const int16x4_t rows23 = load_s16x2x2( src + 2 * stride, stride );
+  return vcombine_s16( rows01, rows23 );
+}
+
 // 4 rows of 4 samples: rows 0 and 1 in s[0], rows 2 and 3 in s[1].
 static inline void load_s16x4x4( const int16_t* src, const ptrdiff_t p, int16x8_t s[2] )
 {
