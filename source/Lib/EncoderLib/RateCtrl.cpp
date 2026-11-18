@@ -1168,7 +1168,9 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
   double lambda = encRCSeq->maxEstLambda;
   int   sliceQP = MAX_QP;
 
-  pic.encRCPic = std::make_shared<EncRCPic>();
+  // not std::make_shared: GCC 16 without LTO speculates that the json output adapter's shared_ptr (operator<< in this file)
+  // holds an in-place EncRCPic and reports a false -Warray-bounds on its destructor, which fails -Werror builds
+  pic.encRCPic = std::shared_ptr<EncRCPic>( new EncRCPic() );
   pic.encRCPic->create( encRCSeq, frameLevel, slice->poc );
 
   if ( frameLevel <= 7 )
