@@ -233,6 +233,8 @@ class EncPicture;
     MergeItem*    getMergeItemInList    (size_t index);
     size_t        size                  () const { return m_list.size(); }
     size_t        capacity              () const { return m_maxTrackingNum; }
+    // an item enters the list only below this cost: the last item's while the list is full (insertMergeItemToList)
+    double        costToEnter           () const { return !m_list.empty() && m_list.size() == m_maxTrackingNum ? m_list.back()->cost : MAX_DOUBLE; }
   };
 
 using MergeBufVector = static_vector<PelUnitBuf, MRG_MAX_NUM_CANDS>;
@@ -410,7 +412,8 @@ private:
   void    generateGeoCandChroma       ( CodingStructure* tempCS, Partitioner& partitioner, const EncTestMode& encTestMode, const MergeCtx& gpmMergeCtx, int mergeCand, PelUnitBuf& geoBuffer );
   void    generateMergePrediction     ( const UnitArea& unitArea, MergeItem* mergeItem, CodingUnit& cu, bool luma, bool chroma,
                                         PelUnitBuf& dstBuf, bool finalRd, bool forceNoResidual, PelUnitBuf* predBuf1, PelUnitBuf* predBuf2 );
-  double  calcLumaCost4MergePrediction( const TempCtx& ctxStart, const PelUnitBuf& predBuf, double lambda, CodingUnit& pu, DistParam& distParam, uint64_t* knownFracBits = nullptr );
+  double  calcLumaCost4MergePrediction( const TempCtx& ctxStart, const PelUnitBuf& predBuf, double lambda, CodingUnit& pu, DistParam& distParam, uint64_t* knownFracBits = nullptr,
+                                        double dropCost = MAX_DOUBLE );
   void    addRegularCandsToPruningList( const MergeCtx& mergeCtx, const UnitArea& localUnitArea, double sqrtLambdaForFirstPassIntra,
                                         const TempCtx& ctxStart, DistParam& distParam, CodingUnit& cu, bool* sameMv, MergeBufVector& regularPred );
   void    addCiipCandsToPruningList   ( const MergeCtx& mergeCtx, const UnitArea& localUnitArea, double sqrtLambdaForFirstPassIntra,

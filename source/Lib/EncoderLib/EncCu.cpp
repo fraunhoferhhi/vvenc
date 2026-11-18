@@ -2503,7 +2503,9 @@ void EncCu::addMmvdCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea 
     mmvdMerge->importMergeInfo( mergeCtx, mmvdIdx.val, MergeItem::MergeItemType::MMVD, pu );
     auto dstBuf               = mmvdMerge->getPredBuf( localUnitArea );
     generateMergePrediction   ( localUnitArea, mmvdMerge, pu, true, false, dstBuf, false, false, nullptr, nullptr );
-    mmvdMerge->cost           = calcLumaCost4MergePrediction( ctxStart, dstBuf, sqrtLambdaForFirstPassIntra, pu, distParam, &fracBitsOfStep[mmvdIdx.pos.baseIdx][mmvdIdx.pos.step] );
+    // a dropped candidate's cost is still compared with the best offset's below
+    const double dropCost     = m_pcEncCfg->m_MMVD > 1 ? std::max( m_mergeItemList.costToEnter(), bestCostOffset ) : m_mergeItemList.costToEnter();
+    mmvdMerge->cost           = calcLumaCost4MergePrediction( ctxStart, dstBuf, sqrtLambdaForFirstPassIntra, pu, distParam, &fracBitsOfStep[mmvdIdx.pos.baseIdx][mmvdIdx.pos.step], dropCost );
     m_mergeItemList           . insertMergeItemToList( mmvdMerge );
 
     if( m_pcEncCfg->m_MMVD > 1 && mmvdMerge->cost < bestCostOffset )
@@ -2983,7 +2985,8 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
   return true;
 }
 
-double EncCu::calcLumaCost4MergePrediction( const TempCtx &ctxStart, const PelUnitBuf &predBuf, double lambda, CodingUnit &cu, DistParam &distParam, uint64_t* knownFracBits )
+double EncCu::calcLumaCost4MergePrediction( const TempCtx &ctxStart, const PelUnitBuf &predBuf, double lambda, CodingUnit &cu, DistParam &distParam, uint64_t* knownFracBits,
+                                            double dropCost )
 {
   distParam.cur = predBuf.Y();
   auto dist     = distParam.distFunc(distParam);
