@@ -271,8 +271,10 @@ public:
   
   static Distortion xCalcHADs2x2      ( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur );
   static Distortion xGetHAD2SADs      ( const DistParam& pcDtParam );
-  template<bool fastHad>
+  // stop: return the partial sum after a row of tiles once it exceeds maximumDistortionForEarlyExit (DF_HAD_STOP*)
+  template<bool fastHad, bool stop = false>
   static Distortion xGetHADs          ( const DistParam& pcDtParam );
+  static bool       xHadStops         ( Distortion sum, const DistParam& dp ) { return ( sum >> DISTORTION_PRECISION_ADJUSTMENT( dp.bitDepth ) ) > dp.maximumDistortionForEarlyExit; }
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_DIST
 
@@ -291,7 +293,7 @@ public:
   template <X86_VEXT vext>
   static void xGetSADX5_16xN_SIMD_X86   ( const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos );
 
-  template<X86_VEXT vext, bool fastHad>
+  template<X86_VEXT vext, bool fastHad, bool stop = false>
   static Distortion xGetHADs_SIMD   ( const DistParam& pcDtParam );
   template<X86_VEXT vext>
   static Distortion xGetHAD2SADs_SIMD( const DistParam &rcDtParam );

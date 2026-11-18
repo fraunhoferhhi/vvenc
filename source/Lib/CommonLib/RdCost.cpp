@@ -120,6 +120,9 @@ void RdCost::create( bool enableOpt )
   m_afpDistortFunc[0][DF_HAD64_fast  ] = RdCost::xGetHADs<true>;
   m_afpDistortFunc[0][DF_HAD128_fast ] = RdCost::xGetHADs<true>;
 
+  m_afpDistortFunc[0][DF_HAD_STOP     ] = RdCost::xGetHADs<false, true>;
+  m_afpDistortFunc[0][DF_HAD_STOP_fast] = RdCost::xGetHADs<true, true>;
+
   //  m_afpDistortFunc[0][DF_SAD_INTERMEDIATE_BITDEPTH] = RdCost::xGetSAD;
   m_afpDistortFunc[0][DF_HAD_2SAD ] = RdCost::xGetHAD2SADs;
 
@@ -214,7 +217,7 @@ void RdCost::setDistParam( DistParam &rcDP, const CPelBuf& org, const Pel* piRef
 DistParam RdCost::setDistParam( const CPelBuf& org, const CPelBuf& cur, int bitDepth, DFunc dfunc )
 {
   int index = dfunc;
-  if( dfunc != DF_HAD_2SAD )   // DF_HAD_2SAD has a single entry for all sizes
+  if( dfunc != DF_HAD_2SAD && dfunc != DF_HAD_STOP && dfunc != DF_HAD_STOP_fast )   // these have a single entry for all sizes
   {
     index += Log2(org.width);
   }
@@ -1820,7 +1823,7 @@ Distortion RdCost::xGetHAD2SADs( const DistParam &rcDtParam )
   return std::min( distHad, 2*distSad);
 }
 
-template<bool fastHad>
+template<bool fastHad, bool stop>
 Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
 {
   if( rcDtParam.applyWeight )
@@ -1837,6 +1840,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
   int  x = 0, y = 0;
 
   Distortion uiSum = 0;
+  // With stop, each row of tiles is checked once it is summed: the sum so far is returned once it exceeds
+  // maximumDistortionForEarlyExit. The tiles stay those of the whole block, so a complete sum is unchanged.
 
   if( iCols > iRows && ( iRows & 7 ) == 0 && ( iCols & 15 ) == 0 )
   {
@@ -1848,6 +1853,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       }
       piOrg += iStrideOrg * 8;
       piCur += iStrideCur * 8;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( iCols < iRows && ( iCols & 7 ) == 0 && ( iRows & 15 ) == 0 )
@@ -1860,6 +1867,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       }
       piOrg += iStrideOrg * 16;
       piCur += iStrideCur * 16;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( iCols > iRows && ( iRows & 3 ) == 0 && ( iCols & 7 ) == 0 )
@@ -1872,6 +1881,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       }
       piOrg += iStrideOrg * 4;
       piCur += iStrideCur * 4;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( iCols < iRows && ( iCols & 3 ) == 0 && ( iRows & 7 ) == 0 )
@@ -1884,6 +1895,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       }
       piOrg += iStrideOrg * 8;
       piCur += iStrideCur * 8;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( fastHad && ( ( iRows % 32 == 0 ) && ( iCols % 32 == 0 ) ) && iRows == iCols )
@@ -1896,6 +1909,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       }
       piOrg += 16 * iStrideOrg;
       piCur += 16 * iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( ( iRows % 8 == 0 ) && ( iCols % 8 == 0 ) )
@@ -1908,6 +1923,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       }
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
@@ -1920,6 +1937,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       }
       piOrg += 4*iStrideOrg;
       piCur += 4*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( ( iRows % 2 == 0 ) && ( iCols % 2 == 0 ) )
@@ -1932,6 +1951,8 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       }
       piOrg += 2*iStrideOrg;
       piCur += 2*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else
