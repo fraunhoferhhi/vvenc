@@ -2155,9 +2155,13 @@ void CABACWriter::transform_unit( const TransformUnit& tu, CUCtx& cuCtx, Partiti
 
   if( cbfLuma )
   {
-    if( m_tuResiBits )
+    if( m_tuResiBits && m_tuResiBits[COMP_Y] != TU_RESI_BITS_UNKNOWN )
     {
       addEstFracBits( m_tuResiBits[COMP_Y] );
+      if( m_tuLumaResiFlags )
+      {
+        cuCtx.addResidualFlags( *m_tuLumaResiFlags );
+      }
     }
     else
     {
@@ -2170,7 +2174,7 @@ void CABACWriter::transform_unit( const TransformUnit& tu, CUCtx& cuCtx, Partiti
     {
       if( cbf[ compID ] )
       {
-        if( m_tuResiBits )
+        if( m_tuResiBits && m_tuResiBits[compID] != TU_RESI_BITS_UNKNOWN )
         {
           addEstFracBits( m_tuResiBits[compID] );
         }

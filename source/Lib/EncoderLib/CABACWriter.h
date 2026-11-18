@@ -72,8 +72,16 @@ public:
 
   void        start                     ()                                                    { m_BinEncoder.start(); }
   void        resetBits                 ()                                                    { m_BinEncoder.resetBits(); }
-  // from now on transform_unit counts these bits for the residuals, without coding them. nullptr ends it.
-  void        setTuResiBits             ( const uint64_t* tuResiBits )                        { m_tuResiBits = tuResiBits; }
+  // an entry of setTuResiBits' array whose residual transform_unit codes as usual
+  static constexpr uint64_t TU_RESI_BITS_UNKNOWN = std::numeric_limits<uint64_t>::max();
+  // from now on transform_unit counts these bits for the residuals (per component), without coding them. When luma's
+  // entry is known, it also adds lumaResiFlags to its CUCtx: the flags luma's residual_coding set when its bits were
+  // counted (needed where MTS or LFNST follow). nullptr ends it.
+  void        setTuResiBits             ( const uint64_t* tuResiBits, const CUCtx* lumaResiFlags = nullptr )
+  {
+    m_tuResiBits      = tuResiBits;
+    m_tuLumaResiFlags = lumaResiFlags;
+  }
   void        addEstFracBits            ( uint64_t fracBits )                                 { static_cast<BitEstimatorBase&>( m_BinEncoder ).addEstFracBits( fracBits ); }
   uint64_t    getEstFracBits            ()                                            const   { return m_BinEncoder.getEstFracBits(); }
   uint32_t    getNumBins                ()                                                    { return m_BinEncoder.getNumBins(); }
@@ -179,6 +187,7 @@ private:
   void        xWriteTruncBinCode         ( uint32_t uiSymbol, uint32_t uiMaxSymbol);
 private:
   const uint64_t*    m_tuResiBits = nullptr;
+  const CUCtx*       m_tuLumaResiFlags = nullptr;
   BinEncIf&          m_BinEncoder;
   OutputBitstream*   m_Bitstream;
   Ctx                m_TestCtx;
