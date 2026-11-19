@@ -1023,11 +1023,13 @@ static bool check_one_xFindFirstTestPos( DepQuant* ref, DepQuant* opt, bool zero
   std::generate( tCoeff.begin(), tCoeff.end(), input_generator );
 
   TCoeff defaultTh = rng.get( 4, 128 );
-  int zeroOutWidth = rng.getOneOf<int>( { 32, 64 } );
-  int zeroOutHeight = rng.getOneOf<int>( { 32, 64 } );
-
   int width = rng.getOneOf<int>( { 4, 8, 16, 32, 64 } );
   int height = rng.getOneOf<int>( { 4, 8, 16, 32, 64 } );
+  // as DepQuant::quant passes them: 16 for a 32-point side whose upper half is zeroed out (MTS), else 32, so that the
+  // test also takes the kernel's skip of positions beyond the zero-out
+  const bool zeroOut = rng.get( 0, 1 ) == 1;
+  int zeroOutWidth = width == 32 && zeroOut ? 16 : 32;
+  int zeroOutHeight = height == 32 && zeroOut ? 16 : 32;
   int pos_ref = std::min( width, JVET_C0024_ZERO_OUT_TH ) * std::min( height, JVET_C0024_ZERO_OUT_TH ) - 1;
 
   DQIntern::TUParameters tuPars( rom, width, height, CH_C );
