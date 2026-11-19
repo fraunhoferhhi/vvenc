@@ -456,11 +456,11 @@ namespace DQIntern
     for( Channel& c : channel ) memset( c.ctxStates, 0xff, sizeof( c.ctxStates ) );
 
     // where equalCoeffCtxStates expects each set of contexts (the end of the last one is checked above)
-    CHECK( Ctx::SigCoeffGroup[ 1 ].Offset - first !=   2 || Ctx::SigFlag[ 0 ].Offset - first !=   4 || Ctx::SigFlag[ 1 ].Offset - first !=  16
-        || Ctx::SigFlag[ 2 ].Offset - first !=  24 || Ctx::SigFlag[ 3 ].Offset - first !=  36 || Ctx::SigFlag[ 4 ].Offset - first !=  44
-        || Ctx::SigFlag[ 5 ].Offset - first !=  56 || Ctx::ParFlag[ 0 ].Offset - first !=  64 || Ctx::ParFlag[ 1 ].Offset - first !=  85
-        || Ctx::GtxFlag[ 0 ].Offset - first !=  96 || Ctx::GtxFlag[ 1 ].Offset - first != 117 || Ctx::GtxFlag[ 2 ].Offset - first != 128
-        || Ctx::GtxFlag[ 3 ].Offset - first != 149, "the coefficient-coding contexts are not where equalCoeffCtxStates reads them" );
+    CHECKD( Ctx::SigCoeffGroup[ 1 ].Offset - first !=   2 || Ctx::SigFlag[ 0 ].Offset - first !=   4 || Ctx::SigFlag[ 1 ].Offset - first !=  16
+         || Ctx::SigFlag[ 2 ].Offset - first !=  24 || Ctx::SigFlag[ 3 ].Offset - first !=  36 || Ctx::SigFlag[ 4 ].Offset - first !=  44
+         || Ctx::SigFlag[ 5 ].Offset - first !=  56 || Ctx::ParFlag[ 0 ].Offset - first !=  64 || Ctx::ParFlag[ 1 ].Offset - first !=  85
+         || Ctx::GtxFlag[ 0 ].Offset - first !=  96 || Ctx::GtxFlag[ 1 ].Offset - first != 117 || Ctx::GtxFlag[ 2 ].Offset - first != 128
+         || Ctx::GtxFlag[ 3 ].Offset - first != 149, "the coefficient-coding contexts are not where equalCoeffCtxStates reads them" );
   }
 
   // The OR of the XORed 64-bit words of numCtx context models from firstCtx on (0 when they are equal), which the compiler
