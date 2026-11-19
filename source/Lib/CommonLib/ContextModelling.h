@@ -520,6 +520,16 @@ struct CUCtx
                            lfnstLastScanPos                = false;
                          }
 
+  // adds the flags residual_coding sets: other holds those it set for the same residual, counted before
+  void addResidualFlags( const CUCtx& other )
+  {
+    lfnstLastScanPos               |= other.lfnstLastScanPos;
+    violatesLfnstConstrained[CH_L] |= other.violatesLfnstConstrained[CH_L];
+    violatesLfnstConstrained[CH_C] |= other.violatesLfnstConstrained[CH_C];
+    violatesMtsCoeffConstraint     |= other.violatesMtsCoeffConstraint;
+    mtsLastScanPos                 |= other.mtsLastScanPos;
+  }
+
   bool      isDQPCoded;
   bool      isChromaQpAdjCoded;
   bool      qgStart;

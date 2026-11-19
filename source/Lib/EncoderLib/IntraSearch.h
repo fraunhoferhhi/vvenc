@@ -66,6 +66,25 @@ class EncCu;
 /// encoder search class
 class IntraSearch : public IntraPrediction
 {
+public:
+  // A luma residual as a trial of the search counted it: its bits, the CUCtx flags its residual_coding set and the
+  // estimator's contexts after the trial's count (see takeLumaResiOfSearch).
+  struct LumaResi
+  {
+    bool     known = false;
+    uint64_t bits  = 0;
+    CUCtx    flags;
+    Ctx      ctx;
+
+    void swap( LumaResi& other )
+    {
+      std::swap( known, other.known );
+      std::swap( bits,  other.bits );
+      std::swap( flags, other.flags );
+      ctx.swap( other.ctx );   // no copy of the contexts
+    }
+  };
+
 private:
 
   struct ModeInfo
@@ -111,6 +130,13 @@ private:
   unsigned            m_searchMpmLst[NUM_MOST_PROBABLE_MODES];
   Area                m_searchMpmArea;
   bool                m_searchMpmValid = false;
+
+  // the last luma residual_coding of xEncCoeffQT, and how many the current estimate made (one per luma TU)
+  uint64_t            m_lumaResiCallBits = 0;
+  CUCtx               m_lumaResiCallFlags;
+  int                 m_lumaResiCalls    = 0;
+  LumaResi            m_trialBestResi;   // of xIntraCodingLumaQT's best transform so far
+  LumaResi            m_modeBestResi;    // of xEstIntraPredLumaQT's best mode so far: csBest's
 
 protected:
   // interface to option
@@ -196,6 +222,7 @@ public:
 
   bool estIntraPredLumaQT         ( CodingUnit &cu, Partitioner &pm, double bestCost = MAX_DOUBLE);
   void estIntraPredChromaQT       ( CodingUnit& cu, Partitioner& partitioner, const double maxCostAllowed );
+  const LumaResi* takeLumaResiOfSearch( const CodingUnit& cu );
 
 private:
   bool      xEstIntraPredLumaQT       ( CodingUnit &cu, Partitioner &pm, double bestCost );
@@ -230,6 +257,7 @@ private:
   void      xIntraCodingTUBlock       ( TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig = nullptr, PelUnitBuf *pPred = nullptr, const bool loadTr = false, const QpParam* lumaQP = nullptr, const bool predKnown = false, const LfnstPrimary lfnstPrimary = LFNST_PRIMARY_NEW);
   ChromaCbfs xIntraChromaCodingQT     ( CodingStructure& cs, Partitioner& pm, const bool keepBestCtx );
   void     xIntraCodingLumaQT         ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode, bool disableMTS, const Ctx& ctxStart );
+  void     xKeepLumaResiOfTrial       ( const CodingUnit& cu, const TransformUnit& tu );
   double   xTestISP                   ( CodingStructure& cs, Partitioner& pm, double bestCostSoFar, PartSplit ispType, bool& splitcbf, uint64_t& singleFracBits, Distortion& singleDistLuma, CUCtx& cuCtx);
   int      xSpeedUpISP                ( int speed, bool& testISP, int mode, int& noISP, int& endISP, CodingUnit& cu, static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,const ModeInfo& bestPUMode, int bestISP, int bestLfnstIdx);
   void     xSpeedUpIntra              ( double bestcost, int& EndMode, int& speedIntra, CodingUnit& cu);

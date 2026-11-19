@@ -1800,11 +1800,16 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   m_CABACEstimator->pred_mode(cu);
   m_CABACEstimator->cu_pred_data(cu);
 
-  // Encode Coefficients
+  // Encode Coefficients; luma's residual as the luma search counted it, where it can
+  const IntraSearch::LumaResi* lumaResi = isLuma( partitioner.chType ) ? m_cIntraSearch.takeLumaResiOfSearch( cu ) : nullptr;
+  const uint64_t resiBits[MAX_NUM_TBLOCKS] = { lumaResi ? lumaResi->bits : CABACWriter::TU_RESI_BITS_UNKNOWN,
+                                               CABACWriter::TU_RESI_BITS_UNKNOWN, CABACWriter::TU_RESI_BITS_UNKNOWN };
+  m_CABACEstimator->setTuResiBits( lumaResi ? resiBits : nullptr, lumaResi ? &lumaResi->flags : nullptr );
   CUCtx cuCtx;
   cuCtx.isDQPCoded = true;
   cuCtx.isChromaQpAdjCoded = true;
   m_CABACEstimator->cu_residual(cu, partitioner, cuCtx);
+  m_CABACEstimator->setTuResiBits( nullptr );
 
   tempCS->fracBits = m_CABACEstimator->getEstFracBits();
   tempCS->cost = m_cRdCost.calcRdCost(tempCS->fracBits, tempCS->dist);
