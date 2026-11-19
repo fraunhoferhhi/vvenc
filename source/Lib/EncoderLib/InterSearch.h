@@ -574,6 +574,7 @@ private:
   EncModeCtrl*      m_modeCtrl;
 
   PelStorage        m_tmpPredStorage[NUM_REF_PIC_LIST_01];
+  PelStorage        m_symStartPredB;   // luma only: the SMVD start search's list-B prediction kept for the next list-A candidate
   PelStorage        m_tmpStorageLCU;
   AffineTemplateDistCache m_affineTemplateDists;
   AffineMeResultCache     m_affineMeResults;
@@ -873,6 +874,9 @@ private:
   uint32_t    xCalcAffineMVBits       ( CodingUnit& cu, Mv mvCand[3], Mv mvPred[3]);
 
   Distortion  xGetSymCost             ( const CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList eCurRefPicList, const MvField& cCurMvField, MvField& cTarMvField , int BcwIdx );
+  CPelBuf     xSymPred                ( const CodingUnit& cu, RefPicList refList, const MvField& mvField, PelUnitBuf& predStorage );
+  CPelBuf     xSymHighFreq            ( const CodingUnit& cu, CPelUnitBuf& origBuf, const CPelBuf& predBufA );
+  Distortion  xSymHadCost             ( const CodingUnit& cu, const CPelBuf& highFreqA, const CPelBuf& predBufB, RefPicList eTarRefPicList );
   CPelBuf     xPredSymLuma            ( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf );
   CPelBuf     xPredLumaReadOnly       ( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf );
   Distortion  xSymRefineMvSearch      ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList,
