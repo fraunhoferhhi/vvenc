@@ -347,13 +347,12 @@ struct SquareSumNeon
   int sum() const { return horizontal_add_s32x4( vaddq_s32( lo, hi ) ); }
 };
 
-static void motionErrorLumaFracColumn_loRes_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
-                                                  const ptrdiff_t buffStride, const int w, const int h,
-                                                  const int16_t* xFilter, const int num, const int16_t* const* yFilter,
+static void motionErrorLumaFracColumn_loRes_neon( const Pel* org, const ptrdiff_t origStride, const Pel* filtered,
+                                                  const int w, const int h, const int num, const int16_t* const* yFilter,
                                                   const int* rowOffset, const int bitDepth, int* error )
 {
-  motionErrorLumaFracColumn_loRes_common<SquareSumNeon>( org, origStride, buf, buffStride, w, h, xFilter, num, yFilter,
-                                                         rowOffset, bitDepth, error );
+  motionErrorLumaFracColumn_loRes_common<SquareSumNeon>( org, origStride, filtered, w, h, num, yFilter, rowOffset,
+                                                         bitDepth, error );
 }
 
 static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
@@ -1407,6 +1406,7 @@ void MCTF::_initMCTF_ARM<NEON>()
 {
   m_motionErrorLumaFrac8[0] = motionErrorLumaFrac6_neon;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_neon;
+  m_filterColumn4             = filterColumn4_common;
   m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_neon;
   m_motionErrorLumaInt8     = motionErrorLumaInt_neon;
   m_applyPlanarCorrection   = applyPlanarCorrection_neon;

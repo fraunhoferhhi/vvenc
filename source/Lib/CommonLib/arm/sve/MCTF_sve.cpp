@@ -275,13 +275,12 @@ struct SquareSumSve
   int sum() const { return ( int )vaddvq_s64( acc ); }
 };
 
-static void motionErrorLumaFracColumn_loRes_sve( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
-                                                 const ptrdiff_t buffStride, const int w, const int h,
-                                                 const int16_t* xFilter, const int num, const int16_t* const* yFilter,
+static void motionErrorLumaFracColumn_loRes_sve( const Pel* org, const ptrdiff_t origStride, const Pel* filtered,
+                                                 const int w, const int h, const int num, const int16_t* const* yFilter,
                                                  const int* rowOffset, const int bitDepth, int* error )
 {
-  motionErrorLumaFracColumn_loRes_common<SquareSumSve>( org, origStride, buf, buffStride, w, h, xFilter, num, yFilter,
-                                                        rowOffset, bitDepth, error );
+  motionErrorLumaFracColumn_loRes_common<SquareSumSve>( org, origStride, filtered, w, h, num, yFilter, rowOffset,
+                                                        bitDepth, error );
 }
 
 void applyPlanarCorrection_sve( const Pel* refPel, const ptrdiff_t refStride, Pel* dstPel, const ptrdiff_t dstStride,
@@ -624,6 +623,7 @@ void MCTF::_initMCTF_ARM<SVE>()
 {
   m_motionErrorLumaInt8 = motionErrorLumaInt_sve;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_sve;
+  m_filterColumn4             = filterColumn4_common;
   m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_sve;
   m_applyPlanarCorrection = applyPlanarCorrection_sve;
   m_applyBlock = applyBlock_sve;
