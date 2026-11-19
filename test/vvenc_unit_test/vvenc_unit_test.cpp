@@ -4029,19 +4029,57 @@ static bool check_SADX5( RdCost* ref, RdCost* opt, unsigned num_cases, int width
   return passed;
 }
 
+// DF_HAD_STOP(_fast) returns the sum so far after a row of tiles once it exceeds the limit, and the kernels' rows of tiles
+// differ in height (x86 AVX2 sums 16 or 32 rows of a square block at a time, the scalar kernel 8 or 16), so the partial
+// sums differ. Each kernel is checked for what the encoder relies on: the whole sum when it does not exceed the limit,
+// otherwise a sum above the limit and at most the whole sum. The limits go through 0, 1/8, ..., 8/8 of the whole sum.
+static bool check_HAD_stop( const std::string& context, RdCost* ref, RdCost* opt, DistParam& dtParam, bool fast,
+                            unsigned& eighths, bool stoppedEarly[2] )
+{
+  const Distortion whole = ref->m_afpDistortFunc[0][fast ? DF_HAD_fast : DF_HAD]( dtParam );
+  const Distortion limit = whole * ( eighths++ % 9 ) / 8;
+  dtParam.maximumDistortionForEarlyExit = limit;
+
+  bool passed = true;
+  RdCost* kernels[2] = { ref, opt };
+  for( int k = 0; k < 2; k++ )
+  {
+    const Distortion sum = kernels[k]->m_afpDistortFunc[0][fast ? DF_HAD_STOP_fast : DF_HAD_STOP]( dtParam );
+    if( whole <= limit ? sum != whole : sum <= limit || sum > whole )
+    {
+      std::cerr << "failed: " << context << ( k ? " opt" : " ref" ) << "\n"
+                << "  whole=" << whole << "  limit=" << limit << "  stop=" << sum << "\n";
+      passed = false;
+    }
+    stoppedEarly[k] |= sum < whole;
+  }
+  return passed;
+}
+
 // generic: test the general-size entry DF_HAD(_fast), which the encoder also calls for every block size, instead of the
 // entry for this width
-static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool fast, bool generic )
+// stop: test DF_HAD_STOP(_fast), the general-size entry that may stop after a row of tiles, with limits from 0 to the
+// whole sum
+static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool fast, bool generic,
+                        bool stop = false )
 {
   std::ostringstream sstm;
   const char* fast_str = fast ? "_fast" : "";
   sstm << "RdCost::m_afpDistortFunc[0][DF_HAD";
-  if( !generic )
+  if( stop )
+  {
+    sstm << "_STOP";
+  }
+  else if( !generic )
   {
     sstm << width;
   }
   sstm << fast_str << "] " << " w=" << width << " h=" << height;
   printf( "Testing %s\n", sstm.str().c_str() );
+
+  const int index = ( fast ? DF_HAD_fast : DF_HAD ) + ( generic ? 0 : log2( width ) );
+  unsigned  eighths = 0;                         // the first limit is 0: random residuals stop after the first row
+  bool      stoppedEarly[2] = { false, false };  // ref, opt
 
   DimensionGenerator rng;
   InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
@@ -4086,7 +4124,11 @@ static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width,
       }
     }
 
-    const int index = ( fast ? DF_HAD_fast : DF_HAD ) + ( generic ? 0 : log2( width ) );
+    if( stop )
+    {
+      passed = check_HAD_stop( sstm.str(), ref, opt, dtParam, fast, eighths, stoppedEarly ) && passed;
+      continue;
+    }
     Distortion sum_ref = ref->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     Distortion sum_opt = opt->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
@@ -4109,10 +4151,21 @@ static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width,
     dtParam.bitDepth = 10;
     dtParam.applyWeight = 0;
 
-    const int index = ( fast ? DF_HAD_fast : DF_HAD ) + ( generic ? 0 : log2( width ) );
+    if( stop )
+    {
+      passed = check_HAD_stop( sstm.str(), ref, opt, dtParam, fast, eighths, stoppedEarly ) && passed;
+      continue;
+    }
     Distortion sum_ref = ref->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     Distortion sum_opt = opt->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+  }
+
+  // 64 rows are at least two rows of tiles in every kernel, so a kernel that never stops early ignores the limit
+  if( stop && height >= 64 && !( stoppedEarly[0] && stoppedEarly[1] ) )
+  {
+    std::cerr << "failed: " << sstm.str() << ( stoppedEarly[0] ? " opt" : " ref" ) << " never stops early\n";
+    passed = false;
   }
   return passed;
 }
@@ -4276,6 +4329,8 @@ static bool test_RdCost()
           passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/true, generic ) && passed;
           passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/false, generic ) && passed;
         }
+        passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/true, /*generic=*/true, /*stop=*/true ) && passed;
+        passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/false, /*generic=*/true, /*stop=*/true ) && passed;
       }
 
       if (w >= GEO_MIN_CU_SIZE && h >= GEO_MIN_CU_SIZE && w <= GEO_MAX_CU_SIZE && h <= GEO_MAX_CU_SIZE)
