@@ -1011,10 +1011,9 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 
 void CodingStructure::clearTUs( bool force )
 {
-#if CLEAR_AND_CHECK_TUIDX
+  // no TU was added since the last clear (or construction): nothing to reset
   if( !m_numTUs && !force ) return;
 
-#endif
   memset( m_offsets, 0, sizeof( m_offsets ) );
 
   for( auto &pcu : cus )
