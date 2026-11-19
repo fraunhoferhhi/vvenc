@@ -822,6 +822,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
   uint32_t   uiBestMode = 0;
   Distortion uiBestDist = 0;
   double     dBestCost  = MAX_DOUBLE;
+  bool       ctxCoded   = false;   // the estimator holds ctxStart's contexts until the first mode is coded
 
   //----- init mode list ----
   {
@@ -1024,14 +1025,20 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
         }
       }
       cs.dist = baseDist;
-      //----- restore context models -----
-      m_CABACEstimator->getCtx() = ctxStart;
+      //----- restore context models (still ctxStart's until a mode is coded) -----
+      if( ctxCoded )
+      {
+        m_CABACEstimator->getCtx() = ctxStart;
+      }
+      ctxCoded = true;
 
       //----- chroma coding -----
       cu.intraDir[1] = chromaIntraMode;
       m_ispTestedModes[0].IspType = ispType;
       m_ispTestedModes[0].subTuCounter = -1;
-      xIntraChromaCodingQT( cs, partitioner );
+      // with transform skip in the SPS the contexts are reset to ctxStart right after it (below, same condition): it need not
+      // keep its best ones
+      xIntraChromaCodingQT( cs, partitioner, !cs.sps->transformSkip );
       if (lumaUsesISP && cs.dist == MAX_UINT)
       {
         continue;
@@ -2081,7 +2088,9 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !cs.slice->isIntra(), g_cuCounters2D[CU_RD_TESTS][Log2( cs.area.lheight() )][Log2( cs.area.lwidth() )] );
 }
 
-ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& partitioner)
+// keepBestCtx: leave the best mode's contexts in the estimator; when false the caller overwrites them, so the copies that only
+// carry them to the end (the saves after Cr and after the LFNST / joint CbCr candidates) are skipped
+ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& partitioner, const bool keepBestCtx)
 {
   UnitArea    currArea      = partitioner.currArea();
 
@@ -2377,8 +2386,8 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
           {
             saveCS.getRecoBuf(area).copyFrom(cs.getRecoBuf(area));
             tmpTU.copyComponentFrom(currTU, compID);
-            // Without a transform skip test only the save after Cr is ever read
-            if( compID != COMP_Cb || testTS )
+            // The save after Cb is read only after a transform skip test (below), the save after Cr only at the end
+            if( compID == COMP_Cb ? testTS : keepBestCtx )
             {
               ctxBest = m_CABACEstimator->getCtx();
             }
@@ -2437,7 +2446,10 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
           tmpTUcur.copyComponentFrom(tmpTU, COMP_Cb);
           tmpTUcur.copyComponentFrom(tmpTU, COMP_Cr);
         }
-        ctxBestTUL = m_CABACEstimator->getCtx();
+        if( keepBestCtx )
+        {
+          ctxBestTUL = m_CABACEstimator->getCtx();
+        }
       }
     }
     if ((testLFNST && (bestLfnstIdx != endLfnstIdx)) || testTS)
@@ -2456,7 +2468,10 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         currTU.copyComponentFrom(tmpTUcur, COMP_Cr);
 
         // swapped, not copied: ctxBestTUL is not read again without joint CbCr
-        m_CABACEstimator->getCtx().swap( ctxBestTUL );
+        if( keepBestCtx )
+        {
+          m_CABACEstimator->getCtx().swap( ctxBestTUL );
+        }
       }
     }
 
@@ -2473,7 +2488,10 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         tmpTU.copyComponentFrom(tmpTUcur, COMP_Cr);
         // the best contexts go to ctxBest only (swapped, not copied): every joint candidate below starts from ctxStartTU, and
         // when none is coded the contexts are restored from ctxBest at the end
-        static_cast<Ctx&>( ctxBest ).swap( ctxBestTUL );
+        if( keepBestCtx )
+        {
+          static_cast<Ctx&>( ctxBest ).swap( ctxBestTUL );
+        }
       }
       // Test using joint chroma residual coding
       double     bestCostCbCr = bestCostCb + bestCostCr;
@@ -2624,7 +2642,10 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
                 tmpTU.copyComponentFrom(currTU, COMP_Cb);
                 tmpTU.copyComponentFrom(currTU, COMP_Cr);
 
-                ctxBest = m_CABACEstimator->getCtx();
+                if( keepBestCtx )
+                {
+                  ctxBest = m_CABACEstimator->getCtx();
+                }
               }
               else
               {
@@ -2645,7 +2666,10 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         cs.cus[0]->lfnstIdx = bestLfnstIdx;
         currTU.copyComponentFrom(tmpTU, COMP_Cb);
         currTU.copyComponentFrom(tmpTU, COMP_Cr);
-        m_CABACEstimator->getCtx().swap( ctxBest );   // ctxBest is not read again
+        if( keepBestCtx )
+        {
+          m_CABACEstimator->getCtx().swap( ctxBest );   // ctxBest is not read again
+        }
       }
       currTU.jointCbCr = (TU::getCbf(currTU, COMP_Cb) || TU::getCbf(currTU, COMP_Cr)) ? bestJointCbCr : 0;
     } // jointCbCr
@@ -2679,7 +2703,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
 
     do
     {
-      ChromaCbfs subCbfs = xIntraChromaCodingQT(cs, partitioner);
+      ChromaCbfs subCbfs = xIntraChromaCodingQT(cs, partitioner, true);   // the next sub-TU starts from these contexts
 
       for (uint32_t ch = COMP_Cb; ch < numValidTBlocks; ch++)
       {

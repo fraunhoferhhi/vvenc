@@ -234,7 +234,8 @@ const double EncCu::coefSquareCUsSlowSlower[2][5][2][5][2][2][2] = {
 
 // ====================================================================================================================
 EncCu::EncCu()
-  : m_CtxCache          ( nullptr )
+  : m_startCtxPending   ( false )
+  , m_CtxCache          ( nullptr )
   , m_globalCtuQpVector ( nullptr )
   , m_wppMutex          ( nullptr )
   , m_CABACEstimator    ( nullptr )
@@ -644,6 +645,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
 bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode, const bool useEDO )
 {
+  CHECKD( m_startCtxPending, "a mode was coded without resetting the contexts (no xRestoreStartCtx since the last mode)" );
+
   bool bestCSUpdated = false;
 
   if( !tempCS->cus.empty() )
@@ -665,10 +668,30 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
     }
   }
 
-  // reset context states
-  m_CABACEstimator->getCtx() = m_CurrCtx->start;
+  // The next mode starts from the CU's start contexts again. The reset waits for the next reader (xRestoreStartCtx): when
+  // this was the CU's last mode before a split or its finish, those overwrite the contexts and the reset is skipped.
+  m_startCtxPending = true;
   return bestCSUpdated;
 
+}
+
+// Every reader of the estimator's contexts that can follow an xCheckBestMode of the same CU calls this first: the test
+// entries (intra, the start of the merge test), each encodeResAndCalcRdInterCU call (inter, IMV, merge and IBC
+// candidates, SBT passes) and a CU that returns without a result.
+void EncCu::xRestoreStartCtx()
+{
+  if( m_startCtxPending )
+  {
+    m_CABACEstimator->getCtx() = m_CurrCtx->start;
+    m_startCtxPending          = false;
+  }
+}
+
+// An unconditional reset to the CU's start contexts, which also makes a pending one void.
+void EncCu::xSetStartCtx()
+{
+  m_CABACEstimator->getCtx() = m_CurrCtx->start;
+  m_startCtxPending          = false;
 }
 
 void xCheckFastCuChromaSplitting( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner&  partitioner, ComprCUCtx& cuECtx )
@@ -956,6 +979,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   m_modeCtrl.initCULevel( partitioner, *tempCS, m_MergeSimpleFlag, deriveCtx.cuRestrictedLeft[partitioner.chType], deriveCtx.cuRestrictedAbove[partitioner.chType] );
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
+  CHECKD( m_startCtxPending, "a context reset of the parent CU is still pending" );
   m_CurrCtx->start = m_CABACEstimator->getCtx();
 
   m_cuChromaQpOffsetIdxPlus1 = 0;
@@ -1184,14 +1208,17 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
   if( bestCS->cus.empty() )
   {
+    xRestoreStartCtx();   // the caller continues on another CU level
     m_modeCtrl.finishCULevel( partitioner );
     return;
   }
 
   //////////////////////////////////////////////////////////////////////////
   // Finishing CU
-  // set context states
-  m_CABACEstimator->getCtx() = m_CurrCtx->best;
+  // set context states: the best mode's contexts, which xCheckBestMode saved in this call (bestCS has a CU); swapped, not
+  // copied, because m_CurrCtx->best is not read again before the next xCheckBestMode on this level overwrites it
+  m_CABACEstimator->getCtx().swap( m_CurrCtx->best );
+  m_startCtxPending = false;
 
   // QP from last processed CU for further processing
   //copy the qp of the last non-chroma CU
@@ -1311,7 +1338,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
   tempCS->initStructData( qp );
 
-  m_CABACEstimator->getCtx()       = m_CurrCtx->start;
+  xSetStartCtx();
 
   const uint16_t split_ctx_size    = Ctx::SplitFlag.size() + Ctx::SplitQtFlag.size() + Ctx::SplitHvFlag.size() + Ctx::Split12Flag.size() + Ctx::ModeConsFlag.size();
   const TempCtx  ctxSplitFlags     ( m_CtxCache, SubCtx( CtxSet( Ctx::SplitFlag(), split_ctx_size ), m_CABACEstimator->getCtx() ) );
@@ -1651,6 +1678,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTRA, tempCS, partitioner.chType );
 
+  xRestoreStartCtx();
   tempCS->initStructData( encTestMode.qp, false ); // clear motion buffer
 
   CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
@@ -1726,7 +1754,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
       // some of these tests win, so the full test stays there.
       if( !m_EDO && bestCS && bestCS->cost < MAX_DOUBLE && tempCS->lumaCost >= bestCS->cost )
       {
-        m_CABACEstimator->getCtx() = m_CurrCtx->start;
+        xSetStartCtx();
         return;
       }
     }
@@ -1993,6 +2021,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
   // 1. Pass: get SATD-cost for selected candidates and reduce their count
   m_mergeItemList.resetList( numMergeSatdCand );
   // until the RD pass below, only xCalcPuMeBits codes, and only merge contexts: save and restore those, not the store
+  xRestoreStartCtx();
   const TempCtx ctxStart   ( m_CtxCache, SubCtx( Ctx::MergeData, m_CABACEstimator->getCtx() ) );
   const DFunc   dfunc      = encTestMode.lossless ? DF_SAD : ( m_pcEncCfg->m_fastHad ? DF_HAD_fast : DF_HAD );
   DistParam     distParam  = m_cRdCost.setDistParam( tempCS->getOrgBuf().Y(), tempCS->getOrgBuf().Y(), sps.bitDepths[CH_L], dfunc );
@@ -3197,7 +3226,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
             //  MC
             cu.mcControl = chroma ? 0: 2;
             m_cInterSearch.motionCompensationIBC(cu, tempCS->getPredBuf());
-            m_CABACEstimator->getCtx() = m_CurrCtx->start;
+            xSetStartCtx();
 
             m_cInterSearch.encodeResAndCalcRdInterCU(*tempCS, partitioner, (numResidualPass != 0));
             cu.mcControl = 0;
@@ -3268,6 +3297,7 @@ void EncCu::xCheckRDCostIBCMode(CodingStructure*& tempCS, CodingStructure*& best
     cu.mcControl = chroma ? 0 : 2;
     m_cInterSearch.motionCompensationIBC(cu, tempCS->getPredBuf());
 
+    xRestoreStartCtx();
     m_cInterSearch.encodeResAndCalcRdInterCU(*tempCS, partitioner, false);
     cu.mcControl = 0;
 
@@ -3957,6 +3987,7 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
   const bool skipResidual = residualPass == 1;
   if( skipResidual || histBestSbt == MAX_UCHAR || !CU::isSbtMode( histBestSbt ) )
   {
+    xRestoreStartCtx();
     m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual, bestCS->cost );
     xEncodeDontSplit( *tempCS, partitioner );
     xCheckDQP       ( *tempCS, partitioner );
@@ -4100,6 +4131,7 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
       cu->sbtInfo = (sbtPos << 4) + sbtIdx;
 
       //try residual coding
+      xRestoreStartCtx();
       m_cInterSearch.encodeResAndCalcRdInterCU( *tempCS, partitioner, skipResidual, bestCS->cost );
       numRDOTried++;
 
@@ -4214,7 +4246,7 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
     xReconInter( cu );
   }
 
-  m_CABACEstimator->getCtx() = m_CurrCtx->start;
+  xSetStartCtx();
   m_CABACEstimator->resetBits();
 
   CUCtx cuCtx;

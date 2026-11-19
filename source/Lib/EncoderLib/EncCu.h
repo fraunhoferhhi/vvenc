@@ -262,6 +262,7 @@ private:
 
   std::vector<CtxPair>  m_CtxBuffer;
   CtxPair*              m_CurrCtx;
+  bool                  m_startCtxPending;  ///< reset the estimator to m_CurrCtx->start before its next read (see xCheckBestMode)
   CtxCache*             m_CtxCache;
 
   //  Data : encoder control
@@ -366,6 +367,8 @@ private:
 
   void xCompressCU            ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm );
   bool xCheckBestMode         ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestmode, const bool useEDO = false );
+  void xRestoreStartCtx       ();
+  void xSetStartCtx           ();
 
   void xCheckRDCostIntra      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckRDCostInter      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
