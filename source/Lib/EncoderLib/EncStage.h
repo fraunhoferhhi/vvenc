@@ -89,6 +89,11 @@ private:
   bool             m_isTrail;
   bool             m_ctsValid;
   void*            m_userData;
+  // The source buffer's layout, kept apart from m_origBuf, which a picture gives back (lends) once it is reconstructed.
+  ChromaFormat     m_chromaFormat = NUM_CHROMA_FORMAT;
+  Size             m_lumaSize;
+  int              m_padding = 0;
+  bool             m_sourceDone = false;   // the final encoder no longer reads m_origBuf (see canLendSource); set and cleared on the main thread only
 
 public:
   PicShared()
@@ -120,31 +125,59 @@ public:
   void         decUsed()               { CHECK( m_refCount <= 0, "invalid state: release unused picture" ); if( m_refCount > 0 ) m_refCount -= 1; }
   bool         isLeadTrail()     const { return m_isLead || m_isTrail; }
   int          getPOC()          const { return m_poc; }
-  ChromaFormat getChromaFormat() const { return m_origBuf.chromaFormat; }
+  ChromaFormat getChromaFormat() const { return m_chromaFormat; }
   PelStorage&  getFgaFilteredBuf()     { return m_fgaFilteredBuf; }
   bool&        fgaUsesFilteredBuf()    { return m_fgaUsesFilteredBuf; }
   PelStorage&  getFgaResidualBuf()     { return m_fgaResidualBuf; }
   int&         fgaResidualWeight()     { return m_fgaResidualWeight; }
   bool&        fgaSceneCut()           { return m_fgaSceneCut; }
   int&         fgaLastSceneCutPoc()    { return m_fgaLastSceneCutPoc; }
-  Size         getLumaSize()     const { return m_origBuf.Y(); }
+  Size         getLumaSize()     const { return m_lumaSize; }
 
-  void create( int maxFrames, ChromaFormat chromaFormat, const Size& size, bool useFilter )
+  // withSource false: the source buffer comes later, from createSource() or takeSourceFrom()
+  void create( int maxFrames, ChromaFormat chromaFormat, const Size& size, bool useFilter, bool withSource )
   {
     CHECK( m_refCount >= 0, "PicShared already created" );
 
-    m_maxFrames = maxFrames;
-    m_refCount  = 0;
+    m_maxFrames    = maxFrames;
+    m_refCount     = 0;
+    m_chromaFormat = chromaFormat;
+    m_lumaSize     = size;
+    m_padding      = useFilter ? MCTF_FRAME_MARGIN : 0;
+    if( withSource )
+    {
+      createSource();
+    }
+  }
 
-    const int padding = useFilter ? MCTF_FRAME_MARGIN : 0;
-    m_origBuf.create( chromaFormat, Area( Position(), size ), 0, padding );
+  bool hasSource() const { return m_origBuf.getOrigin( 0 ) != nullptr; }
+  void createSource()    { m_origBuf.create( m_chromaFormat, Area( Position(), m_lumaSize ), 0, m_padding ); }
+
+  // Set by the final GOP encoder once it has reconstructed the picture and nothing of its own reads the source any
+  // more (PSNR is computed before reconstruction ends, output reads the reconstruction only); cleared when it releases
+  // its picture. So while it is set, the final encoder's picture is one of the holders.
+  void setSourceDone()      { m_sourceDone = true; }
+  void clearSourceDone()    { m_sourceDone = false; }
+  bool isSourceDone() const { return m_sourceDone; }
+  // The source may go to a new input picture when nothing but the final encoder's picture holds this picture: no
+  // earlier stage (MCTF neighbours, pre-processing) and no later picture's QPA previous-frame reference. Once the final
+  // encoder has released its picture, m_refCount == 1 would be such a reference, hence the flag is cleared then.
+  bool canLendSource() const { return m_sourceDone && m_refCount == 1 && hasSource(); }
+  // Moves the lender's source buffer here. The lender keeps an empty PelStorage; a read through it is a bug (its
+  // cleared buffer list may still point at the moved storage, now holding another picture).
+  void takeSourceFrom( PicShared& lender )
+  {
+    CHECK( hasSource() || ! lender.canLendSource(), "invalid source buffer hand-over" );
+    m_origBuf.takeOwnership( lender.m_origBuf );
   }
 
   void reuse( int poc, const vvencYUVBuffer* yuvInBuf )
   {
     CHECK( m_refCount < 0, "PicShared not created" );
     CHECK( isUsed(),       "PicShared still in use" );
+    CHECK( ! hasSource(),  "PicShared has no source buffer" );
 
+    m_sourceDone = false;
     copyPadToPelUnitBuf( m_origBuf, *yuvInBuf, getChromaFormat() );
     m_fgaFilteredBuf.destroy();
     m_fgaUsesFilteredBuf = false;
@@ -206,6 +239,7 @@ public:
       prevOrigBufs[ i ] = nullptr;
       if( m_prevShared[ i ] )
       {
+        CHECK( ! m_prevShared[ i ]->hasSource(), "previous picture's source buffer was lent" );
         m_prevShared[ i ]->incUsed();
         prevOrigBufs[ i ] = &( m_prevShared[ i ]->m_origBuf );
       }
@@ -292,6 +326,16 @@ public:
   }
 
   bool isStageDone() const   { return m_procList.empty(); }
+  // pictures of this stage that are encoded but still hold their source buffer (read on the main thread only)
+  int  numEncodedWithSource() const
+  {
+    int n = 0;
+    for( auto pic : m_procList )
+    {
+      n += ( pic->isEncoded && pic->m_picShared && pic->m_picShared->hasSource() ) ? 1 : 0;
+    }
+    return n;
+  }
   bool isNonBlocking() const { return m_isNonBlocking; }
 
   void initStage( const VVEncCfg& encCfg, int minQueueSize, int startPoc, bool processLeadTrail, bool sortByPoc, bool nonBlocking )
