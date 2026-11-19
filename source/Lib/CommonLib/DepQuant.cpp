@@ -793,6 +793,30 @@ namespace DQIntern
     m_DistAdd                   = (int64_t(1) << m_DistShift) >> 1;
     m_DistStepAdd               = ((m_DistShift+m_QShift)>=64 ? (int64_t)( nomDistFactor * pow(2,m_DistShift+m_QShift) + .5 ) : (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+m_QShift)) + .5 ));
     m_DistOrgFact               = (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+1       )) + .5 );
+    m_psyBonus                  = 0;
+    if( usesPsyRdoq( tu, compID ) )
+    {
+      // psy-rdoq (as x265's psy-rdoq, which lowers a level's cost in proportion to its energy): every non-DC level is
+      // credited psi x sqrt( D1 x 2^15 ) per qIdx unit, D1 = the distortion cost of qIdx 1 at a zero coefficient; the
+      // credit stops at the source coefficient's amplitude (DepQuant::xDecide), so the grain's energy survives the
+      // quantization without levels above the source
+      const double d1 = double( ( m_DistStepAdd + m_DistAdd ) >> m_DistShift );
+      if( d1 > 0.0 )
+      {
+        m_psyBonus = (int64_t) ( m_psyRdoqStrength * std::sqrt( d1 * double( 1 << 15 ) ) + 0.5 );
+        // the zero / one crossover moves down by bonus / ( 2 D1 ) qIdx units: lower the last-position threshold with it
+        const double shiftQIdx = double( m_psyBonus ) / ( 2.0 * d1 );
+        const double thres     = double( m_thresLast ) - shiftQIdx * double( int64_t( 1 ) << ( m_QShift + 2 ) );
+        m_thresLast            = TCoeff( std::max( 1.0, thres ) );
+      }
+    }
+  }
+
+  // psy-rdoq acts on the luma of I slices only, not on transform skip: there it gives the I picture back the grain energy
+  // its inter neighbours keep (less pulsing at each I picture); in all slices it added flicker and lost top-band energy
+  bool Quantizer::usesPsyRdoq( const TransformUnit& tu, const ComponentID compID ) const
+  {
+    return m_psyRdoqStrength > 0.0 && isLuma( compID ) && tu.mtsIdx[ compID ] != MTS_SKIP && tu.cs->slice->isIntra();
   }
 
   void Quantizer::initQuantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, QuantBlockMemo& memo )
@@ -802,7 +826,10 @@ namespace DQIntern
     const int       qpDQ = cQP.Qp( false ) + 1;
     const CompArea& area = tu.blocks[compID];
     QuantBlockMemo::Entry& kept = memo.entry[toChannelType( compID )][Log2( area.width ) + Log2( area.height )];
-    if( kept.qpDQ == qpDQ && kept.lambda == lambda )
+    // psy-rdoq changes the parameters where it acts (I-slice luma), and its strength changes from picture to picture
+    // and within a block (TrQuant::requantLumaWithoutPsyRdoq)
+    const double psyRdoqStrength = usesPsyRdoq( tu, compID ) ? m_psyRdoqStrength : 0.0;
+    if( kept.qpDQ == qpDQ && kept.lambda == lambda && kept.psyRdoqStrength == psyRdoqStrength )
     {
       static_cast<QuantBlockParams&>( *this ) = kept.params;
       return;
@@ -811,6 +838,7 @@ namespace DQIntern
     m_thresDefault = TCoeff( m_thresLast / ( TCoeff( m_QScale ) << 2 ) );
     kept.qpDQ      = qpDQ;
     kept.lambda    = lambda;
+    kept.psyRdoqStrength = psyRdoqStrength;
     kept.params    = *this;
   }
 
@@ -1190,13 +1218,32 @@ struct DepQuant::PointerKernels
   }
 };
 
+// Lambda on luma coefficients in the upper half of a transform's frequencies, with KeepHighBand: distortion there weighs more
+// against bits, so the trellis zeroes fewer of them. It only keeps levels of what the source has, so it is not sharpening.
+// x.7 and x.5 fail on pulsing on film, and cost the second octave more.
+static const double KEEP_HIGH_BAND_LAMBDA = 0.85;
+
 void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
 {
   using namespace DQIntern;
   
   //===== reset / pre-init =====
   const TUParameters& tuPars  = *m_scansRom->getTUPars( tu.blocks[compID], compID );
-  m_quant.initQuantBlock    ( tu, compID, cQP, lambda, m_quantBlockMemo );
+  const bool keepHighBand = m_keepHighBand && isLuma( compID ) && !enableScalingLists && tu.cs->slice->sliceQp <= KEEP_HIGH_BAND_MAX_SLICE_QP;
+  DQIntern::Quantizer::DistWeight lowBandWeight{}, highBandWeight{};
+  if( keepHighBand )
+  {
+    // the block's parameters are those of the high band's lambda (as the memo keeps them), the low band's lambda gives
+    // its distortion weight only
+    m_quant.initQuantBlock( tu, compID, cQP, lambda );
+    lowBandWeight = m_quant.getDistWeight();
+    m_quant.initQuantBlock( tu, compID, cQP, lambda * KEEP_HIGH_BAND_LAMBDA, m_quantBlockMemo );
+    highBandWeight = m_quant.getDistWeight();
+  }
+  else
+  {
+    m_quant.initQuantBlock  ( tu, compID, cQP, lambda, m_quantBlockMemo );
+  }
   TCoeffSig*    qCoeff      = tu.getCoeffs( compID ).buf;
   const TCoeff* tCoeff      = srcCoeff.buf;
   ::memset( qCoeff, 0x00, levelRowsToClear( tu.blocks[compID].height ) * tu.blocks[compID].width * sizeof( TCoeffSig ) );
@@ -1306,6 +1353,17 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
       const ScanInfo& scanInfo = tuPars.m_scanInfo[ scanIdx ];
       m_quant.initQuantBlock( tu, compID, cQP, lambda, quantCoeff[scanInfo.rasterPos] );
       xDecideAndUpdate<PointerKernels>( abs( tCoeff[scanInfo.rasterPos] ), scanInfo, zeroOut && ( scanInfo.posX >= effWidth || scanInfo.posY >= effHeight ), quantCoeff[scanInfo.rasterPos] );
+    }
+  }
+  else if( keepHighBand )
+  {
+    // the distortion weight changes between the low and the high half of the frequencies: one position at a time
+    for( int scanIdx = firstTestPos; scanIdx >= 0; scanIdx-- )
+    {
+      const ScanInfo& scanInfo = tuPars.m_scanInfo[ scanIdx ];
+      const bool highBand = scanInfo.posX >= tuPars.m_width / 2 || scanInfo.posY >= tuPars.m_height / 2;
+      m_quant.setDistWeight( highBand ? highBandWeight : lowBandWeight );
+      xDecideAndUpdate<PointerKernels>( abs( tCoeff[scanInfo.rasterPos] ), scanInfo, zeroOut && ( scanInfo.posX >= effWidth || scanInfo.posY >= effHeight ), defaultQuantisationCoefficient );
     }
   }
   else
@@ -1514,7 +1572,9 @@ DepQuant::~DepQuant()
 
 void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff& uiAbsSum, const QpParam& cQP, const Ctx& ctx )
 {
-  if( tu.cs->picture->useSelectiveRdoq && !xNeedRDOQ( tu, compID, pSrc, cQP ) )
+  // selective RDOQ zeroes a block whose coefficients all lie below the plain dead zone; psy-rdoq's credit can keep such
+  // coefficients, so its blocks always go through the quantizer
+  if( tu.cs->picture->useSelectiveRdoq && !m_quant.usesPsyRdoq( tu, compID ) && !xNeedRDOQ( tu, compID, pSrc, cQP ) )
   {
     tu.lastPos[compID] = -1;
     uiAbsSum           =  0;
@@ -1541,7 +1601,11 @@ void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffB
       enableScalingLists                = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
       quantCoeff                        = Quant::getQuantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight);
     }
-    xQuantDQ( tu, pSrc, compID, cQP, Quant::m_dLambda, ctx, uiAbsSum, enableScalingLists, quantCoeff );
+    // LevelLambda scales the lambda of the luma level decisions only: below 1.0 a small coefficient survives more often
+    // (a smaller deadzone, as x264's --tune grain lowers its trellis deadzones); mode decisions, chroma and transform
+    // skip (RDOQ) keep theirs
+    const double dqLambda = isLuma( compID ) ? Quant::m_dLambda * m_levelLambdaScale : Quant::m_dLambda;
+    xQuantDQ( tu, pSrc, compID, cQP, dqLambda, ctx, uiAbsSum, enableScalingLists, quantCoeff );
   }
   else
   {
@@ -1580,10 +1644,11 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
   }
 }
 
-void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal )
+void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal, bool keepHighBand )
 {
   QuantRDOQ2::init( rdoq, useRDOQTS, thrVal );
   m_quant.init( thrVal );
+  m_keepHighBand = keepHighBand;
   m_quantBlockMemo = DQIntern::QuantBlockMemo();   // the threshold value is part of what it keeps
 }
 

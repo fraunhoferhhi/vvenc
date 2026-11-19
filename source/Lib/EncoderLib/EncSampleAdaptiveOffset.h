@@ -48,6 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CABACWriter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "CommonLib/RdCost.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -109,7 +110,7 @@ public:
   virtual ~EncSampleAdaptiveOffset();
 
   //interface
-  void init                  ( const VVEncCfg& encCfg );
+  void init                  ( const VVEncCfg& encCfg, const RdCost* psyCost );
   void initSlice             ( const Slice* slice );
   void setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, PelStorage* ctuPreSaoBuf );
 
@@ -130,6 +131,8 @@ private:
   void    deriveLoopFilterBoundaryAvailibility(CodingStructure& cs, const Position& pos, bool& isLeftAvail, bool& isAboveAvail, bool& isAboveLeftAvail) const;
   inline int64_t  estSaoDist    (int64_t count, int64_t offset, int64_t diffSum, int shift);
   inline int      estIterOffset (int typeIdx, double lambda, int offsetInput, int64_t count, int64_t diffSum, int shift, int bitIncrease, int64_t& bestDist, double& bestCost, int offsetTh );
+  void    psyBeginCtu        (CodingStructure& cs, const UnitArea& ctuArea);
+  int64_t getPsyDistortion   (int typeIdc, int typeAuxInfo, int* invQuantOffset);
 
 private:
 
@@ -140,6 +143,15 @@ private:
   CtxCache*     m_CtxCache;
   PelStorage*   m_ctuPreSao;   ///< pre-SAO samples of the current CTU with one sample of border, see loadCtuPreSao
   double        m_lambda[ MAX_NUM_COMP ];
+
+  // psy-rd in the luma decision: the change of the fine texture energy gap each candidate's offsets make (see psyBeginCtu)
+  const RdCost*     m_psyCost      = nullptr;   // the slice encoder's source energies and kernels; null with psy-rd off
+  double            m_psyWeight    = 0;         // the slice's psy-rd strength x sqrt( luma lambda ), as the CU search's
+  CodingStructure*  m_psyCs        = nullptr;   // the current CTU's, while its luma SAO is decided with psy-rd
+  CompArea          m_psyArea;                  // the current CTU's luma block
+  uint8_t           m_psyAvailMask = 0;         // its boundary availability, as offsetCTU derives it
+  int64_t           m_psyGapBefore = 0;         // the energy gap of its pre-SAO luma
+  PelStorage        m_psyScratch;               // its luma with a candidate's offsets applied
 };
 
 } // namespace vvenc

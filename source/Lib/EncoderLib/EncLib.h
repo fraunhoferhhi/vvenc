@@ -125,6 +125,7 @@ public:
 private:
   void     xUninitLib          ();
   void     xInitRCCfg          ();
+  void     xDecideVeryLowQP();
 
   PicShared* xGetFreePicShared();
  };

@@ -151,6 +151,7 @@ private:
   SaoPreFilterEdges            m_saoPreFilterEdges;
   std::vector<CtuEncParam>     ctuEncParams;
   std::vector<int>             m_ctuAddrMap;
+  RdCost                       m_psyRdCost;                          ///< builds each picture's psy-rd source energies
 
 public:
   EncSlice();
@@ -188,6 +189,11 @@ private:
 
 public:
   static int getCascadeQP     ( const VVEncCfg& encCfg, const GOPEntry& gopEntry, const bool isIntra, int qp, const int lumaQpBDOffset );
+  static int getLowestInterQP ( const VVEncCfg& encCfg, const int baseQP );
+  static double getPsyRdStrength( const VVEncCfg& encCfg, const Slice& slice );
+  static double getPsyRdoqStrength( const VVEncCfg& encCfg, const Slice& slice );
+  static int    getPsyRateDeblockingOffset( const VVEncCfg& encCfg, int configuredOffsetDiv2 );
+  void          measurePsyLostShare( Picture& pic ) const;
 };
 
 } // namespace vvenc

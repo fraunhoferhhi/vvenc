@@ -303,6 +303,12 @@ inline void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff 
     int64_t pq_a_dist = ( ( scaledAdd + 0 * m_quant.m_DistStepAdd ) * 1 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
     int64_t pq_b_dist = ( ( scaledAdd + 1 * m_quant.m_DistStepAdd ) * 2 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
     /// stop inline prequant
+    if( m_quant.m_psyBonus && scanInfo.rasterPos )   // psy-rdoq (Quantizer::initQuantBlock), not on DC
+    {
+      const int64_t org16 = scaledOrg >> ( m_quant.m_QShift - 4 );   // the source amplitude in 1/16 qIdx units
+      pq_a_dist -= m_quant.psyCredit( 1, org16 );
+      pq_b_dist -= m_quant.psyCredit( 2, org16 );
+    }
 
     if( prev.anyRemRegBinsLt4 )
     {
@@ -359,6 +365,14 @@ inline void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff 
     pq_d.deltaDist = ( ( scaledAdd + 3 * m_quant.m_DistStepAdd ) * ( qIdx + 3 ) + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
     pq_d.absLevel = ( qIdx + 4 ) >> 1;
     /// stop inline prequant
+    if( m_quant.m_psyBonus && scanInfo.rasterPos )   // psy-rdoq (Quantizer::initQuantBlock), not on DC
+    {
+      const int64_t org16 = scaledOrg >> ( m_quant.m_QShift - 4 );   // the source amplitude in 1/16 qIdx units
+      pq_a.deltaDist -= m_quant.psyCredit( qIdx + 0, org16 );
+      pq_b.deltaDist -= m_quant.psyCredit( qIdx + 1, org16 );
+      pq_c.deltaDist -= m_quant.psyCredit( qIdx + 2, org16 );
+      pq_d.deltaDist -= m_quant.psyCredit( qIdx + 3, org16 );
+    }
 
     bool cff02ge4 = pqData[0].absLevel >= 4/* || pqData[2].absLevel >= 4 */;
     bool cff13ge4 = /* pqData[1].absLevel >= 4 || */ pqData[3].absLevel >= 4;

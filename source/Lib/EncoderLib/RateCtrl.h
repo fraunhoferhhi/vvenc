@@ -118,6 +118,7 @@ namespace vvenc {
     int             gopSize;
     unsigned        intraPeriod;
     bool            scRelax;
+    bool            flatInterQP; // FlatInterQP: the temporal levels' QPs may be equal (EncRCPic::clipTargetQP)
     int             bitDepth;
     int64_t         bitsUsed;
     int64_t         bitsUsedQPLimDiff;

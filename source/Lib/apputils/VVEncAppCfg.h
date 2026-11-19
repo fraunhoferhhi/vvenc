@@ -251,6 +251,22 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
   { "gray10",                    YUV400_10 },
 };
 
+// --tune: a set of settings for one purpose, applied at its position on the command line (as --preset)
+enum TuneMode
+{
+  TUNE_NONE  = 0,
+  TUNE_GRAIN = 1,
+};
+
+// the grain tune's CuTreePicStrength, 2.0 as the 5-bit fixed point value of m_cuTreePicStrength
+const uint8_t GRAIN_TUNE_CUTREE_PIC_STRENGTH = 64;
+
+const std::vector<SVPair<int>> TuneToIntMap =
+{
+  { "none",  TUNE_NONE },
+  { "grain", TUNE_GRAIN },
+};
+
 const std::vector<SVPair<int>> SaoToIntMap =
 {
   { "0", 0 },
@@ -441,6 +457,8 @@ static void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cf
 
 static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal );
 
+static void setTune( VVEncAppCfg *appcfg, vvenc_config *cfg, int tune );
+
 static void setColourRange( VVEncAppCfg* appcfg, vvenc_config *cfg, int colourRange );
 
 
@@ -460,6 +478,7 @@ public:
   std::string  m_reconFileName;                                ///< output reconstruction file
   std::string  m_RCStatsFileName;                              ///< rate control statistics file
   vvencChromaFormat m_inputFileChromaFormat    = VVENC_CHROMA_420;
+  int          m_tune                          = TUNE_NONE;    ///< the --tune given, re-applied after a later --preset
   int          m_FrameSkip                     = 0;            ///< number of skipped frames from the beginning
   bool         m_bClipInputVideoToRec709Range  = false;
   bool         m_bClipOutputVideoToRec709Range = false;
@@ -590,6 +609,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToArr<char>                toSummaryPicFilenameBase      ( &c->m_summaryPicFilenameBase[0], VVENC_MAX_STRING_LEN  );
 
   IStreamToFunc<int>                toSaoWithScc                  ( setSAO, this, c, &SaoToIntMap, 0 );
+  IStreamToFunc<int>                toTune                        ( setTune, this, c, &TuneToIntMap, TUNE_NONE );
 
   IStreamToInt8                     toSliceTypeAdapt              ( &c->m_sliceTypeAdapt );
   IStreamToInt8                     toSelectiveRDOQ               ( &c->m_useSelectiveRDOQ );
@@ -599,10 +619,20 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toFga                         ( &c->m_fga );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
+  IStreamToInt8                     toKeepHighBand                ( &c->m_keepHighBand );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
+  IStreamToFixedPointU8             toPsyRD                       ( &c->m_psyRdStrengthVal, 6 );
+  IStreamToFixedPointU8             toPsyRDOQ                     ( &c->m_psyRdoqStrengthVal, 6 );
+  IStreamToInt8                     toFlatInterQP                 ( &c->m_flatInterQP );
+  IStreamToInt8                     toCCALFOnly                   ( &c->m_ccalfOnly );
+  IStreamToFixedPointU8             toLevelLambda                 ( &c->m_levelLambdaVal, 6 );
   IStreamToInt8                     toCuTreeBlockSize             ( &c->m_cuTreeBlockSize );
+  IStreamToFixedPointU8             toCuTreePicStrength           ( &c->m_cuTreePicStrength, 5 );
   IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFractionVal );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
+  IStreamToInt8                     toMTSImplicit                 ( &c->m_MTSImplicit );
+  IStreamToInt8                     toVeryLowQPSpeedUp            ( &c->m_veryLowQPSpeedUp );
+  IStreamToInt8                     toMCTFKeepDetail              ( &c->m_mctfKeepDetail );
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );
   IStreamToEnum<int8_t>             toUseIfp                      ( &c->m_ifp,                         &FlagToIntMap<int8_t> );
@@ -683,6 +713,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.setSubSection("Encoder Options");
     opts.addOptions()
     ("preset",                                          toPreset,                                            "preset for detailed parameter configuration (faster, fast, medium, slow, slower, medium_lowDecEnergy)")
+    ("tune",                                            toTune,                                              "settings for a purpose, kept over --preset in any order; options after --tune override them (none; grain (experimental): keeps\n"
+                                                                                                             "film grain and fine texture: QPA, MCTF and the ALF filters off, CCALF only (CCALFOnly 1), SAO on, luma\n"
+                                                                                                             "deblocking offsets -3, chroma QP offsets -3 (Cb, Cr, joint), FlatInterQP 1, IntraQPOffset -1, BIM 1 with\n"
+                                                                                                             "CuTreeStrength 0 and CuTreePicStrength 2 (picture QPs only; off without random access), PsyRD 1,\n"
+                                                                                                             "PsyRDOQ 1, LevelLambda 0.5, VeryLowQPSpeedUp 2, MTSImplicit 2; constant QP or a target bitrate)")
     ("bitrate,b",                                       toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control; otherwise\n"
                                                                                                              "bits/second; use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000)")
     ("maxrate,m",                                       toMaxRate,                                           "approximate maximum instantaneous bitrate for constrained VBR in rate control (0:\n"
@@ -707,6 +742,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("Threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
     ("MTProfile",                                       toMtProfile,                                         "set automatic multi-threading setting (-1: auto, 0: off, 1,2,3: on, enables tiles, IFP and WPP automatically depending on the number of threads)")
     ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower, medium_lowDecEnergy)")
+    ("Tune",                                            toTune,                                              "settings for a purpose, kept over --preset in any order; options after --tune override them (none; grain (experimental): keeps\n"
+                                                                                                             "film grain and fine texture: QPA, MCTF and the ALF filters off, CCALF only (CCALFOnly 1), SAO on, luma\n"
+                                                                                                             "deblocking offsets -3, chroma QP offsets -3 (Cb, Cr, joint), FlatInterQP 1, IntraQPOffset -1, BIM 1 with\n"
+                                                                                                             "CuTreeStrength 0 and CuTreePicStrength 2 (picture QPs only; off without random access), PsyRD 1,\n"
+                                                                                                             "PsyRDOQ 1, LevelLambda 0.5, VeryLowQPSpeedUp 2, MTSImplicit 2; constant QP or a target bitrate)")
     ("Tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
     ;
 
@@ -982,10 +1022,12 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FastUDIUseMPMEnabled",                            c->m_bFastUDIUseMPMEnabled,                          "If enabled, adapt intra direction search, accounting for MPM")
     ("FastMEForGenBLowDelayEnabled",                    c->m_bFastMEForGenBLowDelayEnabled,                  "If enabled use a fast ME for generalised B Low Delay slices")
 
-    ("MTSImplicit",                                     c->m_MTSImplicit,                                    "Enable implicit MTS when explicit MTS is off\n")
+    ("VeryLowQPSpeedUp",                                toVeryLowQPSpeedUp,                                  "(experimental) Turn off LFNST, BDOF, DMVR, PROF, SbTMVP and quad splits under 8 in B pictures, which save no bytes at very low QP: 0 off (keeps them), 1 on, 2 below QP 16 (with two rate-control passes decided by the second, off with one); 1 and 2 override those tools' own options\n")
+    ("MTSImplicit",                                     toMTSImplicit,                                       "Implicit MTS when explicit MTS is off: 0 off, 1 on, 2 (experimental) off below QP 16 (with two rate-control passes decided by the second, on with one)\n")
     ("TMVPMode",                                        c->m_TMVPModeId,                                     "TMVP mode enable(0: off 1: for all slices 2: for certain slices only)")
     ("DepQuant",                                        c->m_DepQuantEnabled,                                "Enable dependent quantization" )
     ("QuantThrVal",                                     c->m_quantThresholdVal,                              "Quantization threshold value for DQ last coefficient search" )
+    ("KeepHighBand",                                    toKeepHighBand,                                      "(experimental) With DepQuant, keep more fine detail at high rates, on slices up to QP 27: square CUs over 32 whose finest detail a 64-point transform would zero are split, and the trellis drops fewer luma coefficients in the upper half of a transform's frequencies. Costs bytes (0: off, 1: on)" )
     ("SignHideFlag",                                    c->m_SignDataHidingEnabled,                          "Enable sign data hiding" )
     ("MIP",                                             c->m_MIP,                                            "Enable MIP (matrix-based intra prediction)")
     ("FastMIP",                                         c->m_useFastMIP,                                     "Fast encoder search for MIP (matrix-based intra prediction)")
@@ -1108,6 +1150,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("ALF",                                             c->m_alf,                                            "Adaptive Loop Filter" )
     ("ALFSpeed",                                        c->m_alfSpeed,                                       "ALF speed (skip filtering of non-referenced frames) [0-1]" )
     ("CCALF",                                           c->m_ccalf,                                          "Cross-component Adaptive Loop Filter" )
+    ("CCALFOnly",                                       toCCALFOnly,                                         "(experimental) luma and chroma ALF filters off, only CCALF filters the chroma (0: off, 1: on; needs ALF and CCALF on)" )
     ("UseNonLinearAlfLuma",                             c->m_useNonLinearAlfLuma,                            "Non-linear adaptive loop filters for Luma Channel")
     ("UseNonLinearAlfChroma",                           c->m_useNonLinearAlfChroma,                          "Non-linear adaptive loop filters for Chroma Channels")
     ("MaxNumAlfAlternativesChroma",                     c->m_maxNumAlfAlternativesChroma,                    std::string("Maximum number of alternative Chroma filters (1-") + std::to_string(VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA) + std::string (", inclusive)") )
@@ -1123,12 +1166,22 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MCTFSpeed",                                       c->m_vvencMCTF.MCTFSpeed,                            "MCTF Fast Mode (0:best quality ... 4:fastest operation)")
     ("MCTFLevelTilt",                                   toMCTFLevelTilt,                                     "MCTF filter strength raised for the three upper temporal levels, the pictures the others predict from (-1: auto, on with film grain analysis (fga) in random access; 0: off; 1: on, random access only; also raises explicit MCTFStrength values)")
     ("MCTFUnitSize",                                    c->m_vvencMCTF.MCTFUnitSize,                         "Size of MCTF operation area (block size for motion compensation).")
+    ("MCTFKeepDetail",                                  toMCTFKeepDetail,                                    "(experimental) Keep the fine band of noisy sources on filtered pictures (0:off, 1:on, 2:below QP 16, with two rate-control passes decided by the second, off with one); larger files")
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
     ("BIM",                                             toBIM,                                               "Block importance mapping: lower the QP of blocks that later pictures predict from (0: off, 1: CU-tree, TPL model with one GOP of look-ahead, 2: from MCTF's motion error)")
     ("CuTreeStrength",                                  toCuTreeStrength,                                    "CU-tree (BIM 1): scale of its QP offsets [0...8.0)")
+    ("PsyRD",                                           toPsyRD,                                             "(experimental) psy-rd: keeps film grain and fine texture. The encoder's decisions weigh the fine luma texture energy a block\n"
+                                                                                                             "loses or adds against the source (0: off; 1.0: the strength --tune grain sets; up to 3.98). With it, angular\n"
+                                                                                                             "intra modes away from source edges get half the credit, and SAO's luma decision weighs the energy its offsets change")
+    ("PsyRDOQ",                                         toPsyRDOQ,                                           "(experimental) psy-rdoq: keeps film grain in I pictures. Luma quantization keeps small levels that carry the source's texture\n"
+                                                                                                             "(0: off; 1.0: the strength --tune grain sets; up to 3.98; no effect where DepQuant is off and on transform-skip blocks)")
+    ("FlatInterQP",                                     toFlatInterQP,                                       "(experimental) all inter pictures at one QP 5 above the base QP instead of the GOP's QP offsets, the I picture at that QP plus IntraQPOffset; with CuTreePicStrength these flat levels are lowered for the pictures later pictures depend on most; with rate control the inter pictures' QPs stay level while the rate control sets them (0: off, 1: on; needs QPA off)")
+    ("LevelLambda",                                     toLevelLambda,                                       "(experimental) scale of the lambda in dependent quantization's luma level decisions (0...3.98], default 1.0; below 1.0 small\n"
+                                                                                                             "coefficients survive more often; no effect where DepQuant is off and on transform-skip blocks)")
     ("CuTreeBlockSize",                                 toCuTreeBlockSize,                                   "CU-tree (BIM 1): side of its analysis blocks in luma samples (16, 32, or -1: automatic, 32 from 720 lines on, else 16)")
+    ("CuTreePicStrength",                               toCuTreePicStrength,                                 "CU-tree (BIM 1), random access, not with a maximum rate without a target rate: picture QPs from how much later pictures depend on each picture, in place of the temporal layers' fixed QP offsets; scale of these offsets [0...8.0) (0: off). At constant QP it codes at QP + round( 3 + 2 * strength ) to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32). With FlatInterQP: lowers the flat QPs by strength * ( log2( 1 + dependency ) - 4 ), only where that is positive")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
@@ -1402,6 +1455,17 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
       {
         err.error( "y4m parser" ) << "cannot parse y4m metadata.\n";
       }
+    }
+
+    // The grain tune's picture QPs from the CU tree need pictures that later pictures depend on: without random access (all
+    // intra, or no picture reordering) the tune codes at its flat QPs alone instead of failing the configuration check. Only
+    // the tune's own values are dropped: other BIM or CU-tree strengths, and --additional settings (applied later), still
+    // reach the check.
+    if( m_tune == TUNE_GRAIN && ( c->m_IntraPeriod == 1 || ! c->m_picReordering ) && c->m_blockImportanceMapping == 1
+        && c->m_cuTreeStrength == 0 && c->m_cuTreePicStrength == GRAIN_TUNE_CUTREE_PIC_STRENGTH )
+    {
+      c->m_blockImportanceMapping = 0;
+      c->m_cuTreePicStrength      = 0;
     }
 
     if( sdrMode != VVENC_HDR_OFF || hdrMode != VVENC_HDR_OFF )
@@ -1847,6 +1911,7 @@ void setPresets( VVEncAppCfg* appcfg, vvenc_config* cfg,  int preset )
   {
     callback( cfg, (vvencPresetMode)preset );
   }
+  setTune( appcfg, cfg, appcfg->m_tune );   // a preset resets the tune's tools: --tune keeps them whatever the order
 }
 
 void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int dbcs )
@@ -1870,6 +1935,38 @@ static void setSAO( VVEncAppCfg*, vvenc_config *cfg, int saoVal )
 {
   cfg->m_bUseSAO = !!saoVal;
   cfg->m_saoScc  = saoVal == 2;
+}
+
+// the grain tune: the settings measured to keep the most film grain and fine texture at a given size (measured at constant QP)
+static void setTune( VVEncAppCfg* appcfg, vvenc_config *cfg, int tune )
+{
+  appcfg->m_tune = tune;
+  if( tune != TUNE_GRAIN )
+  {
+    return;
+  }
+  cfg->m_usePerceptQPA               = false;
+  cfg->m_vvencMCTF.MCTF              = 0;
+  cfg->m_blockImportanceMapping      = 1;       // the CU tree for picture QPs only (no block offsets): it lowers the flat
+  cfg->m_cuTreeStrength              = 0;       // QPs of pictures much of the sequence depends on (static or clean
+  cfg->m_cuTreePicStrength           = GRAIN_TUNE_CUTREE_PIC_STRENGTH;   // content); film grain keeps the flat QPs
+  cfg->m_alf                         = true;    // ALF stays on in the SPS only for CCALF: the ALF filters are off
+  cfg->m_ccalf                       = true;
+  cfg->m_ccalfOnly                   = 1;
+  setSAO( nullptr, cfg, 1 );                    // SAO smooths the brush strokes; with psy-rd its luma decision keeps the texture
+  cfg->m_loopFilterBetaOffsetDiv2[0] = -3;      // luma deblocking: -6 left visible blocks at block edges
+  cfg->m_loopFilterTcOffsetDiv2[0]   = -3;
+  cfg->m_chromaCbQpOffset            = -3;      // finer chroma: the luma-first bit split left coarse colour patches
+  cfg->m_chromaCrQpOffset            = -3;
+  cfg->m_chromaCbCrQpOffset          = -3;
+  cfg->m_flatInterQP                 = 1;
+  cfg->m_intraQPOffset               = -1;      // the I picture 1 QP finer than the inter pictures: with psy-rdoq keeping its
+                                                // grain it pulses less, and it shows fewer shifting blocks than at +1
+  cfg->m_psyRdStrengthVal            = VVENC_SET_PSYRD_STRENGTH( 1.0 );
+  cfg->m_psyRdoqStrengthVal          = VVENC_SET_PSYRDOQ_STRENGTH( 1.0 );
+  cfg->m_levelLambdaVal              = VVENC_SET_LEVEL_LAMBDA( 0.5 );
+  cfg->m_veryLowQPSpeedUp            = 2;       // below QP 16: tools that save no bytes there off
+  cfg->m_MTSImplicit                 = 2;       // below QP 16: implicit MTS off (sources coded with DCT2 stay sparse in it)
 }
 
 static void setColourRange( VVEncAppCfg*, vvenc_config *cfg, int colourRange )

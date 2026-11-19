@@ -48,6 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencCfg.h"
 
 #define VVENC_MAX_NUM_INTENSITIES             256
+#define VVENC_VERY_LOW_QP                     16   // below it the source's own detail survives quantisation
 #define VVENC_MAX_NUM_MODEL_VALUES            6
 
 namespace vvenc {
@@ -77,9 +78,12 @@ struct VVEncCfg : public vvenc_config
 
   VVEncCfg& operator= ( const vvenc_config& extern_cfg );
 
+  // m_QP is the coding QP (getCodingQp), which differs from the configured QP with CuTreePicStrength;
+  // vvenc_get_config still returns the configured one
+
   // Both kinds of block importance mapping deliver per-CTU QP offsets through PicShared::m_ctuBimQpOffset and a
   // picture offset through m_picAuxQpOffset. BIM 2 takes both from MCTF; CU-tree (BIM 1) takes the picture offset from
-  // MCTF and the CTU offsets from its own look-ahead.
+  // MCTF (with CuTreePicStrength from its own look-ahead too) and the CTU offsets from its own look-ahead.
   bool hasBlockQpOffsets() const { return m_blockImportanceMapping > 0; }
   bool useCuTree()         const { return m_blockImportanceMapping == 1; }
 
@@ -102,13 +106,32 @@ struct VVEncCfg : public vvenc_config
   int       m_internalUsePerceptQPATempFiltISlice;
   bool      m_disableForce2ndOderFilter;
   double    m_cuTreeScale;      // scale of CU-tree's QP offsets, decoded from the 5-bit fixed point m_cuTreeStrength
+  double    m_cuTreePicScale;   // scale of CU-tree's picture QP offsets, decoded from m_cuTreePicStrength (0: off, the QP cascade)
+  int       m_configuredQP;     // the QP as configured; m_QP is the coding QP (getCodingQp)
   double    m_QPFraction;       // m_QPFraction in QP units (0 <= value < 1)
   double    m_fgaStrength;      // Film grain strength as the fraction of the analysed strength (0 <= value <  4)
+  double    m_psyRdStrength;    // psy-rd's strength in the RD cost, decoded from the multiplier m_psyRdStrengthVal (0: off)
+  double    psyRdStrength( double pictureScale ) const;   // the same for a picture whose strength is scaled (EncSlice::getPsyRdStrength)
+  double    psyRdoqStrength( double pictureScale ) const;   // psy-rdoq's (EncSlice::getPsyRdoqStrength)
+  double    m_psyRdoqStrength;  // psy-rdoq's strength in DepQuant, decoded from the multiplier m_psyRdoqStrengthVal (0: off)
 
 
 private:
   void xInitCfgMembers();
 };
+
+// The QP the encoder codes at for a configuration. CuTreePicStrength replaces the QP cascade, which puts the
+// unreferenced pictures 7 to 9 QP above the configured QP (QPA on, GOP 32), with picture offsets that only lower the
+// referenced pictures' QPs. Without a correction the same QP would code about 8 QP finer, at several times the rate, so
+// the coding QP adds round( 3 + 2 * strength ) (7 at strength 2, where it was measured), which keeps the mean rate
+// at a given QP within about x0.8 to x1.2 of master's (15 clips, QP 22 to 37), like the CRF offset x264 and x265
+// apply for MB-tree (mbtree_offset). Every QP-dependent default and tool uses the coding QP.
+int getCodingQp( const vvenc_config& c );
+// The pictures MCTF filters and how strongly, for a QP. Rate control filters one level more at the same QP.
+void initMCTFStrengths( vvencMCTF& mctf, int GOPSize, int QP, int QPFractionVal, bool rateControl );
+
+// Below QP 16 nearly all the bytes are coefficients of the source's own noise, which these tools can't predict or compact.
+void turnOffToolsForVeryLowQP( vvenc_config& cfg );
 
 }
 
