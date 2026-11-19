@@ -606,8 +606,8 @@ namespace DQIntern
 
       // lastBits[ pos ] = ctxBits[ g_uiGroupIdx[ pos ] ] for the first numPos positions, written as the runs of
       // g_uiGroupIdx (Rom.cpp: groups 0 to 3 one position each, 4 and 5 two, 6 and 7 four, 8 and 9 eight), which end at
-      // positions 4, 8, 16 and 32; numPos is 2, 4, 8, 16 or 32
-      CHECKD( numPos < 2 || ( numPos & ( numPos - 1 ) ) != 0, "a last-position run would be cut" );
+      // positions 4, 8, 16 and 32; numPos is 1 (ISP's 1-wide sub-TUs), 2, 4, 8, 16 or 32
+      CHECKD( ( numPos & ( numPos - 1 ) ) != 0, "a last-position run would be cut" );
       for( unsigned pos = 0; pos < std::min( numPos, 4u ); pos++ )
       {
         lastBits[ pos ]         = ctxBits[ pos ];
