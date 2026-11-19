@@ -749,28 +749,37 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FrameScale <= 0,                                                       "Frame scale must be greater than 0" );
   vvenc_confirmParameter( c, c->m_TicksPerSecond < -1 || c->m_TicksPerSecond == 0 || c->m_TicksPerSecond > 27000000, "TicksPerSecond must be in range from 1 to 27000000, or -1 for ticks per frame=1" );
 
-  std::stringstream css;
-  if ( c->m_FrameScale != 1  && c->m_FrameScale != 1001 && c->m_TicksPerSecond == VVENC_TICKS_PER_SEC_DEF )
+  // Every frame must last a whole number of ticks: TicksPerSecond * FrameScale / FrameRate is an integer exactly when
+  // TicksPerSecond is a multiple of FrameRate / gcd( FrameRate, FrameScale ). The message suggests the largest such value
+  // in range, which keeps the timing as fine as the default.
+  if( c->m_TicksPerSecond > 0 && c->m_FrameRate > 0 && c->m_FrameScale > 0
+      && ( (int64_t)c->m_TicksPerSecond * c->m_FrameScale ) % c->m_FrameRate )
   {
-    double dFrameRate = c->m_FrameRate/(double)c->m_FrameScale;
-    css << "Detected non-standard Frame Rate " << c->m_FrameRate << "/" << c->m_FrameScale;
-    css << " (" << std::fixed << std:: setprecision(2) << dFrameRate <<  std::setprecision(-1) << " Hz).";
-    css << " Default TicksPerSecond (" << VVENC_TICKS_PER_SEC_DEF << ") can not be used.";
+    int a = c->m_FrameRate, b = c->m_FrameScale;
+    while( b ) { const int r = a % b; a = b; b = r; }   // a = gcd( FrameRate, FrameScale )
+    const int ticksStep = c->m_FrameRate / a;
 
-    if ( c->m_FrameRate * c->m_FrameScale <= VVENC_TICKS_PER_SEC_DEF )
+    std::stringstream css;
+    if( c->m_TicksPerSecond == VVENC_TICKS_PER_SEC_DEF )
     {
-      css << " possible TicksPerSecond: " << (c->m_FrameRate * c->m_FrameScale) << std::endl;
+      css << "Detected non-standard Frame Rate " << c->m_FrameRate << "/" << c->m_FrameScale;
+      css << " (" << std::fixed << std::setprecision(2) << c->m_FrameRate / (double)c->m_FrameScale << std::setprecision(-1) << " Hz).";
+      css << " Default TicksPerSecond (" << VVENC_TICKS_PER_SEC_DEF << ") can not be used.";
     }
     else
     {
-      css << " cannot find a proper value for TicksPerSecond in the range (1-" << VVENC_TICKS_PER_SEC_DEF << ")" << std::endl;
+      css << "TicksPerSecond (" << c->m_TicksPerSecond << ") does not fit Frame Rate " << c->m_FrameRate << "/" << c->m_FrameScale << ".";
     }
+    if( ticksStep <= VVENC_TICKS_PER_SEC_DEF )
+    {
+      css << " TicksPerSecond must be a multiple of " << ticksStep << ", e.g. " << VVENC_TICKS_PER_SEC_DEF / ticksStep * ticksStep;
+    }
+    else
+    {
+      css << " No TicksPerSecond in the range (1-" << VVENC_TICKS_PER_SEC_DEF << ") fits, use -1 (ticks per frame=1)";
+    }
+    vvenc_confirmParameter( c, true, css.str().c_str() );
   }
-  else
-  {
-    css << "TicksPerSecond must be a multiple of FrameRate/Framescale (" << c->m_FrameRate << "/" << c->m_FrameScale << "). Use 27000000 for NTSC content"  << std::endl;
-  }
-  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 && c->m_FrameRate > 0) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, css.str().c_str() );
 
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,                              "Number of threads out of range (-1 <= t <= 256)");
