@@ -41,6 +41,7 @@ POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 #include "DepQuant.h"
+#include "DepQuantDecide.h"
 #include "TrQuant.h"
 #include "CodingStructure.h"
 #include "UnitTools.h"
@@ -461,11 +462,11 @@ namespace DQIntern
     for( Channel& c : channel ) memset( c.ctxStates, 0xff, sizeof( c.ctxStates ) );
 
     // where equalCoeffCtxStates expects each set of contexts (the end of the last one is checked above)
-    CHECK( Ctx::SigCoeffGroup[ 1 ].Offset - first !=   2 || Ctx::SigFlag[ 0 ].Offset - first !=   4 || Ctx::SigFlag[ 1 ].Offset - first !=  16
-        || Ctx::SigFlag[ 2 ].Offset - first !=  24 || Ctx::SigFlag[ 3 ].Offset - first !=  36 || Ctx::SigFlag[ 4 ].Offset - first !=  44
-        || Ctx::SigFlag[ 5 ].Offset - first !=  56 || Ctx::ParFlag[ 0 ].Offset - first !=  64 || Ctx::ParFlag[ 1 ].Offset - first !=  85
-        || Ctx::GtxFlag[ 0 ].Offset - first !=  96 || Ctx::GtxFlag[ 1 ].Offset - first != 117 || Ctx::GtxFlag[ 2 ].Offset - first != 128
-        || Ctx::GtxFlag[ 3 ].Offset - first != 149, "the coefficient-coding contexts are not where equalCoeffCtxStates reads them" );
+    CHECKD( Ctx::SigCoeffGroup[ 1 ].Offset - first !=   2 || Ctx::SigFlag[ 0 ].Offset - first !=   4 || Ctx::SigFlag[ 1 ].Offset - first !=  16
+         || Ctx::SigFlag[ 2 ].Offset - first !=  24 || Ctx::SigFlag[ 3 ].Offset - first !=  36 || Ctx::SigFlag[ 4 ].Offset - first !=  44
+         || Ctx::SigFlag[ 5 ].Offset - first !=  56 || Ctx::ParFlag[ 0 ].Offset - first !=  64 || Ctx::ParFlag[ 1 ].Offset - first !=  85
+         || Ctx::GtxFlag[ 0 ].Offset - first !=  96 || Ctx::GtxFlag[ 1 ].Offset - first != 117 || Ctx::GtxFlag[ 2 ].Offset - first != 128
+         || Ctx::GtxFlag[ 3 ].Offset - first != 149, "the coefficient-coding contexts are not where equalCoeffCtxStates reads them" );
   }
 
   // The OR of the XORed 64-bit words of numCtx context models from firstCtx on (0 when they are equal), which the compiler
@@ -513,18 +514,17 @@ namespace DQIntern
            | diffOfCtxs<149, 11>( a, b ) ) == 0;     // GtxFlag[3]
   }
 
-  void RateEstimator::initCtx( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
+  bool RateEstimator::initCtx( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
                                RateTablesMemo& memo )
   {
-    m_scanId2Pos = tuPars.m_scanId2BlkPos;
-
     // The sig and gtx tables depend only on the channel type and the states of the coefficient-coding contexts. The
     // memo keeps, per channel type, the last tables built and the raw context bytes they came from: when those are
     // unchanged, as they mostly are, the kept tables are still valid. The result is identical to building them every time.
     const ChannelType chType = tuPars.m_chType;
     RateTablesMemo::Channel& kept = memo.channel[ chType ];
     const uint8_t* ctxStates = reinterpret_cast<const uint8_t*>( &fracBitsAccess[ Ctx::SigCoeffGroup[ 0 ].Offset ] );
-    if( !equalCoeffCtxStates( kept.ctxStates, ctxStates, chType ) )
+    const bool built = !equalCoeffCtxStates( kept.ctxStates, ctxStates, chType );
+    if( built )
     {
       xSetSigSbbFracBits( fracBitsAccess, chType, kept.tables );
       xSetSigFlagBits   ( fracBitsAccess, chType, kept.tables );
@@ -533,6 +533,34 @@ namespace DQIntern
     }
     m_tables = &kept.tables;
     xSetLastCoeffOffset( fracBitsAccess, tuPars, tu, compID );
+    return built;
+  }
+
+  void RateEstimator::xSetZeroProofRates( ZeroProofRates& r ) const
+  {
+    // chroma context ranges: sig_coeff_flag 4..7 for a diagonal < 2, else 0..3; gtx 6..10 for diagonal 0, else 1..5
+    for( int d = 0; d < 2; d++ )
+    {
+      const int sigFirst = d == 0 ? 4 : 0;
+      r.sig0[d] = r.sig1[d] = std::numeric_limits<int32_t>::max();
+      for( unsigned set = 0; set < sm_numCtxSetsSig; set++ )
+      {
+        for( int c = sigFirst; c < sigFirst + 4; c++ )
+        {
+          r.sig0[d] = std::min<int32_t>( r.sig0[d], m_tables->sig[set][c].intBits[0] );
+          r.sig1[d] = std::min<int32_t>( r.sig1[d], m_tables->sig[set][c].intBits[1] );
+        }
+      }
+      const int gtxFirst = d == 0 ? 6 : 1;
+      r.level[d] = std::numeric_limits<int32_t>::max();
+      for( int c = gtxFirst; c < gtxFirst + 5; c++ )
+      {
+        r.level[d] = std::min( r.level[d], *std::min_element( m_tables->gtx[c].bits + 1, m_tables->gtx[c].bits + 6 ) );
+      }
+    }
+    r.lastLevel = *std::min_element( m_tables->gtx[0].bits + 1, m_tables->gtx[0].bits + 6 );
+    r.sbb0      = std::min<int32_t>( m_tables->sigSbb[0].intBits[0], m_tables->sigSbb[1].intBits[0] );
+    r.sbb1      = std::min<int32_t>( m_tables->sigSbb[0].intBits[1], m_tables->sigSbb[1].intBits[1] );
   }
 
   void RateEstimator::xSetLastCoeffOffset( const FracBitsAccess& fracBitsAccess, const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID )
@@ -941,102 +969,6 @@ namespace DQIntern
     state.sbbBits1[stateId]       =  0;
   }
 
-  static const Decisions startDec[2] =
-  {
-    Decisions
-    {
-      { rdCostInit >> 2, rdCostInit >> 2, rdCostInit >> 2, rdCostInit >> 2 },
-      { -1, -1, -1, -1 },
-      { -2, -2, -2, -2 },
-    },
-    Decisions
-    {
-      { rdCostInit >> 2, rdCostInit >> 2, rdCostInit >> 2, rdCostInit >> 2 },
-      { 0, 0, 0, 0 },
-      { 4, 5, 6, 7 },
-    }
-  };
-
-  template<bool rrgEnsured = false>
-  static inline void checkRdCosts( const int stateId, const DQIntern::ScanPosType spt, const DQIntern::PQData& pqDataA, const DQIntern::PQData& pqDataB, DQIntern::Decisions& decisions, int idxAZ, int idxB, const DQIntern::StateMem& state )
-  {
-    const int32_t* goRiceTab = DQIntern::g_goRiceBits[state.m_goRicePar[stateId]];
-    int64_t         rdCostA = state.rdCost[stateId] + pqDataA.deltaDist;
-    int64_t         rdCostB = state.rdCost[stateId] + pqDataB.deltaDist;
-    int64_t         rdCostZ = state.rdCost[stateId];
-
-    if( rrgEnsured || state.remRegBins[stateId] >= 4 )
-    {
-      const CoeffFracBits& cffBits = state.m_gtxFracBitsArray[state.ctx.cff[stateId]];
-      const BinFracBits    sigBits = state.m_sigFracBitsArray[stateId][state.ctx.sig[stateId]];
-
-      if( pqDataA.absLevel < 4 )
-        rdCostA += cffBits.bits[pqDataA.absLevel];
-      else
-      {
-        const unsigned value = ( pqDataA.absLevel - 4 ) >> 1;
-        rdCostA += cffBits.bits[pqDataA.absLevel - ( value << 1 )] + goRiceTab[std::min<unsigned>( value, RICEMAX - 1 )];
-      }
-
-      if( pqDataB.absLevel < 4 )
-        rdCostB += cffBits.bits[pqDataB.absLevel];
-      else
-      {
-        const unsigned value = ( pqDataB.absLevel - 4 ) >> 1;
-        rdCostB += cffBits.bits[pqDataB.absLevel - ( value << 1 )] + goRiceTab[std::min<unsigned>( value, RICEMAX - 1 )];
-      }
-
-      if( spt == SCAN_ISCSBB )
-      {
-        rdCostA += sigBits.intBits[1];
-        rdCostB += sigBits.intBits[1];
-        rdCostZ += sigBits.intBits[0];
-      }
-      else if( spt == SCAN_SOCSBB )
-      {
-        rdCostA += state.sbbBits1[stateId] + sigBits.intBits[1];
-        rdCostB += state.sbbBits1[stateId] + sigBits.intBits[1];
-        rdCostZ += state.sbbBits1[stateId] + sigBits.intBits[0];
-      }
-      else if( state.numSig[stateId] )
-      {
-        rdCostA += sigBits.intBits[1];
-        rdCostB += sigBits.intBits[1];
-        rdCostZ += sigBits.intBits[0];
-      }
-      else
-      {
-        rdCostZ = rdCostInit;
-      }
-    }
-    else
-    {
-      rdCostA += ( 1 << SCALE_BITS ) + goRiceTab[pqDataA.absLevel <= state.m_goRiceZero[stateId] ? pqDataA.absLevel - 1 : std::min<int>( pqDataA.absLevel, RICEMAX - 1 )];
-      rdCostB += ( 1 << SCALE_BITS ) + goRiceTab[pqDataB.absLevel <= state.m_goRiceZero[stateId] ? pqDataB.absLevel - 1 : std::min<int>( pqDataB.absLevel, RICEMAX - 1 )];
-      rdCostZ += goRiceTab[state.m_goRiceZero[stateId]];
-    }
-
-    if( rdCostA < rdCostZ && rdCostA < decisions.rdCost[idxAZ] )
-    {
-      decisions.rdCost[idxAZ] = rdCostA;
-      decisions.absLevel[idxAZ] = pqDataA.absLevel;
-      decisions.prevId[idxAZ] = stateId;
-    }
-    else if( rdCostZ < decisions.rdCost[idxAZ] )
-    {
-      decisions.rdCost[idxAZ] = rdCostZ;
-      decisions.absLevel[idxAZ] = 0;
-      decisions.prevId[idxAZ] = stateId;
-    }
-
-    if( rdCostB < decisions.rdCost[idxB] )
-    {
-      decisions.rdCost[idxB] = rdCostB;
-      decisions.absLevel[idxB] = pqDataB.absLevel;
-      decisions.prevId[idxB] = stateId;
-    }
-  }
-
   void checkAllRdCosts( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
   {
     ::memcpy( &decisions, startDec, sizeof( Decisions ) );
@@ -1046,61 +978,6 @@ namespace DQIntern
     checkRdCosts<true>( 3, spt, pqData[3], pqData[1], decisions, 3, 1, state );
   }
 
-  template<bool rrgEnsured = false>
-  static void checkRdCostsOdd1( const int stateId, const ScanPosType spt, const int64_t deltaDist, Decisions& decisions, int idxA, int idxZ, const StateMem& state )
-  {
-    int64_t         rdCostA = state.rdCost[stateId] + deltaDist;
-    int64_t         rdCostZ = state.rdCost[stateId];
-
-    if( rrgEnsured || state.remRegBins[stateId] >= 4 )
-    {
-      const BinFracBits sigBits = state.m_sigFracBitsArray[stateId][state.ctx.sig[stateId]];
-
-      rdCostA += state.cffBits1[state.ctx.cff[stateId]];
-
-      if( spt == SCAN_ISCSBB )
-      {
-        rdCostA += sigBits.intBits[1];
-        rdCostZ += sigBits.intBits[0];
-      }
-      else if( spt == SCAN_SOCSBB )
-      {
-        rdCostA += state.sbbBits1[stateId] + sigBits.intBits[1];
-        rdCostZ += state.sbbBits1[stateId] + sigBits.intBits[0];
-      }
-      else if( state.numSig[stateId] )
-      {
-        rdCostA += sigBits.intBits[1];
-        rdCostZ += sigBits.intBits[0];
-      }
-      else
-      {
-        rdCostZ = rdCostInit;
-      }
-    }
-    else
-    {
-      const int32_t* goRiceTab = g_goRiceBits[state.m_goRicePar[stateId]];
-
-      rdCostA += ( 1 << SCALE_BITS ) + goRiceTab[0];
-      rdCostZ += goRiceTab[state.m_goRiceZero[stateId]];
-    }
-
-    if( rdCostA < decisions.rdCost[idxA] )
-    {
-      decisions.rdCost[idxA] = rdCostA;
-      decisions.absLevel[idxA] = 1;
-      decisions.prevId[idxA] = stateId;
-    }
-
-    if( rdCostZ < decisions.rdCost[idxZ] )
-    {
-      decisions.rdCost[idxZ] = rdCostZ;
-      decisions.absLevel[idxZ] = 0;
-      decisions.prevId[idxZ] = stateId;
-    }
-  }
-
   static void checkAllRdCostsOdd1( const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
   {
     ::memcpy( &decisions, startDec, sizeof( Decisions ) );
@@ -1108,65 +985,6 @@ namespace DQIntern
     checkRdCostsOdd1<true>( 1, spt, pq_b_dist, decisions, 0, 2, state );
     checkRdCostsOdd1<true>( 2, spt, pq_a_dist, decisions, 3, 1, state );
     checkRdCostsOdd1<true>( 3, spt, pq_a_dist, decisions, 1, 3, state );
-  }
-
-  static inline void checkRdCostStart( int32_t lastOffset, const PQData& pqData, Decisions& decisions, int idx, const StateMem& state )
-  {
-    const CoeffFracBits& cffBits = state.m_gtxFracBitsArray[0];
-
-    int64_t rdCost = pqData.deltaDist + lastOffset;
-    if( pqData.absLevel < 4 )
-    {
-      rdCost += cffBits.bits[pqData.absLevel];
-    }
-    else
-    {
-      const unsigned value = ( pqData.absLevel - 4 ) >> 1;
-      rdCost += cffBits.bits[pqData.absLevel - ( value << 1 )] + g_goRiceBits[0][value < RICEMAX ? value : RICEMAX - 1];
-    }
-
-    if( rdCost < decisions.rdCost[idx] )
-    {
-      decisions.rdCost[idx]   = rdCost;
-      decisions.absLevel[idx] = pqData.absLevel;
-      decisions.prevId[idx]   = -1;
-    }
-  }
-
-  static inline void checkRdCostSkipSbb( const int stateId, Decisions& decisions, int idx, const StateMem& state )
-  {
-    int64_t rdCost = state.rdCost[stateId] + state.sbbBits0[stateId];
-    if( rdCost < decisions.rdCost[idx] )
-    {
-      decisions.rdCost[idx]   = rdCost;
-      decisions.absLevel[idx] = 0;
-      decisions.prevId[idx]   = 4 | stateId;
-    }
-  }
-
-  static inline void checkRdCostSkipSbbZeroOut( const int stateId, Decisions& decisions, int idx, const StateMem& state )
-  {
-    int64_t rdCost          = state.rdCost[stateId] + state.sbbBits0[stateId];
-    decisions.rdCost[idx]   = rdCost;
-    decisions.absLevel[idx] = 0;
-    decisions.prevId[idx]   = 4 | stateId;
-  }
-
-  static inline void setRiceParam( const int stateId, const ScanInfo& scanInfo, StateMem& state, bool ge4 )
-  {
-    if( state.remRegBins[stateId] < 4 || ge4 )
-    {
-      TCoeff  sumAbs = state.sum1st[scanInfo.insidePos][stateId];
-      int sumSub     = state.remRegBins[stateId] < 4 ? 0 : 4 * 5;
-      int sumAll     = std::max( std::min( 31, ( int ) sumAbs - sumSub ), 0 );
-      state.m_goRicePar[stateId]
-                     = g_auiGoRiceParsCoeff[sumAll];
-
-      if( state.remRegBins[stateId] < 4 )
-      {
-        state.m_goRiceZero[stateId] = g_auiGoRicePosCoeff0( stateId, state.m_goRicePar[stateId] );
-      }
-    }
   }
 
   static void update1State( int stateId, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr, DQIntern::StateMem& prev )
@@ -1375,6 +1193,31 @@ namespace DQIntern
   }
 }; // namespace DQIntern
 
+// The per-coefficient kernels through DepQuant's function pointers: the scalar trellis, and every scaling-list trellis
+struct DepQuant::PointerKernels
+{
+  static void checkAllRdCosts( const DepQuant& dq, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+  {
+    dq.m_checkAllRdCosts( spt, pqData, decisions, state );
+  }
+  static void checkAllRdCostsGe4( const DepQuant& dq, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+  {
+    dq.m_checkAllRdCostsGe4( spt, pqData, decisions, state );
+  }
+  static void checkAllRdCostsOdd1( const DepQuant& dq, const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+  {
+    dq.m_checkAllRdCostsOdd1( spt, pq_a_dist, pq_b_dist, decisions, state );
+  }
+  static void updateStates( const DepQuant& dq, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr )
+  {
+    dq.m_updateStates( scanInfo, decisions, curr );
+  }
+  static void updateStatesEOS( const DepQuant& dq, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx )
+  {
+    dq.m_updateStatesEOS( scanInfo, decisions, skip, curr, commonCtx );
+  }
+};
+
 // Lambda on luma coefficients in the upper half of a transform's frequencies, with KeepHighBand: distortion there weighs more
 // against bits, so the trellis zeroes fewer of them. It only keeps levels of what the source has, so it is not sharpening.
 // x.7 and x.5 fail on pulsing on film, and cost the second octave more.
@@ -1461,7 +1304,20 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   }
 
   //===== real init =====
-  RateEstimator::initCtx( tuPars, tu, compID, ctx.getFracBitsAcess(), m_rateTablesMemo );
+  if( RateEstimator::initCtx( tuPars, tu, compID, ctx.getFracBitsAcess(), m_rateTablesMemo ) && isChroma( compID ) )
+  {
+    m_zeroProofRatesStale = true;   // xProvesAllZero's rate minima come from the chroma tables
+  }
+
+  // Chroma in P and B slices: when no path can beat the all-zero TU, skip the trellis (qCoeff and absSum are already 0).
+  // Not in I slices, where the proof rarely succeeds and costs more than it saves.
+  if( isChroma( compID ) && !enableScalingLists && !tu.cs->slice->isIntra()
+      && xProvesAllZero( tuPars, tCoeff, firstTestPos, defaultQuantisationCoefficient ) )
+  {
+    tu.lastPos[compID] = -1;
+    return;
+  }
+
   m_commonCtx.reset( tuPars, *this );
   for( int k = 0; k < 4; k++ )
   {
@@ -1490,21 +1346,29 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
 
   //===== populate trellis =====
   m_firstScanIdx = firstTestPos;
-  for( int scanIdx = firstTestPos; scanIdx >= 0; scanIdx-- )
+  if( enableScalingLists )
   {
-    const ScanInfo& scanInfo = tuPars.m_scanInfo[ scanIdx ];
-    if( keepHighBand )
+    for( int scanIdx = firstTestPos; scanIdx >= 0; scanIdx-- )
     {
+      const ScanInfo& scanInfo = tuPars.m_scanInfo[ scanIdx ];
+      m_quant.initQuantBlock( tu, compID, cQP, lambda, quantCoeff[scanInfo.rasterPos] );
+      xDecideAndUpdate<PointerKernels>( abs( tCoeff[scanInfo.rasterPos] ), scanInfo, zeroOut && ( scanInfo.posX >= effWidth || scanInfo.posY >= effHeight ), quantCoeff[scanInfo.rasterPos] );
+    }
+  }
+  else if( keepHighBand )
+  {
+    // the distortion weight changes between the low and the high half of the frequencies: one position at a time
+    for( int scanIdx = firstTestPos; scanIdx >= 0; scanIdx-- )
+    {
+      const ScanInfo& scanInfo = tuPars.m_scanInfo[ scanIdx ];
       const bool highBand = scanInfo.posX >= tuPars.m_width / 2 || scanInfo.posY >= tuPars.m_height / 2;
       m_quant.setDistWeight( highBand ? highBandWeight : lowBandWeight );
+      xDecideAndUpdate<PointerKernels>( abs( tCoeff[scanInfo.rasterPos] ), scanInfo, zeroOut && ( scanInfo.posX >= effWidth || scanInfo.posY >= effHeight ), defaultQuantisationCoefficient );
     }
-    if( enableScalingLists )
-    {
-      m_quant.initQuantBlock( tu, compID, cQP, lambda, quantCoeff[scanInfo.rasterPos] );
-      xDecideAndUpdate( abs( tCoeff[scanInfo.rasterPos] ), scanInfo, zeroOut && ( scanInfo.posX >= effWidth || scanInfo.posY >= effHeight ), quantCoeff[scanInfo.rasterPos] );
-    }
-    else
-      xDecideAndUpdate( abs( tCoeff[scanInfo.rasterPos] ), scanInfo, zeroOut && ( scanInfo.posX >= effWidth || scanInfo.posY >= effHeight ), defaultQuantisationCoefficient );
+  }
+  else
+  {
+    m_populateTrellis( *this, tuPars, firstTestPos, tCoeff, zeroOut, effWidth, effHeight, defaultQuantisationCoefficient );
   }
 
   //===== find best path =====
@@ -1541,188 +1405,125 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   tu.lastPos[compID] = scanIdx - 1;
 }
 
-void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoeff, const int lastOffset, DQIntern::Decisions& decisions, bool zeroOut, int quantCoeff )
-{
-  using namespace DQIntern;
-
-  // m_checkAllRdCosts and m_checkAllRdCostsOdd1 set all of decisions themselves, and this runs for every coefficient:
-  // only the paths that compare against it start from startDec
-  StateMem& skip = m_state_skip;
-
-  if( zeroOut )
-  {
-    ::memcpy( &decisions, startDec, sizeof( Decisions ) );
-    if( scanInfo.spt == SCAN_EOCSBB )
-    {
-      checkRdCostSkipSbbZeroOut( 0, decisions, 0, skip );
-      checkRdCostSkipSbbZeroOut( 1, decisions, 1, skip );
-      checkRdCostSkipSbbZeroOut( 2, decisions, 2, skip );
-      checkRdCostSkipSbbZeroOut( 3, decisions, 3, skip );
-    }
-    return;
-  }
-
-  StateMem& prev = m_state_curr;
-
-  /// start inline prequant
-  int64_t scaledOrg = int64_t( absCoeff ) * quantCoeff;
-  TCoeff  qIdx      = TCoeff( ( scaledOrg + m_quant.m_QAdd ) >> m_quant.m_QShift );
-
-  if( qIdx < 0 )
-  {
-    int64_t scaledAdd = m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
-    int64_t pq_a_dist = ( ( scaledAdd + 0 * m_quant.m_DistStepAdd ) * 1 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
-    int64_t pq_b_dist = ( ( scaledAdd + 1 * m_quant.m_DistStepAdd ) * 2 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
-    /// stop inline prequant
-    if( m_quant.m_psyBonus && scanInfo.rasterPos )   // psy-rdoq (Quantizer::initQuantBlock), not on DC
-    {
-      const int64_t org16 = scaledOrg >> ( m_quant.m_QShift - 4 );   // the source amplitude in 1/16 qIdx units
-      pq_a_dist -= m_quant.psyCredit( 1, org16 );
-      pq_b_dist -= m_quant.psyCredit( 2, org16 );
-    }
-
-    if( prev.anyRemRegBinsLt4 )
-    {
-      ::memcpy( &decisions, startDec, sizeof( Decisions ) );
-
-      // at a block's first position all states still hold rdCostInit, so none of them can beat startDec's cost
-      if( scanInfo.scanIdx != m_firstScanIdx )
-      {
-        setRiceParam( 0, scanInfo, prev, false );
-        checkRdCostsOdd1( 0, scanInfo.spt, pq_b_dist, decisions, 2, 0, prev );
-
-        setRiceParam( 1, scanInfo, prev, false );
-        checkRdCostsOdd1( 1, scanInfo.spt, pq_b_dist, decisions, 0, 2, prev );
-
-        setRiceParam( 2, scanInfo, prev, false );
-        checkRdCostsOdd1( 2, scanInfo.spt, pq_a_dist, decisions, 3, 1, prev );
-
-        setRiceParam( 3, scanInfo, prev, false );
-        checkRdCostsOdd1( 3, scanInfo.spt, pq_a_dist, decisions, 1, 3, prev );
-      }
-    }
-    else
-    {
-      // has to be called as a first check, assumes no decision has been made yet
-      m_checkAllRdCostsOdd1( scanInfo.spt, pq_a_dist, pq_b_dist, decisions, prev );
-    }
-
-    checkRdCostStart( lastOffset, PQData{ 1, pq_b_dist }, decisions, 2, prev );
-  }
-  else
-  {
-    /// start inline prequant
-    // at least 1. qIdx is not negative here, and how often it is 0 is hard to predict: no branch for it
-    qIdx  = std::min<TCoeff>( m_quant.m_maxQIdx, qIdx );
-    qIdx += TCoeff( qIdx == 0 );
-    int64_t scaledAdd = qIdx * m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
-
-    PQData  pqData[4];
-
-    PQData& pq_a = pqData[( qIdx + 0 ) & 3];
-    PQData& pq_b = pqData[( qIdx + 1 ) & 3];
-    PQData& pq_c = pqData[( qIdx + 2 ) & 3];
-    PQData& pq_d = pqData[( qIdx + 3 ) & 3];
-
-    pq_a.deltaDist = ( ( scaledAdd + 0 * m_quant.m_DistStepAdd ) * ( qIdx + 0 ) + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
-    pq_a.absLevel = ( qIdx + 1 ) >> 1;
-
-    pq_b.deltaDist = ( ( scaledAdd + 1 * m_quant.m_DistStepAdd ) * ( qIdx + 1 ) + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
-    pq_b.absLevel = ( qIdx + 2 ) >> 1;
-
-    pq_c.deltaDist = ( ( scaledAdd + 2 * m_quant.m_DistStepAdd ) * ( qIdx + 2 ) + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
-    pq_c.absLevel = ( qIdx + 3 ) >> 1;
-
-    pq_d.deltaDist = ( ( scaledAdd + 3 * m_quant.m_DistStepAdd ) * ( qIdx + 3 ) + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
-    pq_d.absLevel = ( qIdx + 4 ) >> 1;
-    /// stop inline prequant
-    if( m_quant.m_psyBonus && scanInfo.rasterPos )   // psy-rdoq (Quantizer::initQuantBlock), not on DC
-    {
-      const int64_t org16 = scaledOrg >> ( m_quant.m_QShift - 4 );   // the source amplitude in 1/16 qIdx units
-      pq_a.deltaDist -= m_quant.psyCredit( qIdx + 0, org16 );
-      pq_b.deltaDist -= m_quant.psyCredit( qIdx + 1, org16 );
-      pq_c.deltaDist -= m_quant.psyCredit( qIdx + 2, org16 );
-      pq_d.deltaDist -= m_quant.psyCredit( qIdx + 3, org16 );
-    }
-
-    bool cff02ge4 = pqData[0].absLevel >= 4/* || pqData[2].absLevel >= 4 */;
-    bool cff13ge4 = /* pqData[1].absLevel >= 4 || */ pqData[3].absLevel >= 4;
-
-    if( cff02ge4 || cff13ge4 || prev.anyRemRegBinsLt4 )
-    {
-      ::memcpy( &decisions, startDec, sizeof( Decisions ) );
-
-      // at a block's first position all states still hold rdCostInit, so none of them can beat startDec's cost
-      if( scanInfo.scanIdx != m_firstScanIdx )
-      {
-        if( prev.anyRemRegBinsLt4 || cff02ge4 )
-        {
-          setRiceParam( 0, scanInfo, prev, cff02ge4 );
-          setRiceParam( 1, scanInfo, prev, cff02ge4 );
-        }
-
-        if( prev.anyRemRegBinsLt4 || cff13ge4 )
-        {
-          setRiceParam( 2, scanInfo, prev, cff13ge4 );
-          setRiceParam( 3, scanInfo, prev, cff13ge4 );
-        }
-
-        checkRdCosts( 0, scanInfo.spt, pqData[0], pqData[2], decisions, 0, 2, prev );
-        checkRdCosts( 1, scanInfo.spt, pqData[0], pqData[2], decisions, 2, 0, prev );
-        checkRdCosts( 2, scanInfo.spt, pqData[3], pqData[1], decisions, 1, 3, prev );
-        checkRdCosts( 3, scanInfo.spt, pqData[3], pqData[1], decisions, 3, 1, prev );
-      }
-    }
-    else
-    {
-      // has to be called as a first check, assumes no decision has been made yet
-      m_checkAllRdCosts( scanInfo.spt, pqData, decisions, prev );
-    }
-
-    checkRdCostStart( lastOffset, pqData[0], decisions, 0, prev );
-    checkRdCostStart( lastOffset, pqData[2], decisions, 2, prev );
-  }
-
-  if( scanInfo.spt == SCAN_EOCSBB )
-  {
-    checkRdCostSkipSbb( 0, decisions, 0, skip );
-    checkRdCostSkipSbb( 1, decisions, 1, skip );
-    checkRdCostSkipSbb( 2, decisions, 2, skip );
-    checkRdCostSkipSbb( 3, decisions, 3, skip );
-  }
-}
-
-void DepQuant::xDecideAndUpdate( const TCoeff absCoeff, const DQIntern::ScanInfo& scanInfo, bool zeroOut, int quantCoeff )
-{
-  using namespace DQIntern;
-
-  Decisions* decisions = &m_trellis[scanInfo.scanIdx][0];
-
-  xDecide( scanInfo, absCoeff, lastOffset( scanInfo.scanIdx ), *decisions, zeroOut, quantCoeff );
-
-  if( scanInfo.scanIdx )
-  {
-    if( scanInfo.spt == SCAN_SOCSBB )
-    {
-      memcpy( &m_state_skip, &m_state_curr, DQIntern::StateMemSkipCpySize );
-    }
-
-    if( scanInfo.insidePos == 0 )
-    {
-      m_commonCtx.swap();
-      m_updateStatesEOS( scanInfo, *decisions, m_state_skip, m_state_curr, m_commonCtx );
-      ::memcpy( decisions + 1, decisions, sizeof( Decisions ) );
-    }
-    else if( !zeroOut )
-    {
-      m_updateStates( scanInfo, *decisions, m_state_curr );
-    }
-  }
-}
-
 void DepQuant::xDequantDQ( const TransformUnit& tu,  CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP, bool enableScalingLists, int* piDequantCoef )
 {
   m_quant.dequantBlock( tu, compID, cQP, recCoeff, enableScalingLists, piDequantCoef, m_dequantCoeffs );
+}
+
+// Whether no trellis path can cost less than the all-zero TU (cost 0): then the trellis returns all zero, since it keeps
+// a nonzero level only for a path cost strictly below 0 (the best-path search starts at minPathCost 0, the test is <).
+// For a chroma TU without scaling lists, with the rate tables initCtx loaded. A path is fixed by its start (its last
+// nonzero position p) and the levels below p; its cost, in the trellis's own integers, is at least
+//   minDelta( p ) + lastOffset( p ) + lastLevel                          the start (checkRdCostStart)
+//   + the sum of reg( i ) over the positions i below p in p's sub-block  (its sb_coded_flag is inferred)
+//   + the sum over the sub-blocks below of min( sbb0, sbb1 + the sum of their positions' terms )   (sub-block 0: no flag)
+// minDelta( i ): the smallest deltaDist among xDecide's candidate levels at i; reg( i ) = min( sig0, minDelta( i ) + sig1
+// + level ) where the sig flag is coded; at a coded sub-block's first position (insidePos 0) it may be inferred, so the
+// term there leaves out sig1. The rate minima come from ZeroProofRates; all other rates (Rice and remainder bits) are >= 0.
+// Bypass guard: remRegBins starts at initRemRegBins; the start spends at most 3 bins and every later position at most 4,
+// so the j-th position below the start still has >= 4 bins for j <= jmax. Further down, a position may code no sig /
+// sb_coded_flag / gtx bins: a zero there costs >= 0, a nonzero >= minDelta + 1 bit (the sign), and its sub-block's term
+// becomes min( sbb0, the sum of those terms ).
+// The start costs are evaluated upward from DC, each from the sums of the positions below it, so the first negative one
+// ends the proof at once (TUs that are not all zero mostly end it near DC). The loop is scalar; the early
+// exit would have to go if it were ever vectorised.
+bool DepQuant::xProvesAllZero( const DQIntern::TUParameters& tuPars, const TCoeff* tCoeff, const int firstTestPos, const TCoeff quantCoeff )
+{
+  using namespace DQIntern;
+
+  // from the chroma tables initCtx just built or restored: refreshed here, not in xQuantDQ, once they were built again
+  if( m_zeroProofRatesStale )
+  {
+    xSetZeroProofRates( m_zeroProofRates );
+    m_zeroProofRatesStale = false;
+  }
+  const ZeroProofRates& rate     = m_zeroProofRates;
+  const int64_t         signBit  = int64_t( 1 ) << SCALE_BITS;
+  const int             log2Sbb  = tuPars.m_log2SbbSize;
+  const int             sbbSize  = 1 << log2Sbb;
+  // the trellis's initRemRegBins (xQuantDQ; chroma has no zero-out)
+  const int             initBins = ( std::min<int>( 32, tuPars.m_width ) * std::min<int>( 32, tuPars.m_height ) * MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT ) / 16;
+  const int             jmax     = initBins >= 7 ? ( initBins - 7 ) / 4 + 1 : 0;
+
+  // the sums of the sub-block terms below sub-block u (index u): with every position regular, or with bypass allowed
+  // (at most 32 x 32 positions are scanned, in sub-blocks of at least 4); each entry is written before it is read
+  int64_t sbbSumReg [MAX_TB_SIZEY * MAX_TB_SIZEY / 16 + 1];
+  int64_t sbbSumSafe[MAX_TB_SIZEY * MAX_TB_SIZEY / 16 + 1];
+  // in the current sub-block, the sums of the terms of its positions below insidePos k (index k); MLS_CG_SIZE is the
+  // log2 of the largest sub-block's number of positions
+  CHECKD( sbbSize > ( 1 << MLS_CG_SIZE ), "sub-block larger than the position sums hold" );
+  int64_t posSumReg [( 1 << MLS_CG_SIZE ) + 1];
+  int64_t posSumSafe[( 1 << MLS_CG_SIZE ) + 1];
+  sbbSumReg[0] = sbbSumSafe[0] = posSumReg[0] = posSumSafe[0] = 0;
+  int64_t sbbReg = 0, sbbSafe = 0;   // the current sub-block's own sums so far
+
+  for( int i = 0; i <= firstTestPos; i++ )
+  {
+    const ScanInfo& scanInfo = tuPars.m_scanInfo[i];
+    const int       u        = i >> log2Sbb;
+    const int       k        = scanInfo.insidePos;
+    CHECKD( k != i - ( u << log2Sbb ), "a sub-block's positions must be consecutive in the scan" );
+
+    // the smallest deltaDist of xDecide's candidate levels, with its integers
+    const int64_t scaledOrg = int64_t( abs( tCoeff[scanInfo.rasterPos] ) ) * quantCoeff;
+    TCoeff        qIdx      = TCoeff( ( scaledOrg + m_quant.m_QAdd ) >> m_quant.m_QShift );
+    int64_t       minDelta;
+    if( qIdx < 0 )
+    {
+      const int64_t scaledAdd = m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
+      minDelta = std::min( ( scaledAdd + m_quant.m_DistAdd ) >> m_quant.m_DistShift,
+                           ( ( scaledAdd + m_quant.m_DistStepAdd ) * 2 + m_quant.m_DistAdd ) >> m_quant.m_DistShift );
+    }
+    else
+    {
+      qIdx = std::max<TCoeff>( 1, std::min<TCoeff>( m_quant.m_maxQIdx, qIdx ) );
+      const int64_t scaledAdd = qIdx * m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
+      minDelta = std::numeric_limits<int64_t>::max();
+      for( int j = 0; j < 4; j++ )
+      {
+        minDelta = std::min( minDelta, ( ( scaledAdd + j * m_quant.m_DistStepAdd ) * ( qIdx + j ) + m_quant.m_DistAdd ) >> m_quant.m_DistShift );
+      }
+    }
+
+    // the least cost of a path starting here; positions >= i - jmax are surely regular
+    const int     q         = i - jmax;
+    const int     kq        = std::min( std::max( q - ( u << log2Sbb ), 0 ), k );
+    const int     ur        = std::min( q <= 0 ? 0 : ( q + sbbSize - 1 ) >> log2Sbb, u );
+    const int64_t startCost = minDelta + lastOffset( scanInfo ) + rate.lastLevel + ( posSumReg[k] - posSumReg[kq] ) + posSumSafe[kq]
+                            + ( sbbSumReg[u] - sbbSumReg[ur] ) + sbbSumSafe[ur];
+    if( startCost < 0 )
+    {
+      return false;
+    }
+
+    // the position's terms for the starts above it
+    const int     diag   = scanInfo.posX + scanInfo.posY;
+    const int     d      = diag < 2 ? 0 : 1;
+    const int     dl     = diag < 1 ? 0 : 1;
+    const int64_t bypass = std::min<int64_t>( 0, minDelta + signBit );
+    const int64_t reg    = std::min<int64_t>( rate.sig0[d], minDelta + rate.sig1[d] + rate.level[dl] );
+    const int64_t safe   = std::min( reg, bypass );
+    posSumReg [k + 1]    = posSumReg [k] + reg;
+    posSumSafe[k + 1]    = posSumSafe[k] + safe;
+    if( u > 0 && k == 0 )
+    {
+      const int64_t regInferable = std::min<int64_t>( rate.sig0[d], minDelta + rate.level[dl] );
+      sbbReg  += regInferable;
+      sbbSafe += std::min( regInferable, bypass );
+    }
+    else
+    {
+      sbbReg  += reg;
+      sbbSafe += safe;
+    }
+    if( k == sbbSize - 1 )
+    {
+      sbbSumReg [u + 1] = sbbSumReg [u] + ( u == 0 ? sbbReg  : std::min<int64_t>( rate.sbb0, rate.sbb1 + sbbReg ) );
+      sbbSumSafe[u + 1] = sbbSumSafe[u] + ( u == 0 ? sbbSafe : std::min<int64_t>( rate.sbb0, sbbSafe ) );
+      sbbReg = sbbSafe = 0;
+    }
+  }
+  return true;
 }
 
 DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool enableOpt ) : QuantRDOQ2( other, useScalingLists, enableOpt ), RateEstimator(), m_commonCtx()
@@ -1746,11 +1547,13 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool ena
   }
 
   m_checkAllRdCosts     = DQIntern::checkAllRdCosts;
+  m_checkAllRdCostsGe4  = DQIntern::checkAllRdCosts;   // the scalar checks add the Rice code's bits themselves
   m_checkAllRdCostsOdd1 = DQIntern::checkAllRdCostsOdd1;
   m_updateStatesEOS     = DQIntern::updateStatesEOS;
   m_dequantCoeffs       = DQIntern::dequantCoeffs;
   m_updateStates        = DQIntern::updateStates;
   m_findFirstPos        = DQIntern::findFirstPos;
+  m_populateTrellis     = xPopulateTrellis<PointerKernels>;
 
   if( enableOpt )
   {

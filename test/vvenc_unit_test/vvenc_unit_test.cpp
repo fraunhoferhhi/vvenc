@@ -575,7 +575,7 @@ static bool check_checkAllRdCostsOdd1( DepQuant* ref, DepQuant* opt, unsigned nu
 }
 
 static bool check_one_checkAllRdCosts( DepQuant* ref, DepQuant* opt, DQIntern::ScanPosType spt, const DQIntern::PQData* pqData,
-                                       const DQIntern::StateMem& state, const std::string& context )
+                                       const DQIntern::StateMem& state, const std::string& context, bool ge4 = false )
 {
   DQIntern::Decisions decisions_ref;
   DQIntern::Decisions decisions_opt;
@@ -588,8 +588,8 @@ static bool check_one_checkAllRdCosts( DepQuant* ref, DepQuant* opt, DQIntern::S
     decisions_opt.absLevel[j] = decisions_opt.prevId[j] = -2;
   }
 
-  ref->m_checkAllRdCosts( spt, pqData, decisions_ref, state );
-  opt->m_checkAllRdCosts( spt, pqData, decisions_opt, state );
+  ( ge4 ? ref->m_checkAllRdCostsGe4 : ref->m_checkAllRdCosts )( spt, pqData, decisions_ref, state );
+  ( ge4 ? opt->m_checkAllRdCostsGe4 : opt->m_checkAllRdCosts )( spt, pqData, decisions_opt, state );
 
   bool passed = true;
   passed = compare_values_1d( context + " rdCost", decisions_ref.rdCost, decisions_opt.rdCost, 4 ) && passed;
@@ -701,6 +701,23 @@ static bool check_checkAllRdCosts( DepQuant* ref, DepQuant* opt, unsigned num_ca
       }
       passed = check_one_checkAllRdCosts( ref, opt, DQIntern::SCAN_EOCSBB, pqData, state,
                                           "DepQuant checkAllRdCosts scanPosType=EOC_SBB numSig-01mixed" ) && passed;
+    }
+
+    // Test 4: checkAllRdCostsGe4, which xDecide calls when pqData[0] or pqData[3] is 4 or more (qIdx 4 gives levels 2 to 4,
+    // only pqData[3] >= 4), up to levels past the Rice table's end, with any Rice parameter per state.
+    for( DQIntern::ScanPosType spt : { DQIntern::SCAN_ISCSBB, DQIntern::SCAN_SOCSBB, DQIntern::SCAN_EOCSBB } )
+    {
+      for( int qIdx : { 4, int( rng.get( 4, 12 ) ), int( rng.get( 4, 140 ) ), 2000 } )
+      {
+        setup_state();
+        setup_pq_data( qIdx );
+        for( int j = 0; j < 4; ++j )
+        {
+          state.m_goRicePar[j] = ( int8_t ) rng.get( 0, 3 );
+        }
+        passed = check_one_checkAllRdCosts( ref, opt, spt, pqData, state,
+                                            "DepQuant checkAllRdCostsGe4 scanPosType=" + std::to_string( int( spt ) ) + " qIdx=" + std::to_string( qIdx ), true ) && passed;
+      }
     }
   }
 
@@ -1006,11 +1023,13 @@ static bool check_one_xFindFirstTestPos( DepQuant* ref, DepQuant* opt, bool zero
   std::generate( tCoeff.begin(), tCoeff.end(), input_generator );
 
   TCoeff defaultTh = rng.get( 4, 128 );
-  int zeroOutWidth = rng.getOneOf<int>( { 32, 64 } );
-  int zeroOutHeight = rng.getOneOf<int>( { 32, 64 } );
-
   int width = rng.getOneOf<int>( { 4, 8, 16, 32, 64 } );
   int height = rng.getOneOf<int>( { 4, 8, 16, 32, 64 } );
+  // as DepQuant::quant passes them: 16 for a 32-point side whose upper half is zeroed out (MTS), else 32, so that the
+  // test also takes the kernel's skip of positions beyond the zero-out
+  const bool zeroOut = rng.get( 0, 1 ) == 1;
+  int zeroOutWidth = width == 32 && zeroOut ? 16 : 32;
+  int zeroOutHeight = height == 32 && zeroOut ? 16 : 32;
   int pos_ref = std::min( width, JVET_C0024_ZERO_OUT_TH ) * std::min( height, JVET_C0024_ZERO_OUT_TH ) - 1;
 
   DQIntern::TUParameters tuPars( rom, width, height, CH_C );

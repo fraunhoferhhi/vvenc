@@ -178,12 +178,25 @@ namespace DQIntern
 
   struct RateTablesMemo;
 
+  // Lower bounds of the chroma rates the all-zero proof (DepQuant::xProvesAllZero) adds up: the minimum over the three sig
+  // context sets and over the context range a coefficient's diagonal ( x + y ) selects
+  struct ZeroProofRates
+  {
+    int32_t sig0   [2];   // sig_coeff_flag 0 (diagonal < 2: contexts 4..7, else 0..3)
+    int32_t sig1   [2];   // sig_coeff_flag 1
+    int32_t level  [2];   // the gtx bits of a nonzero level, bits[1..5] (sign bit included; diagonal 0: contexts 6..10, else 1..5)
+    int32_t lastLevel;    // the same for the last position, which uses gtx context 0
+    int32_t sbb0;         // sb_coded_flag 0 and 1, both contexts
+    int32_t sbb1;
+  };
+
   class RateEstimator
   {
   public:
     RateEstimator () {}
     ~RateEstimator() {}
-    void initCtx  ( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
+    // returns whether the sig and gtx tables were built (not taken from the memo)
+    bool initCtx  ( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
                     RateTablesMemo& memo );
 
     inline const BinFracBits *sigSbbFracBits() const { return m_tables->sigSbb; }
@@ -192,13 +205,17 @@ namespace DQIntern
       return m_tables->sig[std::max(((int) stateId) - 1, 0)];
     }
     inline const CoeffFracBits *gtxFracBits() const { return m_tables->gtx; }
-    inline int32_t              lastOffset(unsigned scanIdx) const
+    // the bits of coding the last position at this scan position, from the position the trellis already holds
+    inline int32_t              lastOffset( const ScanInfo& scanInfo ) const
     {
-      return m_lastBitsX[m_scanId2Pos[scanIdx].x] + m_lastBitsY[m_scanId2Pos[scanIdx].y];
+      return m_lastBitsX[scanInfo.posX] + m_lastBitsY[scanInfo.posY];
     }
 
   private:
     void  xSetLastCoeffOffset ( const FracBitsAccess& fracBitsAccess, const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID );
+
+  protected:
+    void  xSetZeroProofRates  ( ZeroProofRates& rates ) const;   // from the chroma tables held now
 
   public:
     static const unsigned sm_numCtxSetsSig    = 3;
@@ -224,7 +241,6 @@ namespace DQIntern
     void  xSetSigFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables );
     void  xSetGtxFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables );
 
-    const ScanElement * m_scanId2Pos;
     int32_t             m_lastBitsX      [ MAX_TB_SIZEY ];
     int32_t             m_lastBitsY      [ MAX_TB_SIZEY ];
     const RateTables*   m_tables = nullptr;   // the tables of the current block's channel type, held in the memo
@@ -535,23 +551,34 @@ public:
 
 private:
   void    xQuantDQ          ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff );
+  bool    xProvesAllZero    ( const DQIntern::TUParameters& tuPars, const TCoeff* tCoeff, const int firstTestPos, const TCoeff quantCoeff );
   void    xDequantDQ        ( const TransformUnit& tu, CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP, bool enableScalingLists, int* quantCoeff );
+  // DepQuantDecide.h: templates on the set of per-coefficient kernels (PointerKernels in DepQuant.cpp, one per SIMD translation unit)
+  template<class Kernels>
   void    xDecideAndUpdate  ( const TCoeff absCoeff, const DQIntern::ScanInfo& scanInfo, bool zeroOut, int quantCoeff);
+  template<class Kernels>
   void    xDecide           ( const DQIntern::ScanInfo &scanInfo, const TCoeff absCoeff, const int lastOffset, DQIntern::Decisions &decisions, bool zeroOut, int quantCoeff );
+  template<class Kernels>
+  static void xPopulateTrellis( DepQuant& dq, const DQIntern::TUParameters& tuPars, const int firstTestPos, const TCoeff* tCoeff,
+                                const bool zeroOut, const int effWidth, const int effHeight, const int quantCoeff );
+  struct PointerKernels;
 
   DQIntern::CommonCtx m_commonCtx;
   std::shared_ptr<DQIntern::Rom>
                       m_scansRom;
   DQIntern::Quantizer m_quant;
+  bool                m_keepHighBand = false;
 
   DQIntern::Decisions m_trellis[MAX_TB_SIZEY * MAX_TB_SIZEY][2];
   DQIntern::StateMem  m_state_curr;
   DQIntern::StateMem  m_state_skip;
   DQIntern::RateTablesMemo m_rateTablesMemo;   // after the trellis and state arrays: see RateTablesMemo
+  double              m_levelLambdaScale = 1.0;
   DQIntern::QuantBlockMemo m_quantBlockMemo;
   int                 m_firstScanIdx = 0;   // the scan position the current block's trellis starts at
-  double              m_levelLambdaScale = 1.0;
-  bool                m_keepHighBand = false;
+  // the rate minima of xProvesAllZero, refreshed by it after the chroma tables were built; after the trellis members, so that they keep their offsets
+  DQIntern::ZeroProofRates m_zeroProofRates;
+  bool                     m_zeroProofRatesStale = true;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   void initDepQuantX86();
@@ -567,12 +594,17 @@ private:
 public:
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCosts )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
+  // as m_checkAllRdCosts, where a level may be 4 or more: its bits then include the Rice code of the state's m_goRicePar
+  void( *m_checkAllRdCostsGe4 )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCostsOdd1 )( const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
   void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
   DQIntern::DequantCoeffsFunc m_dequantCoeffs;   // the dequantization kernel of the SIMD level in use (m_quant.dequantBlock)
   void( *m_updateStatesEOS )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx );
   void( *m_findFirstPos )( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight );
+  // xPopulateTrellis with the kernels of the SIMD level in use; without scaling lists the only indirect call of a block's trellis
+  void( *m_populateTrellis )( DepQuant& dq, const DQIntern::TUParameters& tuPars, const int firstTestPos, const TCoeff* tCoeff,
+                              const bool zeroOut, const int effWidth, const int effHeight, const int quantCoeff );
 };
 
 } // namespace vvenc
