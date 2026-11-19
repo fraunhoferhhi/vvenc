@@ -6446,12 +6446,14 @@ static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* op
 
   const Area blk{ 0, 0, w, h };
   const Area blkDst{ dstX, dstY, w, h };
+  sstm << " dstX=" << dstX << " dstY=" << dstY;
 
-  // Padding to src memory so that filterBlk can safely index [-3,+3] rows.
+  // Padding to src memory so that filterBlk can safely index [-3,+3] rows. dst ends after the block: a store past it is
+  // caught by the sanitizers, one into the stride by the compare of the whole buffer.
   constexpr int pad = 3;
   std::vector<Pel> src( ( blk.y + h + 2 * pad ) * srcStride + blk.x + 2 * pad );
-  std::vector<Pel> dst_ref( ( blkDst.y + h ) * dstStride + blkDst.x );
-  std::vector<Pel> dst_opt( ( blkDst.y + h ) * dstStride + blkDst.x );
+  std::vector<Pel> dst_ref( ( blkDst.y + h - 1 ) * dstStride + blkDst.x + w );
+  std::vector<Pel> dst_opt( ( blkDst.y + h - 1 ) * dstStride + blkDst.x + w );
   std::generate( src.begin(), src.end(), input_generator );
 
   Size sz{ w, h };
@@ -6520,7 +6522,10 @@ static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* op
   opt->m_filter7x7Blk[linearIndex]( classifier.data(), dstUnitBuf_opt, srcUnitBuf, blkDst, blk, compId,
                                     coeffLuma.data(), clipLuma.data(), clpRng, cs, vbCTUHeight, vbPos );
 
-  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h + blkDst.y, w, dstStride );
+  const ptrdiff_t blkOffset = ptrdiff_t( blkDst.y ) * dstStride + blkDst.x;
+  return compare_values_2d( sstm.str(), dst_ref.data() + blkOffset, dst_opt.data() + blkOffset, h, w, dstStride ) &&
+         compare_values_1d( sstm.str() + " (whole buffer)", dst_ref.data(), dst_opt.data(),
+                            unsigned( dst_ref.size() ) );
 }
 
 template<typename G>

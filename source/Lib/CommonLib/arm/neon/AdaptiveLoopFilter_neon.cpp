@@ -424,9 +424,11 @@ static inline void processALF_CoeffPair_neon( const Pel* ptr0, const Pel* ptr1, 
   accB = vaddq_s16( diff2, diff3 );
 }
 
-template<bool isFoldingRequired>
+// With isNonLinear, the two differences of coefficient k are clipped to [clip[k][0], clip[k][1]].
+template<bool isFoldingRequired, bool isNonLinear>
 static inline int16x8_t processALF7x7Row_neon( const Pel* pImg0, const int distance, const ptrdiff_t srcStride,
-                                               const int16x4_t coeff[6], const int clpRngMax )
+                                               const int16x4_t coeff[6], const int16x8_t clip[12][2],
+                                               const int clpRngMax )
 {
   constexpr int SHIFT = AdaptiveLoopFilter::m_NUM_BITS - 1;
 
@@ -469,12 +471,12 @@ static inline int16x8_t processALF7x7Row_neon( const Pel* pImg0, const int dista
 
   int16x8_t a0, a1, a2, a3, a4, a5;
   int16x8_t b0, b1, b2, b3, b4, b5;
-  processALF_CoeffPair_neon( pImg5 + 0, pImg6 + 0, pImg3 + 1, pImg4 - 1, curr, a0, b0 );
-  processALF_CoeffPair_neon( pImg3 + 0, pImg4 + 0, pImg3 - 1, pImg4 + 1, curr, a1, b1 );
-  processALF_CoeffPair_neon( pImg1 + 2, pImg2 - 2, pImg1 + 1, pImg2 - 1, curr, a2, b2 );
-  processALF_CoeffPair_neon( pImg1 + 0, pImg2 + 0, pImg1 - 1, pImg2 + 1, curr, a3, b3 );
-  processALF_CoeffPair_neon( pImg1 - 2, pImg2 + 2, pImg0 + 3, pImg0 - 3, curr, a4, b4 );
-  processALF_CoeffPair_neon( pImg0 + 2, pImg0 - 2, pImg0 + 1, pImg0 - 1, curr, a5, b5 );
+  processALF_CoeffPair_neon<isNonLinear>( pImg5 + 0, pImg6 + 0, pImg3 + 1, pImg4 - 1, curr, a0, b0, clip[0], clip[1] );
+  processALF_CoeffPair_neon<isNonLinear>( pImg3 + 0, pImg4 + 0, pImg3 - 1, pImg4 + 1, curr, a1, b1, clip[2], clip[3] );
+  processALF_CoeffPair_neon<isNonLinear>( pImg1 + 2, pImg2 - 2, pImg1 + 1, pImg2 - 1, curr, a2, b2, clip[4], clip[5] );
+  processALF_CoeffPair_neon<isNonLinear>( pImg1 + 0, pImg2 + 0, pImg1 - 1, pImg2 + 1, curr, a3, b3, clip[6], clip[7] );
+  processALF_CoeffPair_neon<isNonLinear>( pImg1 - 2, pImg2 + 2, pImg0 + 3, pImg0 - 3, curr, a4, b4, clip[8], clip[9] );
+  processALF_CoeffPair_neon<isNonLinear>( pImg0 + 2, pImg0 - 2, pImg0 + 1, pImg0 - 1, curr, a5, b5, clip[10], clip[11] );
 
   int32x4_t accLo = vmull_lane_s16( vget_low_s16( a0 ), coeff[0], 0 );
   int32x4_t accHi = vmull_lane_s16( vget_high_s16( a0 ), coeff[1], 0 );
@@ -522,6 +524,8 @@ static inline int16x8_t processALF7x7Row_neon( const Pel* pImg0, const int dista
   return clip3_neon( acc, vdupq_n_s16( 0 ), vdupq_n_s16( clpRngMax ) );
 }
 
+// isNonLinear defaults to false so that the linear filter is still called Filter7x7Blk_neon.
+template<bool isNonLinear = false>
 void Filter7x7Blk_neon( const AlfClassifier* classifier, const PelUnitBuf& recDst, const CPelUnitBuf& recSrc,
                         const Area& blkDst, const Area& blk, const ComponentID compId, const short* filterSet,
                         const short* fClipSet, const ClpRng& clpRng, const CodingStructure& cs, const int vbCTUHeight,
@@ -594,20 +598,58 @@ void Filter7x7Blk_neon( const AlfClassifier* classifier, const PelUnitBuf& recDs
       load_shuffle_coeffs_neon( g_alf_shuffle_table[cl0.transposeIdx], g_alf_shuffle_table[cl1.transposeIdx],
                                 filterSet + index0, filterSet + index1, coeff );
 
+      // With isNonLinear, per coefficient the bounds -clip, clip of its differences: the clip values are reordered like
+      // the coefficients, class 0 in the low half, class 1 in the high half.
+      int16x8_t clip[12][2] = {};
+      if( isNonLinear )
+      {
+        int16x4_t clipVal[MAX_NUM_ALF_LUMA_COEFF / 2];
+        load_shuffle_coeffs_neon( g_alf_shuffle_table[cl0.transposeIdx], g_alf_shuffle_table[cl1.transposeIdx],
+                                  fClipSet + index0, fClipSet + index1, clipVal );
+        clip[0][1]  = vcombine_s16( vdup_lane_s16( clipVal[0], 0 ), vdup_lane_s16( clipVal[1], 0 ) );
+        clip[1][1]  = vcombine_s16( vdup_lane_s16( clipVal[0], 1 ), vdup_lane_s16( clipVal[1], 1 ) );
+        clip[2][1]  = vcombine_s16( vdup_lane_s16( clipVal[0], 2 ), vdup_lane_s16( clipVal[1], 2 ) );
+        clip[3][1]  = vcombine_s16( vdup_lane_s16( clipVal[0], 3 ), vdup_lane_s16( clipVal[1], 3 ) );
+        clip[4][1]  = vcombine_s16( vdup_lane_s16( clipVal[2], 0 ), vdup_lane_s16( clipVal[3], 0 ) );
+        clip[5][1]  = vcombine_s16( vdup_lane_s16( clipVal[2], 1 ), vdup_lane_s16( clipVal[3], 1 ) );
+        clip[6][1]  = vcombine_s16( vdup_lane_s16( clipVal[2], 2 ), vdup_lane_s16( clipVal[3], 2 ) );
+        clip[7][1]  = vcombine_s16( vdup_lane_s16( clipVal[2], 3 ), vdup_lane_s16( clipVal[3], 3 ) );
+        clip[8][1]  = vcombine_s16( vdup_lane_s16( clipVal[4], 0 ), vdup_lane_s16( clipVal[5], 0 ) );
+        clip[9][1]  = vcombine_s16( vdup_lane_s16( clipVal[4], 1 ), vdup_lane_s16( clipVal[5], 1 ) );
+        clip[10][1] = vcombine_s16( vdup_lane_s16( clipVal[4], 2 ), vdup_lane_s16( clipVal[5], 2 ) );
+        clip[11][1] = vcombine_s16( vdup_lane_s16( clipVal[4], 3 ), vdup_lane_s16( clipVal[5], 3 ) );
+        clip[0][0]  = vnegq_s16( clip[0][1] );
+        clip[1][0]  = vnegq_s16( clip[1][1] );
+        clip[2][0]  = vnegq_s16( clip[2][1] );
+        clip[3][0]  = vnegq_s16( clip[3][1] );
+        clip[4][0]  = vnegq_s16( clip[4][1] );
+        clip[5][0]  = vnegq_s16( clip[5][1] );
+        clip[6][0]  = vnegq_s16( clip[6][1] );
+        clip[7][0]  = vnegq_s16( clip[7][1] );
+        clip[8][0]  = vnegq_s16( clip[8][1] );
+        clip[9][0]  = vnegq_s16( clip[9][1] );
+        clip[10][0] = vnegq_s16( clip[10][1] );
+        clip[11][0] = vnegq_s16( clip[11][1] );
+      }
+
       int16x8_t dst0, dst1, dst2, dst3;
       if( foldingRequired )
       {
-        dst0 = processALF7x7Row_neon<true>( pImg0 + 0 * srcStride, VbDistance[0], srcStride, coeff, clpRngMax );
-        dst1 = processALF7x7Row_neon<true>( pImg0 + 1 * srcStride, VbDistance[1], srcStride, coeff, clpRngMax );
-        dst2 = processALF7x7Row_neon<true>( pImg0 + 2 * srcStride, VbDistance[2], srcStride, coeff, clpRngMax );
-        dst3 = processALF7x7Row_neon<true>( pImg0 + 3 * srcStride, VbDistance[3], srcStride, coeff, clpRngMax );
+        dst0 = processALF7x7Row_neon<true, isNonLinear>( pImg0 + 0 * srcStride, VbDistance[0], srcStride, coeff, clip,
+                                                          clpRngMax );
+        dst1 = processALF7x7Row_neon<true, isNonLinear>( pImg0 + 1 * srcStride, VbDistance[1], srcStride, coeff, clip,
+                                                          clpRngMax );
+        dst2 = processALF7x7Row_neon<true, isNonLinear>( pImg0 + 2 * srcStride, VbDistance[2], srcStride, coeff, clip,
+                                                          clpRngMax );
+        dst3 = processALF7x7Row_neon<true, isNonLinear>( pImg0 + 3 * srcStride, VbDistance[3], srcStride, coeff, clip,
+                                                          clpRngMax );
       }
       else
       {
-        dst0 = processALF7x7Row_neon<false>( pImg0 + 0 * srcStride, 0, srcStride, coeff, clpRngMax );
-        dst1 = processALF7x7Row_neon<false>( pImg0 + 1 * srcStride, 0, srcStride, coeff, clpRngMax );
-        dst2 = processALF7x7Row_neon<false>( pImg0 + 2 * srcStride, 0, srcStride, coeff, clpRngMax );
-        dst3 = processALF7x7Row_neon<false>( pImg0 + 3 * srcStride, 0, srcStride, coeff, clpRngMax );
+        dst0 = processALF7x7Row_neon<false, isNonLinear>( pImg0 + 0 * srcStride, 0, srcStride, coeff, clip, clpRngMax );
+        dst1 = processALF7x7Row_neon<false, isNonLinear>( pImg0 + 1 * srcStride, 0, srcStride, coeff, clip, clpRngMax );
+        dst2 = processALF7x7Row_neon<false, isNonLinear>( pImg0 + 2 * srcStride, 0, srcStride, coeff, clip, clpRngMax );
+        dst3 = processALF7x7Row_neon<false, isNonLinear>( pImg0 + 3 * srcStride, 0, srcStride, coeff, clip, clpRngMax );
       }
 
       vst1q_s16( pDst + 0 * dstStride, dst0 );
@@ -767,6 +809,7 @@ void AdaptiveLoopFilter::_initAdaptiveLoopFilterARM<NEON>()
 {
   m_filter5x5Blk[0] = Filter5x5Blk_neon<false>;
   m_filter5x5Blk[1] = Filter5x5Blk_neon<true>;
+  m_filter7x7Blk[1] = Filter7x7Blk_neon<true>;
   m_filter7x7Blk[0] = Filter7x7Blk_neon;
   m_deriveClassificationBlk = DeriveClassificationBlk_neon;
   m_filterCcAlf             = FilterBlkCcAlf_neon;
