@@ -218,6 +218,63 @@ static inline int16x4_t addAvg_x4( int16x4_t src0, int16x4_t src1, int16x4_t off
   return vreinterpret_s16_u16( vshl_u16( vqshlu_n_s16( sum, 1 ), shift ) );
 }
 
+// BCW's weighted average ClipPel( ( w0 * src0 + w1 * src1 + offset ) >> shift ), as x86's addWghtAvg_SSE: the products
+// and sums are 32-bit (|w| <= 10, 16-bit inputs: no overflow). The accumulator starts at offset minus the rounding
+// half, which vrshl adds back at full precision, and vqmovun narrows with x86's packs saturation, clipping negative
+// values to 0, so only the maximum is left to clip.
+static inline uint16x4_t wghtAvg4Samples_neon( const int16x4_t src0, const int16x4_t src1, const int32x4_t init,
+                                               const int16_t w0, const int16_t w1, const int32x4_t negShift )
+{
+  const int32x4_t sum = vmlal_n_s16( vmlal_n_s16( init, src0, w0 ), src1, w1 );
+  return vqmovun_s32( vrshlq_s32( sum, negShift ) );
+}
+
+static void addWghtAvg8_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride,
+                              int width, int height, unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng )
+{
+  CHECKD( shift < 1 || ( width & 7 ), "shift >= 1, width a multiple of 8" );
+  const int32x4_t  init     = vdupq_n_s32( offset - ( 1 << ( shift - 1 ) ) );
+  const int32x4_t  negShift = vdupq_n_s32( -static_cast<int>( shift ) );
+  const uint16x8_t maxVal   = vdupq_n_u16( clpRng.max() );
+  const int16_t    weight0  = static_cast<int16_t>( w0 );
+  const int16_t    weight1  = static_cast<int16_t>( w1 );
+  for( int row = 0; row < height; row++, src0 += src0Stride, src1 += src1Stride, dst += dstStride )
+  {
+    for( int col = 0; col < width; col += 8 )
+    {
+      const int16x8_t  s0  = vld1q_s16( src0 + col );
+      const int16x8_t  s1  = vld1q_s16( src1 + col );
+      const uint16x4_t lo  = wghtAvg4Samples_neon( vget_low_s16( s0 ), vget_low_s16( s1 ), init, weight0, weight1,
+                                                   negShift );
+      const uint16x4_t hi  = wghtAvg4Samples_neon( vget_high_s16( s0 ), vget_high_s16( s1 ), init, weight0, weight1,
+                                                   negShift );
+      const uint16x8_t avg = vminq_u16( vcombine_u16( lo, hi ), maxVal );
+      vst1q_s16( dst + col, vreinterpretq_s16_u16( avg ) );
+    }
+  }
+}
+
+static void addWghtAvg4_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride,
+                              int width, int height, unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng )
+{
+  CHECKD( shift < 1 || ( width & 3 ), "shift >= 1, width a multiple of 4" );
+  const int32x4_t  init     = vdupq_n_s32( offset - ( 1 << ( shift - 1 ) ) );
+  const int32x4_t  negShift = vdupq_n_s32( -static_cast<int>( shift ) );
+  const uint16x4_t maxVal   = vdup_n_u16( clpRng.max() );
+  const int16_t    weight0  = static_cast<int16_t>( w0 );
+  const int16_t    weight1  = static_cast<int16_t>( w1 );
+  for( int row = 0; row < height; row++, src0 += src0Stride, src1 += src1Stride, dst += dstStride )
+  {
+    for( int col = 0; col < width; col += 4 )
+    {
+      const int16x4_t  s0  = vld1_s16( src0 + col );
+      const int16x4_t  s1  = vld1_s16( src1 + col );
+      const uint16x4_t avg = vmin_u16( wghtAvg4Samples_neon( s0, s1, init, weight0, weight1, negShift ), maxVal );
+      vst1_s16( dst + col, vreinterpret_s16_u16( avg ) );
+    }
+  }
+}
+
 void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, unsigned rshift, int offset,
                   const ClpRng& clpRng )
 {
@@ -1050,6 +1107,211 @@ void addAvg_strided_neon<16>( const Pel* src0, int src0Stride, const Pel* src1, 
   } while( --height != 0 );
 }
 
+// The block operations below serve AreaBuf::subtract, copyClip and reconstruct for blocks that are not contiguous (a
+// contiguous one takes copyClip_neon or recoCore_neon), by width: 2, multiples of 4 and multiples of 8. Like C and the
+// x86 kernels they hold for any Pel values: sub wraps, reco adds with saturation (which keeps the order of the sums, so
+// the clip gives C's result) and then clips.
+
+// dest = src0 - src1 of a block 2 wide, two rows per vector
+static void sub2_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
+                       int width, int height )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  for( ; height >= 2; height -= 2, src0 += 2 * src0Stride, src1 += 2 * src1Stride, dest += 2 * destStride )
+  {
+    const int16x4_t a = load_s16x2x2( src0, src0Stride );
+    const int16x4_t b = load_s16x2x2( src1, src1Stride );
+    store_s16x2x2( dest, vsub_s16( a, b ), destStride );
+  }
+  if( height > 0 )
+  {
+    const int16x4_t a = load_s16x2( src0 );
+    const int16x4_t b = load_s16x2( src1 );
+    store_s16x2( dest, vsub_s16( a, b ) );
+  }
+}
+
+// dest = src0 - src1 of a block whose width is a multiple of 4, 8 samples at a time and the last 4
+static void sub4_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
+                       int width, int height )
+{
+  CHECKD( ( width & 3 ) != 0, "width must be a multiple of 4" );
+  for( ; height > 0; height--, src0 += src0Stride, src1 += src1Stride, dest += destStride )
+  {
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const int16x8_t a = vld1q_s16( src0 + x );
+      const int16x8_t b = vld1q_s16( src1 + x );
+      vst1q_s16( dest + x, vsubq_s16( a, b ) );
+    }
+    if( x < width )
+    {
+      const int16x4_t a = vld1_s16( src0 + x );
+      const int16x4_t b = vld1_s16( src1 + x );
+      vst1_s16( dest + x, vsub_s16( a, b ) );
+    }
+  }
+}
+
+// dst = ClipPel( src ) of a block 2 wide, two rows per vector
+static void copyClip2_neon( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height,
+                            const ClpRng& clpRng )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  const int16x4_t vmin = vdup_n_s16( clpRng.min() );
+  const int16x4_t vmax = vdup_n_s16( clpRng.max() );
+  for( ; height >= 2; height -= 2, src += 2 * srcStride, dst += 2 * dstStride )
+  {
+    const int16x4_t a = load_s16x2x2( src, srcStride );
+    store_s16x2x2( dst, vmin_s16( vmax_s16( a, vmin ), vmax ), dstStride );
+  }
+  if( height > 0 )
+  {
+    const int16x4_t a = load_s16x2( src );
+    store_s16x2( dst, vmin_s16( vmax_s16( a, vmin ), vmax ) );
+  }
+}
+
+// dst = ClipPel( src ) of a block whose width is a multiple of 8, 16 samples at a time and the last 8
+static void copyClip8_neon( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height,
+                            const ClpRng& clpRng )
+{
+  CHECKD( ( width & 7 ) != 0, "width must be a multiple of 8" );
+  const int16x8_t vmin = vdupq_n_s16( clpRng.min() );
+  const int16x8_t vmax = vdupq_n_s16( clpRng.max() );
+  for( ; height > 0; height--, src += srcStride, dst += dstStride )
+  {
+    int x = 0;
+    for( ; x + 16 <= width; x += 16 )
+    {
+      const int16x8_t a0 = vld1q_s16( src + x );
+      const int16x8_t a1 = vld1q_s16( src + x + 8 );
+      vst1q_s16( dst + x,     vminq_s16( vmaxq_s16( a0, vmin ), vmax ) );
+      vst1q_s16( dst + x + 8, vminq_s16( vmaxq_s16( a1, vmin ), vmax ) );
+    }
+    if( x < width )
+    {
+      const int16x8_t a = vld1q_s16( src + x );
+      vst1q_s16( dst + x, vminq_s16( vmaxq_s16( a, vmin ), vmax ) );
+    }
+  }
+}
+
+// dst = ClipPel( src ) of a block whose width is a multiple of 4. The encoder passes only width 4 (block widths are
+// powers of two, and multiples of 8 take copyClip8): two rows per vector. Wider blocks take copyClip8_neon for all
+// but their last 4 columns.
+static void copyClip4_neon( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height,
+                            const ClpRng& clpRng )
+{
+  CHECKD( ( width & 3 ) != 0, "width must be a multiple of 4" );
+  if( width > 4 )
+  {
+    copyClip8_neon( src, srcStride, dst, dstStride, width - 4, height, clpRng );
+    src += width - 4;
+    dst += width - 4;
+  }
+  const int16x8_t vmin = vdupq_n_s16( clpRng.min() );
+  const int16x8_t vmax = vdupq_n_s16( clpRng.max() );
+  for( ; height >= 2; height -= 2, src += 2 * srcStride, dst += 2 * dstStride )
+  {
+    const int16x4_t a0 = vld1_s16( src );
+    const int16x4_t a1 = vld1_s16( src + srcStride );
+    const int16x8_t d  = vminq_s16( vmaxq_s16( vcombine_s16( a0, a1 ), vmin ), vmax );
+    vst1_s16( dst,             vget_low_s16( d ) );
+    vst1_s16( dst + dstStride, vget_high_s16( d ) );
+  }
+  if( height > 0 )
+  {
+    const int16x4_t a = vld1_s16( src );
+    vst1_s16( dst, vmin_s16( vmax_s16( a, vget_low_s16( vmin ) ), vget_low_s16( vmax ) ) );
+  }
+}
+
+// dest = ClipPel( src0 + src1 ) of a block 2 wide, two rows per vector
+static void reco2_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
+                        int width, int height, const ClpRng& clpRng )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  const int16x4_t vmin = vdup_n_s16( clpRng.min() );
+  const int16x4_t vmax = vdup_n_s16( clpRng.max() );
+  for( ; height >= 2; height -= 2, src0 += 2 * src0Stride, src1 += 2 * src1Stride, dest += 2 * destStride )
+  {
+    const int16x4_t a = load_s16x2x2( src0, src0Stride );
+    const int16x4_t b = load_s16x2x2( src1, src1Stride );
+    store_s16x2x2( dest, vmin_s16( vmax_s16( vqadd_s16( a, b ), vmin ), vmax ), destStride );
+  }
+  if( height > 0 )
+  {
+    const int16x4_t a = load_s16x2( src0 );
+    const int16x4_t b = load_s16x2( src1 );
+    store_s16x2( dest, vmin_s16( vmax_s16( vqadd_s16( a, b ), vmin ), vmax ) );
+  }
+}
+
+// dest = ClipPel( src0 + src1 ) of a block whose width is a multiple of 8, 16 samples at a time and the last 8
+static void reco8_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
+                        int width, int height, const ClpRng& clpRng )
+{
+  CHECKD( ( width & 7 ) != 0, "width must be a multiple of 8" );
+  const int16x8_t vmin = vdupq_n_s16( clpRng.min() );
+  const int16x8_t vmax = vdupq_n_s16( clpRng.max() );
+  for( ; height > 0; height--, src0 += src0Stride, src1 += src1Stride, dest += destStride )
+  {
+    int x = 0;
+    for( ; x + 16 <= width; x += 16 )
+    {
+      const int16x8_t a0 = vld1q_s16( src0 + x );
+      const int16x8_t a1 = vld1q_s16( src0 + x + 8 );
+      const int16x8_t b0 = vld1q_s16( src1 + x );
+      const int16x8_t b1 = vld1q_s16( src1 + x + 8 );
+      vst1q_s16( dest + x,     vminq_s16( vmaxq_s16( vqaddq_s16( a0, b0 ), vmin ), vmax ) );
+      vst1q_s16( dest + x + 8, vminq_s16( vmaxq_s16( vqaddq_s16( a1, b1 ), vmin ), vmax ) );
+    }
+    if( x < width )
+    {
+      const int16x8_t a = vld1q_s16( src0 + x );
+      const int16x8_t b = vld1q_s16( src1 + x );
+      vst1q_s16( dest + x, vminq_s16( vmaxq_s16( vqaddq_s16( a, b ), vmin ), vmax ) );
+    }
+  }
+}
+
+// dest = ClipPel( src0 + src1 ) of a block whose width is a multiple of 4. The encoder passes only width 4 (block
+// widths are powers of two, and multiples of 8 take reco8): two rows per vector. Wider blocks take reco8_neon for all
+// but their last 4 columns.
+static void reco4_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
+                        int width, int height, const ClpRng& clpRng )
+{
+  CHECKD( ( width & 3 ) != 0, "width must be a multiple of 4" );
+  if( width > 4 )
+  {
+    reco8_neon( src0, src0Stride, src1, src1Stride, dest, destStride, width - 4, height, clpRng );
+    src0 += width - 4;
+    src1 += width - 4;
+    dest += width - 4;
+  }
+  const int16x8_t vmin = vdupq_n_s16( clpRng.min() );
+  const int16x8_t vmax = vdupq_n_s16( clpRng.max() );
+  for( ; height >= 2; height -= 2, src0 += 2 * src0Stride, src1 += 2 * src1Stride, dest += 2 * destStride )
+  {
+    const int16x4_t a0  = vld1_s16( src0 );
+    const int16x4_t a1  = vld1_s16( src0 + src0Stride );
+    const int16x4_t b0  = vld1_s16( src1 );
+    const int16x4_t b1  = vld1_s16( src1 + src1Stride );
+    const int16x8_t sum = vqaddq_s16( vcombine_s16( a0, a1 ), vcombine_s16( b0, b1 ) );
+    const int16x8_t d   = vminq_s16( vmaxq_s16( sum, vmin ), vmax );
+    vst1_s16( dest,              vget_low_s16( d ) );
+    vst1_s16( dest + destStride, vget_high_s16( d ) );
+  }
+  if( height > 0 )
+  {
+    const int16x4_t a = vld1_s16( src0 );
+    const int16x4_t b = vld1_s16( src1 );
+    vst1_s16( dest, vmin_s16( vmax_s16( vqadd_s16( a, b ), vget_low_s16( vmin ) ), vget_low_s16( vmax ) ) );
+  }
+}
+
 template<>
 void addAvg_strided_neon<8>( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest,
                              int destStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
@@ -1760,8 +2022,18 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   removeHighFreq8 = removeHighFreq8_neon;
   sub8            = sub8_neon;
   copyClip        = copyClip_neon;
+  sub2      = sub2_neon;
+  sub4      = sub4_neon;
+  copyClip2 = copyClip2_neon;
+  copyClip4 = copyClip4_neon;
+  copyClip8 = copyClip8_neon;
+  reco2     = reco2_neon;
+  reco4     = reco4_neon;
+  reco8     = reco8_neon;
   addAvg8  = addAvg_strided_neon<8>;
   sumSquaredErrorParts = sumSquaredErrorParts_neon;
+  wghtAvg4 = addWghtAvg4_neon;
+  wghtAvg8 = addWghtAvg8_neon;
   addAvg16 = addAvg_strided_neon<16>;
 
   // a pair: geoRunSads_neon reads geoPrefixSums_neon's layout

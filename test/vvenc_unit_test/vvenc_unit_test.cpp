@@ -4346,6 +4346,61 @@ static bool check_EqualCoeffComputer( AffineGradientSearch* ref, AffineGradientS
   return passed;
 }
 
+template<typename G>
+static bool check_SobelFilter( AffineGradientSearch* ref, AffineGradientSearch* opt, unsigned num_cases, G inp_gen )
+{
+  DimensionGenerator dim;
+
+  // The source has a margin of one row and column around the block, and the SIMD kernels read up to column width + 1.
+  static constexpr int maxSrcStride = MAX_CU_SIZE + 8;
+  std::vector<Pel> src( ( MAX_CU_SIZE + 2 ) * maxSrcStride + 8 );
+  std::vector<Pel> dstRef( MAX_CU_SIZE * MAX_CU_SIZE );
+  std::vector<Pel> dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
+
+  bool passed = true;
+
+  for( int vertical : { 0, 1 } )
+  {
+    std::ostringstream sstm_test;
+    sstm_test << "AffineGradientSearch::" << ( vertical ? "Vertical" : "Horizontal" )
+              << "SobelFilter Input=" << inp_gen.input_type();
+    std::cout << "Testing " << sstm_test.str() << std::endl;
+
+    for( unsigned n = 0; n < num_cases; n++ )
+    {
+      const int width     = dim.get( 8, MAX_CU_SIZE, 8 );
+      const int height    = dim.get( 8, MAX_CU_SIZE, 4 );
+      const int srcStride = dim.get( width + 2, maxSrcStride );
+      const int dstStride = dim.get( width, MAX_CU_SIZE );
+
+      std::generate( src.begin(), src.end(), inp_gen );
+      // The same canary in both outputs, compared over the whole buffer, catches writes outside the block.
+      std::fill( dstRef.begin(), dstRef.end(), Pel( 0x5a5a ) );
+      std::fill( dstOpt.begin(), dstOpt.end(), Pel( 0x5a5a ) );
+
+      Pel* block = src.data() + srcStride + 1;
+      if( vertical )
+      {
+        ref->m_VerticalSobelFilter( block, srcStride, dstRef.data(), dstStride, width, height );
+        opt->m_VerticalSobelFilter( block, srcStride, dstOpt.data(), dstStride, width, height );
+      }
+      else
+      {
+        ref->m_HorizontalSobelFilter( block, srcStride, dstRef.data(), dstStride, width, height );
+        opt->m_HorizontalSobelFilter( block, srcStride, dstOpt.data(), dstStride, width, height );
+      }
+
+      std::ostringstream sstm_subtest;
+      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " width=" << width
+                   << " height=" << height;
+
+      passed = compare_values_2d( sstm_subtest.str(), dstRef.data(), dstOpt.data(), MAX_CU_SIZE, MAX_CU_SIZE ) && passed;
+    }
+  }
+
+  return passed;
+}
+
 static bool test_AffineGradientSearch()
 {
   AffineGradientSearch ref{ /*enableOpt=*/false };
@@ -4361,6 +4416,8 @@ static bool test_AffineGradientSearch()
 
   passed = check_EqualCoeffComputer( &ref, &opt, num_cases, random_gen ) && passed;
   passed = check_EqualCoeffComputer( &ref, &opt, num_cases, minmax_gen ) && passed;
+  passed = check_SobelFilter( &ref, &opt, num_cases, random_gen ) && passed;
+  passed = check_SobelFilter( &ref, &opt, num_cases, minmax_gen ) && passed;
 
   return passed;
 }
@@ -4529,6 +4586,54 @@ static bool check_reco( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases
   xFree( dest_opt );
 
   return passed;
+}
+
+// reco4, reco8, copyClip4 and copyClip8 with any Pel values (the SIMD versions saturate the sum, which keeps C's clip
+// result) for the widths AreaBuf::reconstruct and copyClip pass them (multiples of 8 to the 8 versions, other multiples
+// of 4 to the 4 versions), heights 1 to 64, padded strides, bit depths 8 to 12, also in place (dest = src0); the whole
+// destination is compared, so that writes beyond the block and samples left out are found
+static bool check_recoCopyClip4And8( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::reco4, reco8, copyClip4, copyClip8\n" );
+  DimensionGenerator rng;
+  auto anyPel = []()
+  {
+    const int r = rand() & 15;   // the extremes one time in eight
+    return Pel( r == 0 ? -32768 : r == 1 ? 32767 : int( ( unsigned( rand() ) << 8 ) ^ unsigned( rand() ) ) );
+  };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int    width   = rng.getOneOf<int>( { 4, 12, 20, 28, 8, 16, 24, 32, 64 } );
+    const int    height  = rng.get( 1, 64 );
+    const int    stride  = width + rng.get( 0, 9 );
+    const bool   inPlace = rng.get( 0, 3 ) == 0;
+    const ClpRng clpRng{ int( rng.getOneOf<unsigned>( { 8, 10, 12 } ) ) };
+    std::vector<Pel> src0( stride * height ), src1( stride * height );
+    std::generate( src0.begin(), src0.end(), anyPel );
+    std::generate( src1.begin(), src1.end(), anyPel );
+    std::vector<Pel> dstRef = inPlace ? src0 : std::vector<Pel>( stride * height, 0x5a5a );
+    std::vector<Pel> dstOpt = dstRef;
+    const Pel* src0Ref = inPlace ? dstRef.data() : src0.data();
+    const Pel* src0Opt = inPlace ? dstOpt.data() : src0.data();
+
+    std::ostringstream sstm;
+    sstm << " " << width << "x" << height << " stride=" << stride << " bd=" << clpRng.bd << " inPlace=" << inPlace;
+    const auto reco     = ( width & 7 ) ? &PelBufferOps::reco4 : &PelBufferOps::reco8;
+    const auto copyClip = ( width & 7 ) ? &PelBufferOps::copyClip4 : &PelBufferOps::copyClip8;
+    ( ref->*reco )( src0Ref, stride, src1.data(), stride, dstRef.data(), stride, width, height, clpRng );
+    ( opt->*reco )( src0Opt, stride, src1.data(), stride, dstOpt.data(), stride, width, height, clpRng );
+    bool ok = compare_values_1d( "reco" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+
+    ( ref->*copyClip )( src1.data(), stride, dstRef.data(), stride, width, height, clpRng );
+    ( opt->*copyClip )( src1.data(), stride, dstOpt.data(), stride, width, height, clpRng );
+    ok = ok && compare_values_1d( "copyClip" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
 }
 
 // The plane checksum of the decoded picture hash SEI: widths and heights beyond 256, where the high bytes of the
@@ -5345,6 +5450,7 @@ static bool test_PelBufferOps()
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
+  passed = check_recoCopyClip4And8( &ref, &opt, num_cases ) && passed;
   passed = check_geoSads( &ref, &opt, num_cases ) && passed;
   passed = check_copyClip( &ref, &opt, num_cases ) && passed;
   passed = check_copyClipScalarTail( &ref, num_cases ) && passed;
@@ -7472,6 +7578,97 @@ static bool test_FGAnalyzerKernels()
 
 #endif // ENABLE_SIMD_OPT_FGA
 
+// A 640x256 10-bit luma picture for the film grain analysis: the left half a smooth ramp (flat blocks), the right half
+// a bright ramp crossed by a dark line every 48 samples, so that the edge mask leaves no flat block there. denoised is
+// the picture, orig has near-Gaussian grain of the given standard deviations added to the two halves: the sum of 12
+// uniform values from the generator's raw output, which is the same in every standard library (the distributions of
+// <random> are not).
+static void fgaBrightTestPicture( std::vector<Pel>& orig, std::vector<Pel>& denoised, double grainLeft, double grainRight )
+{
+  constexpr int W = 640, H = 256;
+  std::mt19937 rng( 1 );
+  auto gauss = []( std::mt19937& generator )
+  {
+    double sum = -6.0;   // 12 uniform values in [0, 1): mean 6, variance 1
+    for( int i = 0; i < 12; i++ )
+    {
+      sum += ( generator() >> 8 ) * ( 1.0 / 16777216.0 );
+    }
+    return sum;
+  };
+  orig.resize( W * H );
+  denoised.resize( W * H );
+  for( int y = 0; y < H; y++ )
+  {
+    for( int x = 0; x < W; x++ )
+    {
+      const bool right = x >= W / 2;
+      const int  ramp  = ( right ? 680 : 280 ) + ( x % ( W / 2 ) ) / 4;
+      const bool line  = right && x % 48 >= 7 && x % 48 <= 8;
+      const int  value = line ? 400 : ramp;
+      denoised[ y * W + x ] = (Pel) value;
+      orig    [ y * W + x ] = (Pel) Clip3( 0, 1023, (int) std::lround( value + ( right ? grainRight : grainLeft ) * gauss( rng ) ) );
+    }
+  }
+}
+
+// The scaling factor the analysis signals for an 8-bit luma level, 0: none.
+static int fgaSignalledScale( const vvenc::FGAnalyzer& analyzer, int level )
+{
+  int log2ScaleFactor = 0;
+  SeiFgc::CompModel model[ MAX_NUM_COMP ];
+  analyzer.getSignalledParameters( 1.0, log2ScaleFactor, model );
+  for( int i = 0; model[ COMP_Y ].presentFlag && i < model[ COMP_Y ].numIntensityIntervals; i++ )
+  {
+    const SeiFgc::CompModelIntensityValues& iv = model[ COMP_Y ].intensityValues[ i ];
+    if( level >= iv.intensityIntervalLowerBound && level <= iv.intensityIntervalUpperBound )
+    {
+      return iv.compModelValue[ 0 ];
+    }
+  }
+  return 0;
+}
+
+// The improved film grain analysis on a bright area without flat blocks: it signals the grain of that area (as strong
+// as on the flat area when both have the same grain), and next to none when the bright area is clean (the lowest of the
+// scaling function's quantization levels is not exactly zero).
+static bool test_FGAnalyzerBrightLevels()
+{
+  printf( "Testing the film grain analysis on bright levels without flat blocks\n" );
+  constexpr int W = 640, H = 256;
+  const int  bitDepths [ MAX_NUM_CH ]   = { 10, 10 };
+  const bool doAnalysis[ MAX_NUM_COMP ] = { true, false, false };
+  const int  flatLevel = 80, brightLevel = 180;   // 8-bit levels inside the two ramps
+
+  bool passed = true;
+  for( const bool grainyBright : { true, false } )
+  {
+    std::vector<Pel> orig, denoised;
+    fgaBrightTestPicture( orig, denoised, 8.0, grainyBright ? 8.0 : 0.0 );
+    const Area area( 0, 0, W, H );
+    const CPelUnitBuf origBuf( CHROMA_400, CPelBuf( orig.data(), W, area ) );
+    const CPelUnitBuf denoisedBuf( CHROMA_400, CPelBuf( denoised.data(), W, area ) );
+
+    vvenc::FGAnalyzer analyzer;
+    analyzer.init( W, H, CHROMA_400, bitDepths, doAnalysis, true );
+    analyzer.estimateGrainParameters( origBuf, denoisedBuf );
+
+    const int flatScale   = fgaSignalledScale( analyzer, flatLevel );
+    const int brightScale = fgaSignalledScale( analyzer, brightLevel );
+    passed = compare_value( "film grain signalled on the flat area", true, flatScale > 0 ) && passed;
+    if( grainyBright )
+    {
+      passed = compare_value( "bright area's grain within a quarter of the flat area's", true,
+                              4 * brightScale >= 3 * flatScale && 4 * brightScale <= 5 * flatScale ) && passed;
+    }
+    else
+    {
+      passed = compare_value( "clean bright area's grain below an eighth of the flat area's", true, 8 * brightScale <= flatScale ) && passed;
+    }
+  }
+  return passed;
+}
+
 #if ENABLE_SIMD_OPT_QUANT
 static bool check_needRdoq( Quant* ref, Quant* opt, unsigned num_cases )
 {
@@ -8362,6 +8559,44 @@ static bool check_tplPredBlock( TplPredBlockFn opt, unsigned num_cases )
   return passed;
 }
 
+// The fused prediction error against the reference prediction and its squared error.
+template<int N>
+static bool check_tplPredError( TplPredErrorFn opt, unsigned num_cases )
+{
+  if( ! opt )
+  {
+    return true;   // no SIMD version: the search predicts and measures separately
+  }
+  InputGenerator<Pel> pelGen( 10, /*is_signed=*/false );
+  MinMaxGenerator<Pel> extremeGen( 10, /*is_signed=*/false );
+  bool passed = true;
+
+  constexpr int STRIDE = N + 16;
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    Pel src[( N + 1 ) * STRIDE], org[N * STRIDE], pred[N * N];
+    for( int i = 0; i < ( N + 1 ) * STRIDE; i++ ) src[i] = ( n & 1 ) ? extremeGen() : pelGen();
+    for( int i = 0; i < N * STRIDE; i++ )         org[i] = ( n & 2 ) ? extremeGen() : pelGen();
+    const int fx = rand() & 15, fy = rand() & 15;
+    tplPredBlockCore<N>( src, STRIDE, fx, fy, pred );
+    int ref = 0;
+    for( int y = 0; y < N; y++ )
+    {
+      for( int x = 0; x < N; x++ )
+      {
+        const int d = org[y * STRIDE + x] - pred[y * N + x];
+        ref += d * d;
+      }
+    }
+    const int got = opt( src, STRIDE, fx, fy, org, STRIDE );
+
+    std::ostringstream ctx;
+    ctx << "tplPredError" << N << " fx=" << fx << " fy=" << fy << " case=" << n;
+    passed = compare_value( ctx.str(), ref, got ) && passed;
+  }
+  return passed;
+}
+
 // The CU-tree look-ahead's 2x2 down-sampling of one row.
 static bool check_tplDownsampleRow( TplDownsampleRowFn opt, unsigned num_cases )
 {
@@ -8398,6 +8633,8 @@ static bool test_CuTree()
   passed = check_tplCodeBlock<16>( cuTree.m_codeBlock[TPL_BLK_16], num_cases, MinMaxGenerator<int>( 11 ) ) && passed;
   passed = check_tplPredBlock<8> ( cuTree.m_predBlock[TPL_BLK_8],  num_cases ) && passed;
   passed = check_tplPredBlock<16>( cuTree.m_predBlock[TPL_BLK_16], num_cases ) && passed;
+  passed = check_tplPredError<8> ( cuTree.m_predError[TPL_BLK_8],  num_cases ) && passed;
+  passed = check_tplPredError<16>( cuTree.m_predError[TPL_BLK_16], num_cases ) && passed;
   passed = check_tplDownsampleRow( cuTree.m_downsampleRow, num_cases ) && passed;
   return passed;
 }
@@ -8657,6 +8894,7 @@ static const UnitTestEntry test_suites[] = {
 #if ENABLE_SIMD_OPT
     { "CuTree", test_CuTree },
 #endif
+    { "FGAnalyzerBrightLevels", test_FGAnalyzerBrightLevels },
     { "CuTreeRefs", test_CuTreeRefs },
     { "ThreadPool", test_ThreadPool },
     { "RefreshMarking", test_RefreshMarking },
