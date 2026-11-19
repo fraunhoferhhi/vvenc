@@ -157,6 +157,11 @@ public:
   template <X86_VEXT vext>
   void _initCuTree_X86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT
+  void initCuTreeARM();
+  template <ARM_VEXT vext>
+  void _initCuTreeARM();
+#endif
 
 protected:
   virtual void initPicture    ( Picture* pic );

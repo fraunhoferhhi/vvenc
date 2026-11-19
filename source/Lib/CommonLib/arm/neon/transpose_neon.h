@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #if defined( TARGET_SIMD_ARM )
 
 #include <arm_neon.h>
+#include <utility>
 
 namespace vvenc
 {
@@ -219,6 +220,42 @@ static inline void transpose_4x4_s32( int32x4_t& a0, int32x4_t& a1, int32x4_t& a
   a1 = vcombine_s32( vget_low_s32( a01.val[1] ), vget_low_s32( a23.val[1] ) );
   a2 = vcombine_s32( vget_high_s32( a01.val[0] ), vget_high_s32( a23.val[0] ) );
   a3 = vcombine_s32( vget_high_s32( a01.val[1] ), vget_high_s32( a23.val[1] ) );
+}
+
+// Transpose a 32-bit 8x8 matrix in place, row y in m[2 y] (columns 0-3) and m[2 y + 1] (columns 4-7): each 4x4 block
+// transposed, the two off-diagonal blocks trading places.
+static inline void transpose_8x8_s32( int32x4_t* m )
+{
+  transpose_4x4_s32( m[0], m[2],  m[4],  m[6]  );
+  transpose_4x4_s32( m[1], m[3],  m[5],  m[7]  );
+  transpose_4x4_s32( m[8], m[10], m[12], m[14] );
+  transpose_4x4_s32( m[9], m[11], m[13], m[15] );
+  std::swap( m[1], m[8]  );
+  std::swap( m[3], m[10] );
+  std::swap( m[5], m[12] );
+  std::swap( m[7], m[14] );
+}
+
+// Transpose a 32-bit 16x16 matrix in place, row y in m[4 y .. 4 y + 3]: each 4x4 block transposed, the block at block
+// row by, column bx (starting at m[16 by + bx]) trading places with the one at block row bx, column by.
+static inline void transpose_16x16_s32( int32x4_t* m )
+{
+  for( int by = 0; by < 4; by++ )
+  {
+    int32x4_t* d = m + 16 * by + by;
+    transpose_4x4_s32( d[0], d[4], d[8], d[12] );
+    for( int bx = by + 1; bx < 4; bx++ )
+    {
+      int32x4_t* a = m + 16 * by + bx;
+      int32x4_t* b = m + 16 * bx + by;
+      transpose_4x4_s32( a[0], a[4], a[8], a[12] );
+      transpose_4x4_s32( b[0], b[4], b[8], b[12] );
+      std::swap( a[0],  b[0]  );
+      std::swap( a[4],  b[4]  );
+      std::swap( a[8],  b[8]  );
+      std::swap( a[12], b[12] );
+    }
+  }
 }
 
 } // namespace vvenc
