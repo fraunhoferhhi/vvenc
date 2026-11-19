@@ -378,7 +378,7 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const EncTestMode& 
 
 bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partitioner& partitioner, int qp )
 {
-  if( !m_reuseCuResults || partitioner.treeType == TREE_C || partitioner.maxBTD <= 1 )
+  if( !m_reuseCuResults || partitioner.treeType == TREE_C || partitioner.maxBTD <= 1 || partitioner.currQgEnable() )
   {
     return false; //if save & load is allowed for chroma CUs, we should check whether luma info (pred, recon, etc) is the same, which is quite complex
   }
@@ -399,11 +399,12 @@ bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partit
   }
   if( encInfo.cu.qp != qp )
     return false;
-  if( cs.picture->poc != encInfo.poc 
-    || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) 
-    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height))
+  // the cheap tests first, the area and neighbourhood comparisons last
+  if( cs.picture->poc != encInfo.poc
+    || cs.currQP[partitioner.chType] != encInfo.cu.qp
     || CU::isIBC(encInfo.cu)
-    || partitioner.currQgEnable() || cs.currQP[partitioner.chType] != encInfo.cu.qp
+    || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType )
+    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height))
     )
   {
     return false;
@@ -481,7 +482,7 @@ void EncModeCtrl::destroy()
   BestEncInfoCache::destroy();
 }
 
-void EncModeCtrl::initCTUEncoding( const Slice &slice, int tileIdx )
+void EncModeCtrl::initCTUEncoding( const Slice &slice )
 {
   CacheBlkInfoCtrl::init( slice );
   BestEncInfoCache::init( slice );
@@ -496,18 +497,16 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice, int tileIdx )
   {
     m_skipThresholdE0023FastEnc = SKIP_DEPTH;
   }
-
-  m_tileIdx = tileIdx;
 }
 
-void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag)
+void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag, const CodingUnit* cuLeft, const CodingUnit* cuAbove )
 {
   // Min/max depth
   unsigned minDepth = 0;
   unsigned maxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType );
   if( m_pcEncCfg->m_useFastLCTU )
   {
-    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, cs.picture->useQtbttSpeedUpMode, MergeSimpleFlag);
+    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, cs.picture->useQtbttSpeedUpMode, MergeSimpleFlag, cuLeft, cuAbove);
   }
 
   minDepth = std::max<unsigned>( minDepth, cs.pcv->getMinDepth( cs.slice->sliceType, partitioner.chType ) );
@@ -515,9 +514,6 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
   comprCUCtx = &m_ComprCUCtxList.back();
-
-  const CodingUnit* cuLeft  = cs.getCURestricted( cs.area.blocks[partitioner.chType].pos().offset( -1, 0 ), cs.area.blocks[partitioner.chType].pos(), cs.slice->independentSliceIdx, m_tileIdx, partitioner.chType, partitioner.treeType );
-  const CodingUnit* cuAbove = cs.getCURestricted( cs.area.blocks[partitioner.chType].pos().offset( 0, -1 ), cs.area.blocks[partitioner.chType].pos(), cs.slice->independentSliceIdx, m_tileIdx, partitioner.chType, partitioner.treeType );
 
   const bool qtBeforeBt = ( (  cuLeft  &&  cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth && cuAbove->qtDepth > partitioner.currQtDepth )
                          || (  cuLeft  && !cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth )

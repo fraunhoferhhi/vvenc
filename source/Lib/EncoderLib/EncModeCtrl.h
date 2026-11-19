@@ -379,7 +379,6 @@ protected:
         RdCost*         m_pcRdCost;
   static_vector<ComprCUCtx, ( MAX_CU_DEPTH << 2 )> m_ComprCUCtxList;
   unsigned              m_skipThresholdE0023FastEnc;
-  unsigned              m_tileIdx;
 
 public:
   ComprCUCtx*           comprCUCtx;
@@ -388,8 +387,9 @@ public:
 
   void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
-  void initCTUEncoding    ( const Slice &slice, int tileIdx );
-  void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag );
+  void initCTUEncoding    ( const Slice &slice );
+  // cuLeft / cuAbove: the restricted left and above neighbours of the CU (DeriveCtx::determineNeighborCus)
+  void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag, const CodingUnit* cuLeft, const CodingUnit* cuAbove );
   void finishCULevel      ( Partitioner &partitioner );
 
   bool tryMode            ( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner );
