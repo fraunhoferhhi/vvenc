@@ -111,6 +111,7 @@ private:
   //QuantErrScale m_quantErrScale;
   int     m_lastBitsX             [MAX_NUM_CH][LAST_SIGNIFICANT_GROUPS];
   int     m_lastBitsY             [MAX_NUM_CH][LAST_SIGNIFICANT_GROUPS];
+  bool    m_lastBitsBuilt         [MAX_NUM_CH];   ///< true if the channel type's latest call built m_lastBitsX / Y
   int*    m_errScale              [SCALING_LIST_SIZE_NUM][SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM][SCALING_LIST_REM_NUM]; ///< array of quantization matrix coefficient 4x4
   int     m_errScaleNoScalingList [SCALING_LIST_SIZE_NUM][SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM][SCALING_LIST_REM_NUM]; ///< array of quantization matrix coefficient 4x4
   CtxTpl  m_tplBuf                [CTX_TPL_BUF_SIZE];

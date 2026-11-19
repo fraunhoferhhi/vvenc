@@ -85,7 +85,7 @@ struct coeffGroupRDStats
 
 //! \}
 
-QuantRDOQ2::QuantRDOQ2( const Quant* other, bool useScalingLists, bool enableOpt ) : QuantRDOQ( other, useScalingLists, enableOpt ), m_isErrScaleListOwner( false ), m_iLambda( 0 )
+QuantRDOQ2::QuantRDOQ2( const Quant* other, bool useScalingLists, bool enableOpt ) : QuantRDOQ( other, useScalingLists, enableOpt ), m_isErrScaleListOwner( false ), m_iLambda( 0 ), m_lastBitsBuilt{}
 {
   const QuantRDOQ2 *rdoq2 = dynamic_cast<const QuantRDOQ2*>( other );
   CHECK( other && !rdoq2, "The RDOQ cast must be successfull!" );
@@ -487,8 +487,10 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
 
-  if( compID != COMP_Cr || !tu.cbf[COMP_Cb] )
-    xInitLastPosBitsTab( cctx, uiWidth, uiHeight, chType, fracBits );
+  // The last position bits table is built when the first last position is priced, so blocks that quantise to zero skip it.
+  // Cr reuses Cb's table (same contexts, same size) when Cb is coded and built the table in the latest call.
+  bool lastBitsBuilt = compID == COMP_Cr && tu.cbf[COMP_Cb] && m_lastBitsBuilt[chType];
+  m_lastBitsBuilt[chType] = lastBitsBuilt;
 
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
   * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
@@ -1041,6 +1043,11 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
     {
       if( cctx.isSigGroup( subSetId ) )
       {
+        if( !lastBitsBuilt )
+        {
+          xInitLastPosBitsTab( cctx, uiWidth, uiHeight, chType, fracBits );
+          lastBitsBuilt = m_lastBitsBuilt[chType] = true;
+        }
         cost_t codedCostBlockTmp = iUncodedCostBlock + iCodedCostCG - iCostCoeffGroupSig;
         int startPosInCG  = subSetId == lastSubSetId ? iLastScanPos % iCGSize: iCGSizeM1;
         int newAbsSumCG   = uiAbsSumCG;

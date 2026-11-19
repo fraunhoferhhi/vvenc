@@ -177,7 +177,9 @@ public:
   bool isConsInter                        () { return modeType == MODE_TYPE_INTER; }
   bool isConsIntra                        () { return modeType == MODE_TYPE_INTRA; }
 
-  void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, int QtbttSpeedUp, bool MergeFlag ) const;
+  // cuLeft / cuAbove: the restricted left and above neighbours of currArea() in chType (CS::getCURestricted)
+  void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, int QtbttSpeedUp, bool MergeFlag,
+                                            const CodingUnit* cuLeft, const CodingUnit* cuAbove ) const;
 };
 
 //////////////////////////////////////////////////////////////////////////
