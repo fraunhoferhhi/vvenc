@@ -559,7 +559,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 {
   m_tileIdx = cs.pps->getTileIdx( area.lumaPos() );
 
-  m_modeCtrl.initCTUEncoding( *cs.slice, m_tileIdx );
+  m_modeCtrl.initCTUEncoding( *cs.slice );
 
   // init the partitioning manager
   Partitioner *partitioner = &m_partitioner;
@@ -951,7 +951,9 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   {
     m_MergeSimpleFlag = 0;
   }
-  m_modeCtrl.initCULevel( partitioner, *tempCS, m_MergeSimpleFlag );
+  // the neighbours determineNeighborCus looked up at the start of this CU
+  const DeriveCtx& deriveCtx = m_CABACEstimator->getDeriveCtx();
+  m_modeCtrl.initCULevel( partitioner, *tempCS, m_MergeSimpleFlag, deriveCtx.cuRestrictedLeft[partitioner.chType], deriveCtx.cuRestrictedAbove[partitioner.chType] );
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
   m_CurrCtx->start = m_CABACEstimator->getCtx();
@@ -1009,7 +1011,8 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
       m_cIntraSearch.reset();
 
-      bool isReuseCU = m_modeCtrl.isReusingCuValid( cs, partitioner, qp );
+      // initCULevel already checked this at the CU's base QP, and nothing it reads has changed since
+      bool isReuseCU = qp == cs.baseQP ? cuECtx.isReusingCu : m_modeCtrl.isReusingCuValid( cs, partitioner, qp );
 
       bool checkIbc = m_pcEncCfg->m_IBCMode && bestCS->picture->useIBC && (partitioner.chType == CH_L);
       if ((m_pcEncCfg->m_IBCFastMethod>3) && (cs.area.lwidth() * cs.area.lheight()) > (16 * 16))

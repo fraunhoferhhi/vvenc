@@ -160,7 +160,8 @@ void Partitioner::copyState( const Partitioner& other )
 #endif
 }
 
-void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, int QtbttSpeedUp, bool MergeFlag) const
+void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, int QtbttSpeedUp, bool MergeFlag,
+                                  const CodingUnit* cuLeft, const CodingUnit* cuAbove ) const
 {
   unsigned          stdMinDepth = 0;
   unsigned          stdMaxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, chType );
@@ -168,9 +169,7 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
   const unsigned    curSliceIdx = cs.slice->independentSliceIdx;
   const unsigned    curTileIdx  = cs.pps->getTileIdx( currArea().lumaPos() );
 
-  const CodingUnit* cuLeft        = cs.getCURestricted( pos.offset( -1,                               0 ), pos, curSliceIdx, curTileIdx, chType, treeType );
   const CodingUnit* cuBelowLeft   = cs.getCURestricted( pos.offset( -1, currArea().blocks[chType].height), pos, curSliceIdx, curTileIdx, chType, treeType );
-  const CodingUnit* cuAbove       = cs.getCURestricted( pos.offset(  0,                              -1 ), pos, curSliceIdx, curTileIdx, chType, treeType );
   const CodingUnit* cuAboveRight  = cs.getCURestricted( pos.offset( currArea().blocks[chType].width, -1 ), pos, curSliceIdx, curTileIdx, chType, treeType );
 
   minDepth = stdMaxDepth;
