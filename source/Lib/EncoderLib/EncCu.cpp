@@ -1036,7 +1036,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       m_cIntraSearch.reset();
 
       // initCULevel already checked this at the CU's base QP, and nothing it reads has changed since
-      bool isReuseCU = qp == cs.baseQP ? cuECtx.isReusingCu : m_modeCtrl.isReusingCuValid( cs, partitioner, qp );
+      bool isReuseCU = qp == cs.baseQP ? cuECtx.isReusingCu : m_modeCtrl.isReusingCuValid( cs, partitioner, qp, cuECtx.mttDepthLimit );
 
       bool checkIbc = m_pcEncCfg->m_IBCMode && bestCS->picture->useIBC && (partitioner.chType == CH_L);
       if ((m_pcEncCfg->m_IBCFastMethod>3) && (cs.area.lwidth() * cs.area.lheight()) > (16 * 16))
@@ -1068,7 +1068,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
             xCheckRDCostInter(tempCS, bestCS, partitioner, encTestMode);
           }
 
-          if (m_pcEncCfg->m_AMVRspeed)
+          if (m_pcEncCfg->m_AMVRspeed && !m_modeCtrl.skipsAmvrSearch( *bestCS ))
           {
             double bestIntPelCost = MAX_DOUBLE;
 
@@ -1151,6 +1151,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
+    // FastMTTRefine (EncModeCtrl.cpp): at an MTT root the BT / TT splits below are first searched without the deepest
+    // MTT level, and xRefineDeepSplits then searches the promising ones again with it. QT is outside both passes: its
+    // sub-blocks are MTT roots themselves.
+    const bool refinesDeepSplits = !isBoundary && m_modeCtrl.beginCappedSplitPass( cs, partitioner );
+
     if( partitioner.canSplit( CU_HORZ_SPLIT, cs ) )
     {
       // add split modes
@@ -1193,6 +1198,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         lastTestMode = encTestMode;
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
+    }
+
+    if( refinesDeepSplits )
+    {
+      xRefineDeepSplits( tempCS, bestCS, partitioner, qp );
     }
 
     if( !cuECtx.qtBeforeBt )
@@ -1260,6 +1270,27 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   CHECK( bestCS->cost             == MAX_DOUBLE                , "No possible encoding found" );
 }
 
+
+// FastMTTRefine, the second pass at an MTT root (EncModeCtrl.cpp): searches again the root's BT / TT splits that came
+// close to its best cost in the first pass, now with the deepest MTT level below the sub-splits that came close to
+// their node's best. Each result competes with the best so far like any other split.
+void EncCu::xRefineDeepSplits( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner, const int qp )
+{
+  const EncTestModeType btAndTtSplits[] = { ETM_SPLIT_BT_H, ETM_SPLIT_BT_V, ETM_SPLIT_TT_H, ETM_SPLIT_TT_V };
+
+  const unsigned splitsToRefine = m_modeCtrl.beginSplitRefinePass( partitioner );
+
+  for( const EncTestModeType splitType : btAndTtSplits )
+  {
+    const EncTestMode encTestMode( { splitType, ETO_STANDARD, qp, false } );
+    if( ( splitsToRefine >> getPartSplit( encTestMode ) ) & 1 )
+    {
+      xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
+    }
+  }
+
+  m_modeCtrl.endSplitRefinePass();
+}
 
 void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode )
 {
@@ -1361,23 +1392,27 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     double         a = -1, b = -1;
     const unsigned w       = partitioner.currArea().lwidth();
     const unsigned h       = partitioner.currArea().lheight();
-    const bool contextCond = w == h && tempCS->slice->sliceType == VVENC_B_SLICE && isLuma( partitioner.chType ) && m_pcEncCfg->m_splitCostThrParamId >= 0 && m_pcEncCfg->m_splitCostThrParamId <= 3;
+    // the split-cost thresholds are trained per MTT depth limit (table id = the configured limit); a node that
+    // FastMTTRefine searches with a lowered limit (its first pass) uses the table of that lower limit, as an encode
+    // configured with it would
+    const int  splitCostId = m_pcEncCfg->m_splitCostThrParamId - ( m_modeCtrl.comprCUCtx->mttDepthLimit < partitioner.maxBTD ? 1 : 0 );
+    const bool contextCond = w == h && tempCS->slice->sliceType == VVENC_B_SLICE && isLuma( partitioner.chType ) && splitCostId >= 0 && splitCostId <= 3;
 
     if( contextCond )
     {
       uint8_t nsPredInd = m_modeCtrl.comprCUCtx->bestNsPredMode.type == ETM_INTRA;
       uint8_t szInd     = getLog2( w ) - 3;
       uint8_t splitInd  = split == CU_QUAD_SPLIT ? 1 : 0;
-      if ( m_pcEncCfg->m_splitCostThrParamId <= 1 )
+      if ( splitCostId <= 1 )
       {
-        a = coefSquareCUsFasterFastMedium[m_pcEncCfg->m_splitCostThrParamId][szInd][nsPredInd][splitInd][0];
-        b = coefSquareCUsFasterFastMedium[m_pcEncCfg->m_splitCostThrParamId][szInd][nsPredInd][splitInd][1];
+        a = coefSquareCUsFasterFastMedium[splitCostId][szInd][nsPredInd][splitInd][0];
+        b = coefSquareCUsFasterFastMedium[splitCostId][szInd][nsPredInd][splitInd][1];
       }
       else
       {
         uint8_t mtInd = (partitioner.currMtDepth == 0);
-        a = coefSquareCUsSlowSlower[m_pcEncCfg->m_splitCostThrParamId - 2][szInd][nsPredInd][partitioner.currQtDepth][mtInd][splitInd][0];
-        b = coefSquareCUsSlowSlower[m_pcEncCfg->m_splitCostThrParamId - 2][szInd][nsPredInd][partitioner.currQtDepth][mtInd][splitInd][1];
+        a = coefSquareCUsSlowSlower[splitCostId - 2][szInd][nsPredInd][partitioner.currQtDepth][mtInd][splitInd][0];
+        b = coefSquareCUsSlowSlower[splitCostId - 2][szInd][nsPredInd][partitioner.currQtDepth][mtInd][splitInd][1];
       }
     }
 
@@ -3444,6 +3479,10 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
     }
 
     CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
+    if( !testBcw )
+    {
+      m_modeCtrl.noteMotionSearchMvd( cu );   // FastAMVR: the MVDs found with equal weights
+    }
         
     xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
     
@@ -3567,6 +3606,10 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
             costCurStart = bestCS->cost;
           }
           if (nextimv)
+          {
+            continue;
+          }
+          if( i == IMV_4PEL && m_modeCtrl.skips4PelAmvr() )   // FastAMVR: MVDs too small for 4-sample precision
           {
             continue;
           }

@@ -599,6 +599,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toFga                         ( &c->m_fga );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
+  IStreamToInt8                     toFastMTTRefine               ( &c->m_fastMTTRefine );
+  IStreamToInt8                     toFastMEBelowSkip             ( &c->m_fastMEBelowSkip );
+  IStreamToInt8                     toFastAMVR                    ( &c->m_fastAMVR );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
   IStreamToInt8                     toCuTreeBlockSize             ( &c->m_cuTreeBlockSize );
   IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFractionVal );
@@ -1133,6 +1136,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
     ("FastTTSplit",                                     c->m_fastTTSplit,                                    "Fast method for TT split" )
+    ("FastMTTRefine",                                   toFastMTTRefine,                                     "Two-pass BT / TT search in the inter pictures whose MTT depth limit is the highest of MaxMTTDepth's, if that is 2 or 3: "
+                                                                                                             "first with that limit lowered by one, then again with the full depth for the splits that could win (0: off, 1: on)" )
+    ("FastMEBelowSkip",                                 toFastMEBelowSkip,                                   "No motion search (ME and AMVR) in the parts of a split block whose best mode without a split is skip (0: off, 1: on)" )
+    ("FastAMVR",                                        toFastAMVR,                                          "No AMVR search where the best mode is skip, where the motion search with quarter-sample MVDs costs more than 1.1 times "
+                                                                                                             "the best mode or its largest MVD is below half a sample; no 4-sample MVDs where that MVD is below 4 samples (0: off, 1: on)" )
     ;
 
     opts.setSubSection("Threading, performance");

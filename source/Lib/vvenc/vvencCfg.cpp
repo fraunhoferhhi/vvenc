@@ -650,6 +650,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_qtbttSpeedUp                            = 1;
   c->m_qtbttSpeedUpMode                        = 0;
   c->m_fastTTSplit                             = 0;
+  c->m_fastMTTRefine                           = 0;
+  c->m_fastMEBelowSkip                         = 0;
+  c->m_fastAMVR                                = 0;
 
   c->m_fastLocalDualTreeMode                   = 0;
 
@@ -702,6 +705,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
   c->m_reservedInt32 = 0;
+  memset( c->m_reservedInt8_5, 0, sizeof(c->m_reservedInt8_5) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -2092,6 +2096,9 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 7,   "QtbttExtraFast out of range [0..7]");
   vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
+  vvenc_confirmParameter( c, c->m_fastMTTRefine < 0 || c->m_fastMTTRefine > 1, "FastMTTRefine out of range [0..1]");
+  vvenc_confirmParameter( c, c->m_fastMEBelowSkip < 0 || c->m_fastMEBelowSkip > 1, "FastMEBelowSkip out of range [0..1]");
+  vvenc_confirmParameter( c, c->m_fastAMVR < 0 || c->m_fastAMVR > 1,           "FastAMVR out of range [0..1]");
   vvenc_confirmParameter( c, c->m_MTSIntraMaxCand < 0 || c->m_MTSIntraMaxCand > 4, "MTSIntraMaxCand out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
@@ -3446,6 +3453,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "ReduceFilterME:" << c->m_meReduceTap << " ";
     css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
     css << "FastTTSplit:" << c->m_fastTTSplit << " ";
+    css << "FastMTTRefine:" << (int)c->m_fastMTTRefine << " ";
+    css << "FastMEBelowSkip:" << (int)c->m_fastMEBelowSkip << " ";
+    if( c->m_AMVRspeed )
+    {
+      css << "FastAMVR:" << (int)c->m_fastAMVR << " ";
+    }
     if( c->m_IBCMode )
     {
       css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";

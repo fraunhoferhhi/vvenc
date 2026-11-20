@@ -377,6 +377,7 @@ private:
   void xCheckRDCostInterIMV   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckRDCostUnifiedMerge
                               ( CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &pm,       EncTestMode& encTestMode );
+  void xRefineDeepSplits      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const int qp );
   void xCheckModeSplit        ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckModeSplitInternal( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, const ModeType modeTypeParent, bool& skipInterPass );
   void xReuseCachedResult     ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm );
