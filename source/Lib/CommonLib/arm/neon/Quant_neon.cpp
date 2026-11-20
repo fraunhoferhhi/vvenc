@@ -434,12 +434,143 @@ static void quantNeon( const TransformUnit tu, const ComponentID compID, const C
   }
 }
 
+// BDPCM residuals (Quant::xFwdResDPCM / xInvResDPCMVer) for blocks a multiple of 4 wide; other widths go to the C
+// versions. The forward residual is a 16-bit wrap-around subtraction, the vertical inverse a 16-bit saturating addition,
+// as in the C versions.
+static void fwdResDPCMNeon( TCoeffSig* coef, const ptrdiff_t stride, const int width, const int height, const bool vertical )
+{
+  if( width & 3 )
+  {
+    Quant::fwdResDPCMCore( coef, stride, width, height, vertical );
+    return;
+  }
+
+  if( !vertical && width == 4 )
+  {
+    // two rows per vector: shifting each 64-bit row left by one coefficient gives its left neighbours, with a zero
+    // shifted in for the first coefficient, which stays
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, coef += 2 * stride )
+    {
+      const int16x4_t row0 = vld1_s16( coef );
+      const int16x4_t row1 = vld1_s16( coef + stride );
+      const int16x8_t cur  = vcombine_s16( row0, row1 );
+      const int16x8_t left = vreinterpretq_s16_u64( vshlq_n_u64( vreinterpretq_u64_s16( cur ), 16 ) );
+      const int16x8_t diff = vsubq_s16( cur, left );
+      vst1_s16( coef, vget_low_s16( diff ) );
+      vst1_s16( coef + stride, vget_high_s16( diff ) );
+    }
+    if( y < height )
+    {
+      const int16x4_t cur  = vld1_s16( coef );
+      const int16x4_t left = vreinterpret_s16_u64( vshl_n_u64( vreinterpret_u64_s16( cur ), 16 ) );
+      vst1_s16( coef, vsub_s16( cur, left ) );
+    }
+  }
+  else if( !vertical )
+  {
+    // per column strip, right to left, so that the coefficients left of a strip are still the originals when it reads
+    // them; the first coefficient of a row has no left neighbour and stays (the first strip shifts a zero in)
+    int x = width;
+    if( width & 4 )
+    {
+      x -= 4;
+      for( int y = 0; y < height; y++ )
+      {
+        TCoeffSig* const p    = coef + y * stride + x;
+        const int16x4_t  cur  = vld1_s16( p );
+        const int16x4_t  left = vld1_s16( p - 1 );
+        vst1_s16( p, vsub_s16( cur, left ) );
+      }
+    }
+    for( x -= 8; x > 0; x -= 8 )
+    {
+      for( int y = 0; y < height; y++ )
+      {
+        TCoeffSig* const p    = coef + y * stride + x;
+        const int16x8_t  cur  = vld1q_s16( p );
+        const int16x8_t  left = vld1q_s16( p - 1 );
+        vst1q_s16( p, vsubq_s16( cur, left ) );
+      }
+    }
+    for( int y = 0; y < height; y++ )
+    {
+      TCoeffSig* const p    = coef + y * stride;
+      const int16x8_t  cur  = vld1q_s16( p );
+      const int16x8_t  left = vextq_s16( vdupq_n_s16( 0 ), cur, 7 );
+      vst1q_s16( p, vsubq_s16( cur, left ) );
+    }
+  }
+  else
+  {
+    // per column strip, top down: each row minus the original row above it
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      int16x8_t up = vld1q_s16( coef + x );
+      for( int y = 1; y < height; y++ )
+      {
+        const int16x8_t cur = vld1q_s16( coef + y * stride + x );
+        vst1q_s16( coef + y * stride + x, vsubq_s16( cur, up ) );
+        up = cur;
+      }
+    }
+    if( x < width )
+    {
+      int16x4_t up = vld1_s16( coef + x );
+      for( int y = 1; y < height; y++ )
+      {
+        const int16x4_t cur = vld1_s16( coef + y * stride + x );
+        vst1_s16( coef + y * stride + x, vsub_s16( cur, up ) );
+        up = cur;
+      }
+    }
+  }
+}
+
+static void invResDPCMVerNeon( const TCoeffSig* coef, const ptrdiff_t coefStride, TCoeffSig* dst, const ptrdiff_t dstStride, const int width, const int height )
+{
+  if( width & 3 )
+  {
+    Quant::invResDPCMVerCore( coef, coefStride, dst, dstStride, width, height );
+    return;
+  }
+
+  // per column strip, top down: the running sum of the rows
+  int x = 0;
+  for( ; x + 8 <= width; x += 8 )
+  {
+    int16x8_t sum = vld1q_s16( coef + x );
+    vst1q_s16( dst + x, sum );
+    for( int y = 1; y < height; y++ )
+    {
+      const int16x8_t c = vld1q_s16( coef + y * coefStride + x );
+      sum = vqaddq_s16( sum, c );
+      vst1q_s16( dst + y * dstStride + x, sum );
+    }
+  }
+  if( x < width )
+  {
+    int16x4_t sum = vld1_s16( coef + x );
+    vst1_s16( dst + x, sum );
+    for( int y = 1; y < height; y++ )
+    {
+      const int16x4_t c = vld1_s16( coef + y * coefStride + x );
+      sum = vqadd_s16( sum, c );
+      vst1_s16( dst + y * dstStride + x, sum );
+    }
+  }
+}
+
 template<>
 void Quant::_initQuantARM<NEON>()
 {
   xNeedRdoq = needRdoqNeon;
   xDeQuant  = dequantNeon;
   xQuant    = quantNeon;
+
+  xFwdResDPCM    = fwdResDPCMNeon;
+  xInvResDPCMVer = invResDPCMVerNeon;
 }
 
 }  // namespace vvenc
