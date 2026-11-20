@@ -56,6 +56,8 @@ VVEncCfg::VVEncCfg()
   , m_bimCtuSize( 64 )
   , m_MaxQT { 128, 128, 128 }
   , m_cuTreeScale( 0.0 )
+  , m_cuTreePicScale( 0.0 )
+  , m_configuredQP( 0 )
   , m_QPFraction( 0.0 )
   , m_fgaStrength( 0.0 )
 {
@@ -84,8 +86,16 @@ static unsigned getMaxTlVal( unsigned perTlVal )
   return maxVal;
 }
 
+int getCodingQp( const vvenc_config& c )
+{
+  const int offset = c.m_cuTreePicStrength > 0 ? int( 3.0 + 2.0 * c.m_cuTreePicStrength / 32.0 + 0.5 ) : 0;
+  return std::min( c.m_QP + offset, MAX_QP );
+}
+
 void VVEncCfg::xInitCfgMembers()
 {
+  m_configuredQP        = m_QP;
+  m_QP                  = getCodingQp( *this );
   m_stageParallelProc   = m_numThreads > 0 && m_maxParallelFrames > 0;
   m_log2GopSize         = floorLog2( m_GOPSize );
   m_maxTLayer           = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
@@ -99,6 +109,7 @@ void VVEncCfg::xInitCfgMembers()
   m_reuseCuResults      = ( m_IntraPeriod > 1 && getMaxTlVal( m_maxMTTDepth ) > 1 ) || m_maxMTTDepthI > ( m_IntraPeriod == 1 ? 1 : 2 );
   m_splitCostThrParamId = getMaxTlVal(m_maxMTTDepth);
   m_cuTreeScale         = m_cuTreeStrength / 32.0;
+  m_cuTreePicScale      = m_cuTreePicStrength / 32.0;
 
   m_mergeRdCandQuotaRegular = std::min( NUM_MRG_SATD_CAND, std::max( ( int ) m_maxNumMergeCand - 2, 1 ) );
   //                                        0  1  2  3  4
