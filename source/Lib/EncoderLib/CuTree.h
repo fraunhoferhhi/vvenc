@@ -94,6 +94,10 @@ typedef void ( *TplPredBlockFn )( const Pel* src, ptrdiff_t srcStride, int fx, i
 template<int N>
 void tplPredBlockCore( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel* dst );
 
+// The squared error between the N x N block at org and its bilinear prediction from src at ( fx, fy ), as
+// TplPredBlockFn predicts it: the fractional motion search's cost without storing the prediction.
+typedef int ( *TplPredErrorFn )( const Pel* src, ptrdiff_t srcStride, int fx, int fy, const Pel* org, ptrdiff_t orgStride );
+
 // One row of 2x2 averages, ( a + b + c + d + 2 ) >> 2.
 typedef void ( *TplDownsampleRowFn )( const Pel* src, ptrdiff_t srcStride, Pel* dst, int dstWidth );
 
@@ -150,12 +154,18 @@ public:
 
   TplCodeBlockFn     m_codeBlock[NUM_TPL_BLK_SIZES];   // kernels per block size, SIMD where available
   TplPredBlockFn     m_predBlock[NUM_TPL_BLK_SIZES];
+  TplPredErrorFn     m_predError[NUM_TPL_BLK_SIZES];   // AVX2 and Neon only; elsewhere the search predicts, then measures
   TplDownsampleRowFn m_downsampleRow;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
   void initCuTree_X86();
   template <X86_VEXT vext>
   void _initCuTree_X86();
+#endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT
+  void initCuTreeARM();
+  template <ARM_VEXT vext>
+  void _initCuTreeARM();
 #endif
 
 protected:
@@ -177,6 +187,7 @@ private:
   int                                   m_blkHeight;
   int                                   m_qpBDOffset;
   double                                m_lambdaLeaf;    // Lagrange multiplier at the QP of unreferenced pictures
+  double                                m_noiseVar;      // CuTreePicStrength: mean MCTF noise estimate of the latest batch's T2 pictures
   std::map<int, std::unique_ptr<Frame>> m_frames;        // analysis data by POC, kept while it can still be referenced
   // the IRAP and the IDR picture coded last among the erased ones
   PocCodingNum                          m_lastErasedIrap;
@@ -184,6 +195,7 @@ private:
 
   void   xForEachRow         ( int numRows, const std::function<void( int )>& fn ) const;
   void   xDownsample         ( const PelStorage& src, PelStorage& dst ) const;
+  double xMeanAbsDiff        ( const PelStorage& a, const PelStorage& b ) const;
   bool   xIsBatchReady       ( const PicList& picList, int& batchEndPoc ) const;
   Frame* xFindFrame          ( int poc ) const;
   void   xMarkRandomAccess   ( const PicList& picList );
