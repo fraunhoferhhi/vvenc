@@ -6958,6 +6958,108 @@ static bool test_AdaptiveLoopFilter()
 
 #if ENABLE_SIMD_OPT_SAO
 
+// SampleAdaptiveOffset::offsetBlock is protected: a subclass to reach it
+struct SaoOffsetBlockAccess : public SampleAdaptiveOffset
+{
+  explicit SaoOffsetBlockAccess( bool enableOpt ) : SampleAdaptiveOffset( enableOpt ) {}
+  using SampleAdaptiveOffset::offsetBlock;
+};
+
+// offsetBlock for every SAO type, availability mask and block width offsetCTU can pass (multiples of 4, picture-edge
+// CTUs included), samples with a one-sample border of valid values (the edge classes
+// read it), offsets as the encoder's (edge class 0 offset 0; band offset nonzero only in the four bands from startIdx);
+// the whole block compared, positions the C code leaves alone included (they must keep their samples), not the rest of
+// the rows (the SSE kernel stores whole vectors past a block width that is not a multiple of 8: the picture margin at
+// picture-edge CTUs).
+static bool check_SAOoffsetBlock( SaoOffsetBlockAccess* ref, SaoOffsetBlockAccess* opt, int bd )
+{
+  printf( "Testing SampleAdaptiveOffset::offsetBlock %d-bit\n", bd );
+  DimensionGenerator  rng;
+  InputGenerator<Pel> samples{ unsigned( bd ), /*is_signed=*/false };
+  const ClpRng        clpRng{ bd };
+  const int           maxOffset = SampleAdaptiveOffset::getMaxOffsetQVal( bd ) << std::max( bd - 10, 0 );
+
+  for( int typeIdx = 0; typeIdx < 5; typeIdx++ )
+  {
+    for( int availMask = 0; availMask < 256; availMask++ )
+    {
+#if !defined( TARGET_SIMD_ARM )
+      // the SSE kernel's diagonal classes assume the masks deriveLoopFilterBoundaryAvailibility can give (raster
+      // slices, tiles: the CTUs between the current one and a neighbour of its slice / tile in raster order, or inside
+      // the tile rectangle, are there too); the NEON kernel matches the C code on every mask
+      auto has = [availMask]( int bits ) { return ( availMask & bits ) == bits; };
+      if( ( has( AboveLeftAvail ) && !has( AboveAvail | LeftAvail ) )
+          || ( has( BelowRightAvail ) && !has( BelowAvail | RightAvail ) )
+          || ( has( AboveAvail | RightAvail ) && !has( AboveRightAvail ) )
+          || ( has( BelowAvail | LeftAvail ) && !has( BelowLeftAvail ) ) )
+      {
+        continue;
+      }
+#endif
+      for( int width : { 4, 8, 12, 16, 20, 24, 36, 64, 128 } )
+      {
+        const int height = rng.getOneOf<int>( { 4, 8, 12, 16, 32, 64 } );
+        // strides past the width rounded up to 16, in steps of 8 samples (16 bytes: the SSE kernel's stores are
+        // aligned), as a picture's; the source padded by 16 samples (the SSE kernel reads whole vectors past the block)
+        const ptrdiff_t srcStride = ( ( width + 2 + 15 ) & ~15 ) + 8 * rng.get( 0, 2 );
+        const ptrdiff_t resStride = ( ( width + 15 ) & ~15 ) + 8 * rng.get( 0, 2 );
+        std::vector<Pel> src( srcStride * ( height + 2 ) + 16 );
+        std::generate( src.begin(), src.end(), samples );
+        if( availMask & 1 )
+        {
+          // runs of one value (edge class 0, band offset in one band)
+          const Pel value = Pel( rng.get( 0, ( 1 << bd ) - 1 ) );
+          std::fill( src.begin() + srcStride, src.begin() + srcStride + width / 2, value );
+        }
+        // the destination holds the block's own samples before SAO, as in offsetCTU (the SSE kernel stores them back,
+        // unchanged, at positions the C code skips)
+        std::vector<Pel> resRef( resStride * height, 0x5a5a );
+        for( int y = 0; y < height; y++ )
+        {
+          std::copy_n( src.data() + ( y + 1 ) * srcStride + 1, width, resRef.data() + y * resStride );
+        }
+        std::vector<Pel> resOpt = resRef;
+
+        int offset[MAX_NUM_SAO_CLASSES] = { 0 };
+        const int startIdx = rng.get( 0, MAX_NUM_SAO_CLASSES - 1 );
+        for( int k = 0; k < 4; k++ )
+        {
+          const int value = int( rng.get( 0, 2 * maxOffset ) ) - maxOffset;
+          if( typeIdx == SAO_TYPE_BO )
+          {
+            offset[( startIdx + k ) % MAX_NUM_SAO_CLASSES] = value;
+          }
+          else
+          {
+            offset[k < 2 ? k : k + 1] = value;   // edge classes -2, -1, 1, 2; class 0 keeps 0
+          }
+        }
+        // the sign lines as SampleAdaptiveOffset::init sizes them (the CTU width + 1; the SSE kernel reads and writes
+        // whole vectors of them)
+        std::vector<int8_t> signRef1( 256 ), signRef2( 256 ), signOpt1( 256 ), signOpt2( 256 );
+        const Pel* srcBlk = src.data() + srcStride + 1;
+        ref->offsetBlock( bd, clpRng, typeIdx, offset, startIdx, srcBlk, resRef.data(), srcStride, resStride, width,
+                          height, uint8_t( availMask ), signRef1, signRef2 );
+        opt->offsetBlock( bd, clpRng, typeIdx, offset, startIdx, srcBlk, resOpt.data(), srcStride, resStride, width,
+                          height, uint8_t( availMask ), signOpt1, signOpt2 );
+
+        std::ostringstream sstm;
+        sstm << "offsetBlock type=" << typeIdx << " availMask=" << availMask << " " << width << "x" << height
+             << " startIdx=" << startIdx;
+        for( int y = 0; y < height; y++ )
+        {
+          if( !compare_values_1d( sstm.str(), resRef.data() + y * resStride, resOpt.data() + y * resStride, width ) )
+          {
+            return false;
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
+
 template<typename G>
 static bool check_SAOcalcSaoStatisticsBo( SampleAdaptiveOffset* ref, SampleAdaptiveOffset* opt, int bd, G src_generator,
                                           G org_generator )
@@ -7347,6 +7449,13 @@ static bool test_SampleAdaptiveOffset()
     passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, max_gen, min_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, min_gen, max_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+  }
+
+  SaoOffsetBlockAccess refApply{ false };
+  SaoOffsetBlockAccess optApply{ true };
+  for( int bd : { 8, 10, 12 } )
+  {
+    passed = check_SAOoffsetBlock( &refApply, &optApply, bd ) && passed;
   }
 
   return passed;
