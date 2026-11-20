@@ -597,10 +597,12 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
   IStreamToInt8                     toPOC0IDR                     ( &c->m_poc0idr );
   IStreamToInt8                     toFga                         ( &c->m_fga );
+  IStreamToInt8                     toCuTreeLookAheadGOPs         ( &c->m_cuTreeLookAheadGOPs );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
   IStreamToInt8                     toCuTreeBlockSize             ( &c->m_cuTreeBlockSize );
+  IStreamToFixedPointU8             toCuTreePicStrength           ( &c->m_cuTreePicStrength, 5 );
   IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFractionVal );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
 
@@ -1126,9 +1128,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
-    ("BIM",                                             toBIM,                                               "Block importance mapping: lower the QP of blocks that later pictures predict from (0: off, 1: CU-tree, TPL model with one GOP of look-ahead, 2: from MCTF's motion error)")
+    ("BIM",                                             toBIM,                                               "Block importance mapping: lower the QP of blocks that later pictures predict from (0: off, 1: CU-tree, TPL model with CuTreeLookAheadGOPs of look-ahead, 2: from MCTF's motion error)")
+    ("CuTreeLookAheadGOPs",                             toCuTreeLookAheadGOPs,                               "CU-tree (BIM 1): GOPs the analysis looks ahead, never more than the intra period (at least 1 GOP): 1 to 4 (-1: automatic, 1). Each extra GOP costs one GOP of pictures in memory and of delay, none once the window reaches the intra period")
     ("CuTreeStrength",                                  toCuTreeStrength,                                    "CU-tree (BIM 1): scale of its QP offsets [0...8.0)")
     ("CuTreeBlockSize",                                 toCuTreeBlockSize,                                   "CU-tree (BIM 1): side of its analysis blocks in luma samples (16, 32, or -1: automatic, 32 from 720 lines on, else 16)")
+    ("CuTreePicStrength",                               toCuTreePicStrength,                                 "CU-tree (BIM 1), random access, constant QP: picture QPs from how much later pictures depend on each picture, in place of the temporal layers' fixed QP offsets; scale of these offsets [0...8.0) (0: off). Codes at QP + round( 3 + 2 * strength ) to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32)")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )

@@ -259,7 +259,7 @@ void EncLib::initPass( int pass, const char* statsFName )
     m_maxNumPicShared += minQueueSize - leadFrames;
   }
 
-  // CU-tree look-ahead, holds the pictures of a GOP until the next GOP has arrived
+  // CU-tree look-ahead, holds the pictures of a GOP until its look-ahead has arrived (CuTree::getNumLookAheadPics)
   if( m_encCfg.useCuTree() )
   {
     m_cuTree = new CuTree();
