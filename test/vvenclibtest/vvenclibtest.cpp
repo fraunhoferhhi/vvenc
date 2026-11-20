@@ -956,6 +956,32 @@ int checkSDKStringApiFractionalQP()
   return 0;
 }
 
+int checkSDKStringApiPreset()
+{
+  // the preset key gives the same configuration as passing that preset to vvenc_init_default
+  vvenc_config c, ref;
+  vvenc_init_default( &c,   176,144,60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &ref, 176,144,60, 0, 32, vvencPresetMode::VVENC_SLOWER );
+
+  if( vvenc_set_param( &c, VVENC_OPT_PRESET, "slower" ) != 0 )
+  {
+    return -1;
+  }
+  if( vvenc_set_param( &c, VVENC_OPT_PRESET, "nopreset" ) != VVENC_PARAM_BAD_VALUE )
+  {
+    return -1;
+  }
+  if( vvenc_init_config_parameter( &c ) || vvenc_init_config_parameter( &ref ) )
+  {
+    return -1;
+  }
+
+  // vvenc_get_config_as_string returns a shared buffer: copy each result before the next call
+  const std::string cfgString    = vvenc_get_config_as_string( &c,   VVENC_DETAILS );
+  const std::string refCfgString = vvenc_get_config_as_string( &ref, VVENC_DETAILS );
+  return cfgString == refCfgString ? 0 : -1;
+}
+
 int checkSDKStringApiInvalid()
 {
   vvenc_config c;
@@ -1292,6 +1318,7 @@ int testStringApiInterface()
 {
   testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
   testfunc( "checkSDKStringApiFractionalQP", &checkSDKStringApiFractionalQP, false );
+  testfunc( "checkSDKStringApiPreset", &checkSDKStringApiPreset, false );
   testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
   testfunc( "checkSDKStringApiNoValue", &checkSDKStringApiNoValue, false );
 
