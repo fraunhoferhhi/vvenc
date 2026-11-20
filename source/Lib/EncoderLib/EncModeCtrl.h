@@ -201,6 +201,12 @@ struct ComprCUCtx
     , isIntra               (false)
     , nonSkipWasTested      (false)
     , bestNsPredMode        (EncTestMode())
+    , mttDepthLimit         (0)
+    , bestNoSplitCost       (MAX_DOUBLE)
+    , mttSplitCost          { MAX_DOUBLE, MAX_DOUBLE, MAX_DOUBLE, MAX_DOUBLE }
+    , refinableSplits       (0)
+    , meCost                (MAX_DOUBLE)
+    , meLargestMvd          (-1)
   {
   }
 
@@ -237,6 +243,15 @@ struct ComprCUCtx
   bool              isIntra;
   bool              nonSkipWasTested;
   EncTestMode       bestNsPredMode;
+  unsigned          mttDepthLimit;     // the MTT depth limit the split rules, the reuse of stored results and the split-cost table read at this node:
+                                       // the partitioner's, one lower in the first pass of FastMTTRefine (EncModeCtrl::xSearchMttDepthLimit)
+  // FastMTTRefine; split sets are bit masks of 1 << PartSplit
+  double            bestNoSplitCost;   // cost of the best mode without a split plus its deblocking offset
+  double            mttSplitCost[4];   // first pass: cost of BT-H, BT-V, TT-H, TT-V as compared, MAX_DOUBLE where not searched
+  unsigned          refinableSplits;   // first pass: the splits below which a search of the deepest MTT level was left out
+  // FastAMVR: the motion search with quarter-sample MVDs and equal bi-prediction weights
+  double            meCost;            // its best RD cost, MAX_DOUBLE where it has none
+  int               meLargestMvd;      // the largest MVD component of its result in quarter samples, -1 where it has none
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -261,6 +276,7 @@ struct CodedCUInfo
   uint32_t  puSse  [SBT_NUM_SL];
   uint8_t   puSbt  [SBT_NUM_SL];
   double    bestCost;
+  uint8_t   refineSplits;   // FastMTTRefine: the BT / TT splits (bits 1 << PartSplit) this block searches again as a child of its MTT root
 
   bool getMv  ( const RefPicList refPicList, const int iRefIdx,       Mv& rMv ) const;
   void setMv  ( const RefPicList refPicList, const int iRefIdx, const Mv& rMv );
@@ -299,6 +315,7 @@ struct BestEncodingInfo
   int             poc;
   Distortion      dist;
   double          costEDO;
+  uint32_t        storeNumber;   // position of this result among the results stored for the CTU (BestEncInfoCache::m_storeCount)
 };
 
 // Hands out runs of T from chunks that are kept for reuse. Runs never move, so pointers into them
@@ -349,21 +366,34 @@ private:
   CodingStructure      m_dummyCS;
   XUCache              m_dummyCache;
 
-  BestEncodingInfo*    xNewEntry( const int wIdx, const int hIdx );
+  // A stored result is reused only where the CU still has the neighbours it was found with (isTheSameNbHood), which
+  // relies on every node being searched once. FastMTTRefine searches the splits of an MTT root a second time: while it
+  // does (m_revisitFirstStore > 0), the results stored before are trusted only for what lies outside the root, the
+  // first m_revisitSharedLevels levels of the split path.
+  uint32_t             m_storeCount;            // results stored for the current CTU
+  uint32_t             m_revisitFirstStore;     // m_storeCount when the second search began, 0 while none runs
+  int                  m_revisitSharedLevels;
+
+  BestEncodingInfo*    xNewEntry    ( const int wIdx, const int hIdx );
+  int                  xSharedLevels( const BestEncodingInfo& encInfo ) const;
 
 protected:
   bool                 m_reuseCuResults;
   void create   ( const bool reuseCuResults, const ChromaFormat chFmt, int ctuSize );
   void destroy  ();
+  // around the second search of the splits of an MTT root whose split path has sharedLevels levels (the CTU counts as one)
+  void beginRevisit( const int sharedLevels ) { m_revisitFirstStore = m_storeCount; m_revisitSharedLevels = sharedLevels; }
+  void endRevisit  ()                         { m_revisitFirstStore = 0; }
 
 public:
-  BestEncInfoCache() : m_pcv( nullptr ), m_chFmt( CHROMA_420 ), m_dummyCS( m_dummyCache, nullptr ) {}
+  BestEncInfoCache() : m_pcv( nullptr ), m_chFmt( CHROMA_420 ), m_dummyCS( m_dummyCache, nullptr ), m_storeCount( 0 ), m_revisitFirstStore( 0 ), m_revisitSharedLevels( 0 ) {}
   ~BestEncInfoCache() {}
 
   void init             ( const Slice &slice );
   bool setCsFrom        (       CodingStructure& cs,       EncTestMode& testMode, const Partitioner& partitioner ) const;
   bool setFromCs        ( const CodingStructure& cs, const EncTestMode& testMode, const Partitioner& partitioner );
-  bool isReusingCuValid ( const CodingStructure &cs, const Partitioner &partitioner, int qp );
+  // mttDepthLimit: the MTT depth limit the CU's split rules read (ComprCUCtx::mttDepthLimit)
+  bool isReusingCuValid ( const CodingStructure &cs, const Partitioner &partitioner, int qp, unsigned mttDepthLimit );
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -379,6 +409,21 @@ protected:
         RdCost*         m_pcRdCost;
   static_vector<ComprCUCtx, ( MAX_CU_DEPTH << 2 )> m_ComprCUCtxList;
   unsigned              m_skipThresholdE0023FastEnc;
+
+  // FastMTTRefine (EncModeCtrl.cpp): the passes of the BT / TT search below an MTT root
+  enum MttSearchPass { MTT_SEARCH_FULL, MTT_SEARCH_CAPPED, MTT_SEARCH_REFINE };
+  unsigned              m_mttRefineLimit;   // the MTT depth limit of the inter pictures FastMTTRefine acts on (the highest
+                                            // per-layer MaxMTTDepth digit, m_splitCostThrParamId), 0 for none
+  MttSearchPass         m_mttSearchPass;
+
+  bool     xRefinesMtt            ( const CodingStructure& cs, const Partitioner& partitioner ) const;
+  unsigned xSearchMttDepthLimit   ( const CodingStructure& cs, const Partitioner& partitioner ) const;
+  bool     xSkipsDeepestMttLevel  ( const CodingStructure& cs, const Partitioner& partitioner );
+  bool     xChoosesSplitsToRefine ( const Partitioner& partitioner ) const;
+  unsigned xSplitsToRefine        ( const ComprCUCtx& cuECtx ) const;
+  void     xStoreSplitsToRefine   ( const Partitioner& partitioner );
+  void     xNoteMotionSearchCost  ( const EncTestMode& encTestmode, const CodingStructure& tempCS, const bool useEDO );
+  bool     xKeepIfBest            ( const EncTestMode& encTestmode, CodingStructure* tempCS, const bool useEDO );
 
 public:
   ComprCUCtx*           comprCUCtx;
@@ -397,6 +442,20 @@ public:
   bool useModeResult      ( const EncTestMode& encTestmode, CodingStructure*& tempCS,  Partitioner& partitioner, const bool useEDO );
 
   void beforeSplit        ( Partitioner& partitioner );
+
+  // FastMTTRefine, called by EncCu::xCompressCU at a node away from the picture border: before the node's BT / TT
+  // splits (true: the node is an MTT root FastMTTRefine acts on, and its first pass begins), and after them for such
+  // a root (ends the first pass and begins the second, returning the splits the caller searches again, bits
+  // 1 << PartSplit), then once the caller has searched them
+  bool     beginCappedSplitPass ( const CodingStructure& cs, const Partitioner& partitioner );
+  unsigned beginSplitRefinePass ( const Partitioner& partitioner );
+  void     endSplitRefinePass   ();
+
+  // FastAMVR: noteMotionSearchMvd keeps the largest MVD of the current node's motion search with equal bi-prediction weights;
+  // skipsAmvrSearch and skips4PelAmvr say where the AMVR search, or its 4-sample MVDs, cannot pay
+  void     noteMotionSearchMvd  ( const CodingUnit& cu );
+  bool     skipsAmvrSearch      ( const CodingStructure& bestCS ) const;
+  bool     skips4PelAmvr        () const;
 };
 
 } // namespace vvenc

@@ -54,6 +54,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_next.h"
 
+#include <algorithm>
+#include <climits>
 #include <cmath>
 
 //! \ingroup EncoderLib
@@ -223,7 +225,9 @@ bool CacheBlkInfoCtrl::saveBestSbt( const UnitArea& area, const uint32_t curPuSs
   return true;
 }
 
-static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, const Partitioner &partitioner, int picW, int picH )
+// sharedLevels: the number of leading levels of the split path (the CTU counts as one) whose nodes have been searched
+// only once since the result was stored; INT_MAX where that holds for the whole path (BestEncInfoCache::xSharedLevels)
+static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, const Partitioner &partitioner, int picW, int picH, const int sharedLevels )
 {
   if( cu.chType != partitioner.chType )
   {
@@ -241,6 +245,10 @@ static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, co
       break;
     }
   }
+
+  // A node searched a second time may by now have other blocks coded before it, also where the split path to the
+  // stored result is the same: only the neighbours outside the deepest node searched once are still the same.
+  i = std::min( i, sharedLevels );
 
   const UnitArea& cmnAnc = ps[i - 1].parts[ps[i - 1].idx];
   const UnitArea cuArea  = CS::getArea( cs, cu, partitioner.chType, partitioner.treeType );
@@ -292,6 +300,8 @@ void BestEncInfoCache::init( const Slice &slice )
   m_entryArena.reset();
   m_coeffArena.reset();
   m_dmvrMvArena.reset();
+  m_storeCount        = 0;
+  m_revisitFirstStore = 0;
 
   bool isInitialized = m_pcv;
 
@@ -372,13 +382,26 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const EncTestMode& 
   encInfo.testMode       = testMode;
   encInfo.dist           = cs.dist;
   encInfo.costEDO        = cs.costDbOffset;
+  encInfo.storeNumber    = ++m_storeCount;
 
   return true;
 }
 
-bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partitioner& partitioner, int qp )
+// How far down the split path a stored result can share its neighbourhood with the CU coded now (isTheSameNbHood)
+int BestEncInfoCache::xSharedLevels( const BestEncodingInfo& encInfo ) const
 {
-  if( !m_reuseCuResults || partitioner.treeType == TREE_C || partitioner.maxBTD <= 1 || partitioner.currQgEnable() )
+  // never true while m_revisitFirstStore is 0: store numbers start at 1
+  const bool storedBeforeRevisit = encInfo.storeNumber <= m_revisitFirstStore;
+  return storedBeforeRevisit ? m_revisitSharedLevels : INT_MAX;
+}
+
+// FastMTTRefine searches some CUs as a picture with a lower MTT depth limit would (mttDepthLimit), and such a picture
+// reuses nothing where that limit is 1. Results are still stored with the partitioner's limit (setFromCs): that changes
+// nothing for a CU that reuses nothing, and the second pass, which searches with the partitioner's limit, can then
+// reuse what the first pass found.
+bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partitioner& partitioner, int qp, const unsigned mttDepthLimit )
+{
+  if( !m_reuseCuResults || partitioner.treeType == TREE_C || mttDepthLimit <= 1 || partitioner.currQgEnable() )
   {
     return false; //if save & load is allowed for chroma CUs, we should check whether luma info (pred, recon, etc) is the same, which is quite complex
   }
@@ -404,7 +427,7 @@ bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partit
     || cs.currQP[partitioner.chType] != encInfo.cu.qp
     || CU::isIBC(encInfo.cu)
     || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType )
-    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height))
+    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height), xSharedLevels( encInfo ) )
     )
   {
     return false;
@@ -431,7 +454,7 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
 
   if( cs.picture->poc != encInfo.poc 
     || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) 
-    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height))
+    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height), xSharedLevels( encInfo ) )
     || partitioner.currQgEnable() || cs.currQP[partitioner.chType] != encInfo.cu.qp
     )
   {
@@ -466,6 +489,28 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
 //////////////////////////////////////////////////////////////////////////
 // EncModeCtrl
 //////////////////////////////////////////////////////////////////////////
+
+// FastMTTRefine acts where the MTT depth limit is in this range. Below 2 an MTT root would itself be the node whose
+// splits the first pass leaves out; above 3 the first pass has levels of nodes the second pass has no rule for.
+static constexpr unsigned MIN_REFINED_MTT_DEPTH_LIMIT = 2;
+static constexpr unsigned MAX_REFINED_MTT_DEPTH_LIMIT = 3;
+
+// FastAMVR: where the motion search with quarter-sample MVDs and equal weights shows that AMVR cannot pay
+static constexpr double   AMVR_ME_BEHIND_RATIO  = 1.1;   // it costs more than this times the best mode: a merge mode or intra is far ahead of any searched motion
+static constexpr int      AMVR_MIN_MVD          = 2;     // its largest MVD component (quarter samples) is below this: every MVD is 0 or 1/4, no MVD bits to save
+static constexpr int      AMVR_4PEL_MIN_MVD     = 16;    // ... below this (4 samples): no 4-sample MVDs, which round every MVD to 4 samples
+
+// MTT depth of a node below the splits the picture border forces, which are not counted against the depth limit
+static int freeMttDepth( const Partitioner& partitioner )
+{
+  return ( int ) partitioner.currMtDepth - ( int ) partitioner.currImplicitBtDepth;
+}
+
+static bool isBtOrTt( const PartSplit split )
+{
+  return split == CU_HORZ_SPLIT || split == CU_VERT_SPLIT || split == CU_TRIH_SPLIT || split == CU_TRIV_SPLIT;
+}
+
 void EncModeCtrl::init( const VVEncCfg& encCfg, RdCost* pRdCost )
 {
   m_pcEncCfg = &encCfg;
@@ -474,6 +519,13 @@ void EncModeCtrl::init( const VVEncCfg& encCfg, RdCost* pRdCost )
 
   CacheBlkInfoCtrl::create( encCfg.m_CTUSize );
   BestEncInfoCache::create( encCfg.m_reuseCuResults, encCfg.m_internChromaFormat, encCfg.m_CTUSize );
+
+  // FastMTTRefine acts on the inter pictures with the highest MTT depth limit of the encode's temporal layers, which
+  // is also the id of its split-cost table (3 at preset slower, whose top layer with limit 2 is searched as before)
+  const unsigned highestMttDepthLimit = ( unsigned ) std::max( 0, encCfg.m_splitCostThrParamId );
+  const bool     limitCanBeRefined    = highestMttDepthLimit >= MIN_REFINED_MTT_DEPTH_LIMIT && highestMttDepthLimit <= MAX_REFINED_MTT_DEPTH_LIMIT;
+  m_mttRefineLimit = encCfg.m_fastMTTRefine && limitCanBeRefined ? highestMttDepthLimit : 0;
+  m_mttSearchPass  = MTT_SEARCH_FULL;
 }
 
 void EncModeCtrl::destroy()
@@ -515,20 +567,23 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
   comprCUCtx = &m_ComprCUCtxList.back();
 
+  const unsigned mttDepthLimit = xSearchMttDepthLimit( cs, partitioner );
+
   const bool qtBeforeBt = ( (  cuLeft  &&  cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth && cuAbove->qtDepth > partitioner.currQtDepth )
                          || (  cuLeft  && !cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth )
                          || ( !cuLeft  &&  cuAbove  && cuAbove->qtDepth > partitioner.currQtDepth )
                          || ( !cuAbove && !cuLeft   && cs.area.lwidth() >= ( 32 << cs.slice->TLayer ) )
-                         || ( m_pcEncCfg->m_qtbttSpeedUp > 1 && partitioner.maxBTD < ( ( cs.slice->isIntra() && !cs.sps->IBC ) ? 3 : 2 ) ) )
+                         || ( m_pcEncCfg->m_qtbttSpeedUp > 1 && mttDepthLimit < ( ( cs.slice->isIntra() && !cs.sps->IBC ) ? 3u : 2u ) ) )
                          && ( cs.area.lwidth() > ( cs.pcv->getMinQtSize( *cs.slice, partitioner.chType ) << 1 ) );
 
   // set features
   ComprCUCtx &cuECtx    = *comprCUCtx;
+  cuECtx.mttDepthLimit  = mttDepthLimit;
   cuECtx.qtBeforeBt     = qtBeforeBt;
   cuECtx.doTriHorzSplit = true;
   cuECtx.doTriVertSplit = true;
   cuECtx.doMoreSplits   = 3;
-  cuECtx.isReusingCu    = isReusingCuValid( cs, partitioner, cs.baseQP );
+  cuECtx.isReusingCu    = isReusingCuValid( cs, partitioner, cs.baseQP, mttDepthLimit );
   cuECtx.didHorzSplit   = partitioner.canSplit( CU_HORZ_SPLIT, cs );
   cuECtx.didVertSplit   = partitioner.canSplit( CU_VERT_SPLIT, cs );
   cuECtx.doHorChromaSplit = true;
@@ -560,6 +615,11 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
 
 void EncModeCtrl::finishCULevel( Partitioner &partitioner )
 {
+  if( m_mttSearchPass == MTT_SEARCH_CAPPED && xChoosesSplitsToRefine( partitioner ) )
+  {
+    xStoreSplitsToRefine( partitioner );
+  }
+
   m_ComprCUCtxList.pop_back();
   comprCUCtx = m_ComprCUCtxList.size() ? &m_ComprCUCtxList.back() : nullptr;
 }
@@ -605,6 +665,15 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   }
 
   CHECK( ! isModeSplit( encTestmode ), "wrong method" );
+
+  // FastMTTRefine: in the second pass a child of the MTT root searches again exactly the splits noted for it at the end
+  // of the first pass. The rules below are not asked again: they let these splits through in the first pass, and now
+  // they would read the results of sibling splits that are not searched again. (With an MTT depth limit of 2 nothing
+  // was noted: the child's splits are the ones left out, and the rules below decide on them now for the first time.)
+  if( m_mttSearchPass == MTT_SEARCH_REFINE && xChoosesSplitsToRefine( partitioner ) )
+  {
+    return ( getBlkInfo( partitioner.currArea() ).refineSplits >> getPartSplit( encTestmode ) ) & 1;
+  }
 
   //////////////////////////////////////////////////////////////////////////
   // skip-history rule - don't split further if at least for three past levels
@@ -690,7 +759,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   if( m_pcEncCfg->m_qtbttSpeedUp > 1 )
   {
-    const int availDepth = cs.pcv->getMaxMTTDepth( slice, partitioner.chType ) - partitioner.currMtDepth;
+    const int availDepth = cuECtx.mttDepthLimit - partitioner.currMtDepth;
     if( bestCU && bestCU->skip && availDepth <= ( 3 - m_skipThresholdE0023FastEnc ) && !isModeSplit( lastTestmode ) && split != CU_QUAD_SPLIT )
     {
       return false;
@@ -709,7 +778,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
       {
         if( !cuECtx.qtBeforeBt && bestCU )
         {
-          unsigned maxBTD        = cs.pcv->getMaxMTTDepth( slice, partitioner.chType );
+          unsigned maxBTD        = cuECtx.mttDepthLimit;
           const CodingUnit *cuBR = bestCS->cus.back();
           unsigned height        = partitioner.currArea().lumaSize().height;
 
@@ -839,12 +908,19 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
       break;
   }
 
+  const bool passedAllRules = m_pcEncCfg->m_qtbttSpeedUp <= 1 || !!cuECtx.doMoreSplits;
+
   if( split == CU_QUAD_SPLIT )
   {
-    cuECtx.didQuadSplit = m_pcEncCfg->m_qtbttSpeedUp <= 1 || !!cuECtx.doMoreSplits;
+    cuECtx.didQuadSplit = passedAllRules;
+  }
+  else if( passedAllRules && xSkipsDeepestMttLevel( cs, partitioner ) )
+  {
+    // asked last, so that FastMTTRefine notes exactly the splits the rules above would search
+    return false;
   }
 
-  return m_pcEncCfg->m_qtbttSpeedUp <= 1 || !!cuECtx.doMoreSplits;
+  return passedAllRules;
 }
 
 bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner )
@@ -950,6 +1026,14 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     // INTER MODES (ME + MERGE/SKIP)
     CHECK( slice.isIntra(), "Inter-mode should not be in the I-Slice mode list!" );
 
+    // FastMEBelowSkip: no motion search in the split parts of a block whose best mode without a split is skip. The
+    // parts of a block that one merge candidate predicts without a residual rarely need a searched motion vector.
+    if( m_pcEncCfg->m_fastMEBelowSkip && ( encTestmode.type == ETM_INTER_ME || encTestmode.type == ETM_INTER_IMV )
+        && m_ComprCUCtxList.size() > 1 && ( m_ComprCUCtxList.end() - 2 )->isBestNoSplitSkip )
+    {
+      return false;
+    }
+
     // --- Check if we can quit current mode using SAVE/LOAD coding history
 
     if( encTestmode.type == ETM_INTER_ME )
@@ -1013,6 +1097,8 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
 
   cuECtx.bestNsPredMode       = cuECtx.bestMode;
   cuECtx.bestCostBeforeSplit  = cuECtx.bestCS->cost;
+  cuECtx.bestNoSplitCost      = cuECtx.bestCS->cost + cuECtx.bestCS->costDbOffset;   // read by FastMTTRefine only; the
+                                                                                          // EDO offset is 0 where EDO did not run
 
   setFromCs( *cuECtx.bestCS, cuECtx.bestMode, partitioner );
 
@@ -1059,6 +1145,30 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
 {
   ComprCUCtx& cuECtx = m_ComprCUCtxList.back();
 
+  if( m_pcEncCfg->m_fastAMVR )
+  {
+    xNoteMotionSearchCost( encTestmode, *tempCS, useEDO );
+  }
+
+  const bool isLumaBtOrTt = isLuma( partitioner.chType ) && isBtOrTt( getPartSplit( encTestmode ) );
+  if( m_mttSearchPass == MTT_SEARCH_REFINE && isLumaBtOrTt && freeMttDepth( partitioner ) == 0 )
+  {
+    // FastMTTRefine: a split of the MTT root, searched a second time, only competes with the results so far. What the
+    // rules know about the root's splits stays as the first pass left it; the root's QT decision reads it.
+    if( !xKeepIfBest( encTestmode, tempCS, useEDO ) )
+    {
+      return false;
+    }
+    // the root's best result now comes from a search with the partitioner's limit, so the QT decision reads that one
+    cuECtx.mttDepthLimit = partitioner.maxBTD;
+    return true;
+  }
+  if( m_mttSearchPass == MTT_SEARCH_CAPPED && isLumaBtOrTt && tempCS->cost != MAX_DOUBLE )
+  {
+    // the lower of the two where a split is searched once with inter and once with intra sub-blocks
+    double& splitCost = cuECtx.mttSplitCost[getPartSplit( encTestmode ) - CU_HORZ_SPLIT];
+    splitCost         = std::min( splitCost, tempCS->cost + ( useEDO ? tempCS->costDbOffset : 0 ) );
+  }
 
   if(      encTestmode.type == ETM_SPLIT_BT_H )
   {
@@ -1095,7 +1205,7 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
     cuECtx.maxQtSubDepth = maxQtD;
   }
 
-  int maxMtD = tempCS->pcv->getMaxMTTDepth( *tempCS->slice, partitioner.chType ) + partitioner.currImplicitBtDepth;
+  int maxMtD = cuECtx.mttDepthLimit + partitioner.currImplicitBtDepth;
 
   if( encTestmode.type == ETM_SPLIT_BT_H )
   {
@@ -1134,6 +1244,14 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
                     cuECtx.doMoreSplits--;
   }
 
+  return xKeepIfBest( encTestmode, tempCS, useEDO );
+}
+
+// Makes tempCS the best result of the current CU if it is better than the best so far; returns whether it did
+bool EncModeCtrl::xKeepIfBest( const EncTestMode& encTestmode, CodingStructure* tempCS, const bool useEDO )
+{
+  ComprCUCtx& cuECtx = m_ComprCUCtxList.back();
+
   // for now just a simple decision based on RD-cost or choose tempCS if bestCS is not yet coded
   if( tempCS->cost != MAX_DOUBLE && ( !cuECtx.bestCS || ( ( tempCS->cost + ( useEDO ? tempCS->costDbOffset : 0 ) ) < ( cuECtx.bestCS->cost + ( useEDO ? cuECtx.bestCS->costDbOffset : 0 ) ) ) ) )
   {
@@ -1148,6 +1266,209 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
   {
     return false;
   }
+}
+
+//////////////////////////////////////////////////////////////////////////
+// FastMTTRefine: two-pass BT / TT search of the inter pictures with the encode's highest MTT depth limit L (2 or 3)
+//
+// Every MTT root (a luma node that no BT / TT split lies above) searches its BT / TT splits twice. The first, capped
+// pass leaves out the deepest MTT level, the splits that make CUs of MTT depth L. The second pass then searches again
+// the root's splits whose cost in the first pass is at most the root's best cost without QT, and below which a search
+// was left out, now with the deepest level. With L = 3 it searches, inside them, only the children's splits that are
+// at most the child's best cost (xStoreSplitsToRefine). With L = 2 the root's children are the nodes whose splits
+// were left out, so there are no costs to choose by: they search their splits as always.
+// The first pass is searched as a picture with MTT depth limit L - 1 is: its split rules, its reuse of stored CU
+// results and its split-cost table read that limit (ComprCUCtx::mttDepthLimit). Only the split flags are coded and
+// priced with the picture's limit L.
+//////////////////////////////////////////////////////////////////////////
+
+// True for the nodes FastMTTRefine acts on: luma, in an inter picture with the MTT depth limit it refines
+bool EncModeCtrl::xRefinesMtt( const CodingStructure& cs, const Partitioner& partitioner ) const
+{
+  return m_mttRefineLimit && isLuma( partitioner.chType ) && !cs.slice->isIntra() && partitioner.maxBTD == m_mttRefineLimit;
+}
+
+// The MTT depth limit that a node's split rules, its reuse of stored results (BestEncInfoCache::isReusingCuValid) and
+// its split-cost table (EncCu::xCheckModeSplitInternal) read; called when the node begins. It is the partitioner's,
+// except where FastMTTRefine acts: an MTT root and the nodes of its first pass are searched as in a picture whose
+// limit is one lower, so they read that limit too (with the picture's, the rules would take the splits left out for
+// searched and found useless). From 3 to 2 that changes the rules that compare depths and the row of the split-cost
+// table; from 2 to 1 also QT is searched before BT / TT (QtbttExtraFast above 1), no stored result is reused, and the
+// split-cost table is medium's. The nodes of the second pass read the picture's limit; the MTT root itself keeps
+// the lower one until a split of the second pass is kept (useModeResult), so until then its own later splits read
+// the lower limit's split-cost table, as in the research build this was measured with.
+unsigned EncModeCtrl::xSearchMttDepthLimit( const CodingStructure& cs, const Partitioner& partitioner ) const
+{
+  if( !xRefinesMtt( cs, partitioner ) )
+  {
+    return partitioner.maxBTD;
+  }
+  // outside the two passes the only nodes FastMTTRefine acts on are the MTT roots
+  const bool searchedWithLowerLimit = m_mttSearchPass != MTT_SEARCH_REFINE;
+  return partitioner.maxBTD - ( searchedWithLowerLimit ? 1 : 0 );
+}
+
+// Asked by trySplit for a BT / TT split that would be searched now: true where the first pass leaves it out, as it
+// makes CUs of the deepest MTT level. The node's parent then notes that its split that made this node has a search
+// left out below it, which the second pass can make.
+bool EncModeCtrl::xSkipsDeepestMttLevel( const CodingStructure& cs, const Partitioner& partitioner )
+{
+  if( m_mttSearchPass != MTT_SEARCH_CAPPED )
+  {
+    return false;
+  }
+  const bool makesDeepestLevel = partitioner.currMtDepth + 1 == partitioner.maxBTD + partitioner.currImplicitBtDepth;
+  if( !makesDeepestLevel || !xRefinesMtt( cs, partitioner ) )
+  {
+    return false;
+  }
+  ComprCUCtx& parentCtx      = *( m_ComprCUCtxList.end() - 2 );
+  parentCtx.refinableSplits |= 1 << partitioner.currPartLevel().split;
+  return true;
+}
+
+// True below an MTT root for a child of the root that has a level of nodes between it and the deepest MTT level
+// (limit 3). Such a child had its own splits searched in the first pass, so the second pass searches again only the
+// ones chosen by their cost (xStoreSplitsToRefine).
+bool EncModeCtrl::xChoosesSplitsToRefine( const Partitioner& partitioner ) const
+{
+  const int depth = freeMttDepth( partitioner );
+  return isLuma( partitioner.chType ) && depth == 1 && depth + 1 < ( int ) partitioner.maxBTD;
+}
+
+// The BT / TT splits of a node (bits 1 << PartSplit) that the second pass searches again: those whose cost in the
+// first pass is at most the node's best cost without QT, and that have a search left out below them
+unsigned EncModeCtrl::xSplitsToRefine( const ComprCUCtx& cuECtx ) const
+{
+  const double bestCost = std::min( cuECtx.bestNoSplitCost, *std::min_element( std::begin( cuECtx.mttSplitCost ), std::end( cuECtx.mttSplitCost ) ) );
+  unsigned     splits   = 0;
+  for( int split = CU_HORZ_SPLIT; split <= CU_TRIV_SPLIT; split++ )
+  {
+    const double cost      = cuECtx.mttSplitCost[split - CU_HORZ_SPLIT];
+    const bool   refinable = ( cuECtx.refinableSplits >> split ) & 1;
+    if( refinable && cost != MAX_DOUBLE && cost <= bestCost )
+    {
+      splits |= 1 << split;
+    }
+  }
+  return splits;
+}
+
+// End of the first pass at a child of the MTT root that had splits of its own searched (xChoosesSplitsToRefine):
+// notes the splits the child searches again in the second pass, in the block info of its area (within one MTT root,
+// each of its children has an area of its own), and tells the root that the split that made this child is worth
+// searching again.
+void EncModeCtrl::xStoreSplitsToRefine( const Partitioner& partitioner )
+{
+  const ComprCUCtx& cuECtx   = *comprCUCtx;
+  const unsigned    toRefine = xSplitsToRefine( cuECtx );
+  if( toRefine )
+  {
+    ComprCUCtx& rootCtx      = *( m_ComprCUCtxList.end() - 2 );
+    rootCtx.refinableSplits |= 1 << partitioner.currPartLevel().split;
+  }
+
+  // The child's best split is searched again too, with or without a search left out below it: if a sibling makes the
+  // root search this child again, the child must be able to find the result it had in the first pass.
+  const PartSplit bestSplit   = cuECtx.bestCS ? getPartSplit( cuECtx.bestMode ) : CU_DONT_SPLIT;
+  const unsigned  searchAgain = toRefine | ( isBtOrTt( bestSplit ) ? 1 << bestSplit : 0 );
+  getBlkInfo( partitioner.currArea() ).refineSplits = ( uint8_t ) searchAgain;
+}
+
+bool EncModeCtrl::beginCappedSplitPass( const CodingStructure& cs, const Partitioner& partitioner )
+{
+  if( !xRefinesMtt( cs, partitioner ) || freeMttDepth( partitioner ) != 0 )
+  {
+    return false;
+  }
+  CHECKD( m_mttSearchPass != MTT_SEARCH_FULL, "MTT roots do not nest" );
+  m_mttSearchPass = MTT_SEARCH_CAPPED;
+  return true;
+}
+
+unsigned EncModeCtrl::beginSplitRefinePass( const Partitioner& partitioner )
+{
+  m_mttSearchPass = MTT_SEARCH_REFINE;
+  // From here on nodes below the root are searched a second time: see BestEncInfoCache
+  beginRevisit( ( int ) partitioner.getPartStack().size() );
+  return xSplitsToRefine( *comprCUCtx );
+}
+
+void EncModeCtrl::endSplitRefinePass()
+{
+  m_mttSearchPass = MTT_SEARCH_FULL;
+  endRevisit();
+}
+
+//////////////////////////////////////////////////////////////////////////
+// FastAMVR: AMVR (MVDs in whole, 4 or half samples) pays where coding the MVD coarsely saves bits, or where the
+// half-sample filter predicts better, and only where a searched motion vector is near the node's best mode at all.
+// The motion search with quarter-sample MVDs and equal bi-prediction weights, made before it, shows where it cannot.
+//////////////////////////////////////////////////////////////////////////
+
+// The largest MVD component in quarter samples that a CU found by motion search codes: per list in use and per control
+// point (one unless affine). The MVDs of the second list of an SMVD CU are not coded.
+static int largestMvdInQuarterSamples( const CodingUnit& cu )
+{
+  static constexpr int QUARTER_SHIFT = MV_FRACTIONAL_BITS_INTERNAL - 2;   // MVDs are kept in 1/16 samples
+  const int controlPoints = !cu.affine ? 1 : cu.affineType == AFFINEMODEL_6PARAM ? 3 : 2;
+  int largest = 0;
+  for( int list = 0; list < NUM_REF_PIC_LIST_01; list++ )
+  {
+    if( !( cu.interDir >> list & 1 ) || ( list == REF_PIC_LIST_1 && cu.smvdMode ) )
+    {
+      continue;
+    }
+    for( int point = 0; point < controlPoints; point++ )
+    {
+      largest = std::max( { largest, abs( cu.mvd[list][point].hor ) >> QUARTER_SHIFT, abs( cu.mvd[list][point].ver ) >> QUARTER_SHIFT } );
+    }
+  }
+  return largest;
+}
+
+// Keeps the best cost of the motion search with quarter-sample MVDs and equal weights (called by useModeResult)
+void EncModeCtrl::xNoteMotionSearchCost( const EncTestMode& encTestmode, const CodingStructure& tempCS, const bool useEDO )
+{
+  if( encTestmode.type != ETM_INTER_ME || tempCS.cost == MAX_DOUBLE || tempCS.cus.empty() || !comprCUCtx )
+  {
+    return;
+  }
+  const CodingUnit& cu   = *tempCS.cus.front();
+  const double      cost = tempCS.cost + ( useEDO ? tempCS.costDbOffset : 0 );   // what useModeResult compares
+  if( cu.imv == IMV_OFF && cu.BcwIdx == BCW_DEFAULT && cost < comprCUCtx->meCost )
+  {
+    comprCUCtx->meCost = cost;
+  }
+}
+
+void EncModeCtrl::noteMotionSearchMvd( const CodingUnit& cu )
+{
+  if( m_pcEncCfg->m_fastAMVR && comprCUCtx )
+  {
+    comprCUCtx->meLargestMvd = largestMvdInQuarterSamples( cu );
+  }
+}
+
+// True where the AMVR search of the current node is not made: its best mode bestCS is skip (as AMVR speeds 3 and 4
+// do), or the motion search is far behind it or found MVDs too small to save bits on. The last two need a result of
+// the motion search.
+bool EncModeCtrl::skipsAmvrSearch( const CodingStructure& bestCS ) const
+{
+  if( !m_pcEncCfg->m_fastAMVR || !comprCUCtx || bestCS.cus.empty() )
+  {
+    return false;
+  }
+  const ComprCUCtx& cuECtx      = *comprCUCtx;
+  const bool        hasMeResult = cuECtx.meLargestMvd >= 0 && cuECtx.meCost != MAX_DOUBLE;
+  return bestCS.cus.front()->skip
+      || ( hasMeResult && ( cuECtx.meCost > AMVR_ME_BEHIND_RATIO * bestCS.cost || cuECtx.meLargestMvd < AMVR_MIN_MVD ) );
+}
+
+// True where the AMVR search of the current node leaves out 4-sample MVDs
+bool EncModeCtrl::skips4PelAmvr() const
+{
+  return m_pcEncCfg->m_fastAMVR && comprCUCtx && comprCUCtx->meLargestMvd >= 0 && comprCUCtx->meLargestMvd < AMVR_4PEL_MIN_MVD;
 }
 
 } // namespace vvenc
