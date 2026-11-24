@@ -145,64 +145,107 @@ public:
   // the log2 scale factor and the component models, with scaling factors calibrated against the synthesis.
   void getSignalledParameters( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
 
-  // The film grain SEI fitted to the grain the coding lost. lostGrainSpectra: for one component of a coded picture, the
-  // summed 16x16 DCT power of the original's smoothest blocks (the 30 % with the least low-frequency power per band of
-  // block means) and of the same blocks of the reconstruction, per 8-bit block mean, in ascending order (read by several
-  // threads at once: it changes no state).
+  // The film grain SEI fitted to the grain the coding lost, as the eye sees it. lostGrainSpectra: for one component of
+  // a coded picture, what the coding took from the original's smoothest 64x64 tiles (the 30 % with the least
+  // roughness per level of tile means): the power of original minus reconstruction per band of periods and direction
+  // and per 8-bit tile mean, in ascending order (read by several threads at once: it changes no state). Empty before
+  // init() with the improved analysis.
   void lostGrainSpectra( const CPelBuf& org, const CPelBuf& rec, int bitDepth, std::vector<LostGrainSpectrum>& spectra ) const;
-  // An intensity interval's summed spectra reduced to the mean power per block in each u + v frequency group of the fit,
-  // split by direction (once per interval: it does not depend on the cut-offs tried).
+  // An intensity interval's summed spectra reduced to the mean grain power per tile, in squared sample values, that
+  // the coding took in each band of periods (50-25, 25-12.5, 12.5-6.25, 6.25-3.125 samples of the component, and
+  // finer) and direction (once per interval: it does not depend on the cut-offs tried).
   struct LostGrainPower
   {
-    static constexpr int GROUPS     = 5;
-    static constexpr int DIRECTIONS = 2;   // 0: horizontal frequency dominates (u > v), 1: vertical (v > u)
-    double orig[ GROUPS ][ DIRECTIONS ] = {};
-    double reco[ GROUPS ][ DIRECTIONS ] = {};
-    int    blocks                       = 0;
+    static constexpr int BANDS      = 5;
+    static constexpr int DIRECTIONS = 2;   // 0: the horizontal frequency is the higher one, 1: the vertical one
+    double lost[ BANDS ][ DIRECTIONS ] = {};   // the power of original minus reconstruction
+    int    tiles                       = 0;
   };
-  static LostGrainPower lostGrainPower( const double orig[ 256 ], const double reco[ 256 ], int blocks );
-  // What lostGrainFit needs of the grain synthesized at cut-offs (h, w), each clipped to 2 .. 14. It depends on nothing
-  // else, so the caller computes it once per pair of cut-offs and fits every intensity interval with it.
+  static LostGrainPower lostGrainPower( const LostGrainSpectrum& pooled );
+  // The most one picture's tiles of an interval say the coding took: their mean power per band and direction plus two
+  // standard errors of that mean, from how far the tiles' powers differ (LostGrainSpectrum::lostSquared).
+  static LostGrainPower lostGrainPowerAtMost( const LostGrainSpectrum& ofPicture );
+  // How the bands count in the fit of one intensity interval of a component.
+  struct LostGrainBands
+  {
+    static constexpr int BANDS = LostGrainPower::BANDS;
+    double weight        [ BANDS ] = {};   // how much grain power in the band counts to the eye, the largest 1; 0: the band is not fitted
+    double allBandsWeight[ BANDS ] = {};   // the same, but no fitted band counts less than a fixed share of the largest
+    double tolerance     [ BANDS ] = {};   // the most synthesized power per lost power; 0: the band does not count at all
+  };
+  // The bands' weights are Barten's contrast sensitivity, squared, at the given display luminance (cd/m2), for a
+  // picture of pictureHeight luma rows seen from 1.5 and from 3 picture heights (the mean of both). By them the grain
+  // finer than about 6 samples of a 4K picture hardly counts; allBandsWeight is for where it must (see
+  // LOST_GRAIN_MIN_WEIGHT). Bands of periods of up to 25 luma samples are fitted, those up to 50 only limit the
+  // synthesis, longer ones do not count; the synthesis may exceed the lost grain by 1.05 times in amplitude.
+  static LostGrainBands lostGrainBands( bool chroma420, int pictureHeight, double luminance );
+  // The luminance in cd/m2 a display gives an 8-bit limited-range luma value: PQ (SMPTE ST 2084), or else gamma 2.4 with
+  // white at 100 cd/m2; at least 0.1.
+  static double displayLuminance( int luma8, bool pq );
+  // What lostGrainFit needs of the grain synthesized at cut-offs (h horizontal, w vertical), each clipped to 2 .. 14.
+  // It depends on nothing else, so the caller computes it once per pair of cut-offs and fits every intensity interval
+  // with it.
   struct LostGrainShape
   {
     double patternStddev = 0.0;   // the grain pattern's standard deviation
     double blockShare    = 0.0;   // the share of the grain's variance a 16x16 block keeps
-    double power[ LostGrainPower::GROUPS ][ LostGrainPower::DIRECTIONS ] = {};   // per unit of grain variance
+    double power[ LostGrainPower::BANDS ][ LostGrainPower::DIRECTIONS ] = {};   // the shares of the grain's variance
   };
-  static LostGrainShape lostGrainShape( bool chroma420, int h, int w );
-  // The scaling factor (0 .. MAX_STANDARD_DEVIATION) at the cut-offs of shape whose synthesized grain, added to the
-  // reconstruction, best matches the original's power per u + v frequency group and direction (least squares of the log
-  // ratio, overshoot weighted); the synthesized power is capped at LOST_GRAIN_CAP_POWER times that of the analyzer's scale s0
-  // at its cut-offs (h0, w0). Returns the cost, -1: nothing to fit (scale is then s0).
-  static double lostGrainFit( const LostGrainPower& power, int bitDepth, bool chroma420, int log2ScaleFactor, int s0, int h0,
-                              int w0, const LostGrainShape& shape, int& scale );
-  // The scaling factor at cut-offs (h, w) whose synthesized in-block power equals that of scale s at (h0, w0).
+  LostGrainShape lostGrainShape( bool chroma420, int h, int w ) const;
+  // A fit of the frequency model to the lost grain of an intensity interval at one pair of cut-offs. The costs are in
+  // squared sample values, so the costs of intervals can be added; those of no grain do not depend on the cut-offs and
+  // are what the others are a share of.
+  struct LostGrainFit
+  {
+    int    scale              = 0;      // the fitted scaling factor
+    double seenCost           = -1.0;   // the eye's cost (LostGrainBands::weight) of its grain; below 0: nothing to fit
+    double allBandsCost       = 0.0;    // the same grain's cost by LostGrainBands::allBandsWeight
+    double seenCostOfNone     = 0.0;    // the two costs of no grain at all
+    double allBandsCostOfNone = 0.0;
+  };
+  // The scaling factor (0 .. largestScale) at the cut-offs of shape whose synthesized grain the eye sees
+  // closest to the lost grain: the least sum over the fitted bands and directions of the band's weight times the squared
+  // difference of the amplitudes, synthesized grain beyond the lost grain counting four times; among the scaling factors
+  // that leave every band within its tolerance (plus a small share of all the lost grain's power). The synthesized
+  // power is capped at LOST_GRAIN_CAP_POWER times that of the analyzer's scale s0 at its cut-offs (h0, w0). With
+  // nothing to fit the scale is s0. largestScale: lostGrainLargestScale().
+  static LostGrainFit lostGrainFit( const LostGrainPower& power, const LostGrainBands& bands, int bitDepth, bool chroma420,
+                                    int log2ScaleFactor, int s0, int h0, int w0, const LostGrainShape& shape, int largestScale );
+  // The largest scaling factor the fit of the frequency model may give at a log2 scale factor: above the largest one
+  // signalled (127) as far as a lower log2 scale factor can signal it. lostGrainSignalledScales then brings the scaling
+  // factors of all components of a film grain SEI into the signalled range: it halves them as often as needed and
+  // returns the number of halvings, by which the caller lowers the SEI's log2 scale factor.
+  static int lostGrainLargestScale( int log2ScaleFactor );
+  static int lostGrainSignalledScales( int log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] );
+  // The scaling factor at cut-offs (h, w) whose synthesized in-block power equals that of scale s at (h0, w0); it can
+  // be larger than any that is signalled.
   static int equalPowerScale( int s, bool chroma420, int h0, int w0, int h, int w );
   // The lost-grain fit may put back up to this many times the analyzer's grain power: the coding can lose more than that
   // (the analyzer's scale falls toward bright areas while the lost grain does not). At 2x Top Gun's mid-bright band
   // (8-bit 97-128) got back 0.68-0.76 of its lost fine grain and 0.52-0.56 of its medium grain, at 4x 0.93-0.94 and
-  // 0.71-0.72; the overshoot-weighted cost still holds the fit where it is not bound.
+  // 0.71-0.72 (measured with the fit on 16x16 blocks, before it tolerated overshoot). It also bounds grain fitted to
+  // texture the coding smoothed away, which the lost grain cannot be told from.
   static constexpr double LOST_GRAIN_CAP_POWER = 4.0;
   // The largest scaling factor the fit may give at cut-offs (h, w): LOST_GRAIN_CAP_POWER times the power of the analyzer's
-  // scale s0 at (h0, w0), at most 127 (the largest scaling factor the analyzer signals).
-  static int lostGrainCapScale( int s0, bool chroma420, int h0, int w0, int h, int w );
+  // scale s0 at (h0, w0), at most largestScale (lostGrainLargestScale()).
+  static int lostGrainCapScale( int s0, bool chroma420, int h0, int w0, int h, int w, int largestScale );
 
   // The grain the synthesis makes with a filter of the auto-regressive model (--fga 3): its standard deviation per unit
-  // of the scaling factor, and its power in a 16x16 block per unit of grain variance in each u + v frequency group and
-  // direction of the lost-grain fit.
+  // of the scaling factor, the shares of its variance in each band and direction of the lost-grain fit, and those of
+  // white noise (the error of rounding the grain to whole sample values).
   struct ArGrain
   {
     double stddevPerScale = 0.0;
-    double bandPower[ LostGrainPower::GROUPS ][ LostGrainPower::DIRECTIONS ] = {};
+    double bandPower [ LostGrainPower::BANDS ][ LostGrainPower::DIRECTIONS ] = {};
+    double whitePower[ LostGrainPower::BANDS ][ LostGrainPower::DIRECTIONS ] = {};
   };
   // modelValues: an intensity interval's signalled model values (scaling factor, a1, 0, a3, r, a5; the filter is the same
   // in all intervals of a component).
   static ArGrain arGrain( const std::vector<int>& modelValues, int log2ScaleFactor, int bitDepth, bool luma );
   // The scaling factor (0 to twice s0, the analyzer's: LOST_GRAIN_CAP_POWER in power) whose synthesized grain, rounded
-  // to whole sample values as the synthesis rounds it, added to the reconstruction, best matches the original's power
-  // per frequency group and direction (the cost of lostGrainFit), among those that leave no group from u + v = 3 more
-  // than 1.1 times above the original in amplitude. Returns the cost, -1: nothing to fit.
-  static double lostGrainFitAr( const LostGrainPower& power, const ArGrain& grain, int s0, int& scale );
+  // to whole sample values as the synthesis rounds it, is closest to the lost grain: lostGrainFit's cost and tolerances,
+  // by LostGrainBands::allBandsWeight. Returns the cost, -1: nothing to fit.
+  static double lostGrainFitAr( const LostGrainPower& power, const LostGrainBands& bands, const ArGrain& grain, int s0, int& scale );
   // The largest scaling factor that fit may give: LOST_GRAIN_CAP_POWER times the power of the analyzer's s0.
   static int lostGrainCapScaleAr( int s0 );
 
@@ -338,6 +381,14 @@ private:
   void limitCutoff           ( ComponentID compId, int avgH, int avgV );
   void limitCutoffConsecutive( ComponentID compId );
   int  limitCutoffPairs      ( std::vector<CutoffPair>& pairs, int maxUnique ) const;
+
+  void initLostGrainTables   ();
+
+  // Tables of the fit to the grain the coding lost, set by init() with the improved analysis: the basis functions of the
+  // 64x64 tiles' DCT ([ sample ][ frequency ]), and per component type (luma, 4:2:0 chroma) and cut-off frequency the
+  // shares of the synthesized grain's variance in the tile's coefficients along one direction.
+  std::vector<float>  m_tileBasis;
+  std::vector<double> m_synthesisMarginals;
 
   FgaRowKernels     m_kernels;
 

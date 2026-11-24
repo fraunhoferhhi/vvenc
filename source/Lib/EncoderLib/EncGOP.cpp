@@ -2967,9 +2967,9 @@ bool EncGOP::xFilmGrainSeiNeeded( const Slice& slice, const SeiFgc& sei, ChromaF
   return needed;
 }
 
-// The grain the coding of a picture lost, for its film grain SEI: per component, the summed 16x16 DCT spectra of the
-// original's smoothest blocks and of the reconstruction, per 8-bit block mean (the intensity intervals are known only when the
-// SEI is written). Runs when the picture is finished, before its reconstruction can be released; only where
+// The grain the coding of a picture lost, for its film grain SEI: per component, the summed power per band of periods of
+// the difference between the original's smoothest 64x64 tiles and the reconstruction, and the sum of its squares, per
+// 8-bit tile mean (the intensity intervals are known only when the SEI is written). Runs when the picture is finished, before its reconstruction can be released; only where
 // xScaleToLostGrain uses them (xFitsLostGrain).
 void EncGOP::xStoreLostGrainSpectra( Picture& pic ) const
 {
@@ -2993,8 +2993,8 @@ bool EncGOP::xFitsLostGrain() const
          && m_pcRateCtrl->rcIsFinalPass && !m_isPreAnalysis;
 }
 
-// Drops the pooled sums or fitted values of this component and temporal layer whose intensity interval the picture's SEI
-// no longer has (a new analysis can change the intervals within a random access period), so the maps stay small.
+// Drops the fitted values of this component and temporal layer whose intensity interval the picture's SEI no longer
+// has (a new analysis can change the intervals within a random access period), so the map stays small.
 template<typename LostGrainMap>
 static void eraseOtherIntervals( LostGrainMap& map, int c, unsigned layer, const SeiFgc::CompModel& cm )
 {
@@ -3034,25 +3034,143 @@ static void signalBothCutoffs( SeiFgc::CompModel& cm )
   cm.numModelValues = 3;
 }
 
-// Fits each intensity interval's grain to the grain the coding lost: the analyzer measures the source's grain, but the
-// coding keeps part of it (the full synthesis would add it twice) and loses the fine band first (the analyzer's cut-offs
-// are those of the source's grain). Per component: the summed spectra of each interval over this picture and the previous
-// LOST_GRAIN_POOL - 1 pictures of its temporal layer (only those at most LOST_GRAIN_POOL_SPAN pictures back), then
-// xFitLostGrain or xFitLostGrainAr. Random access points start over. Frees
-// the picture's spectra.
-void EncGOP::xScaleToLostGrain( Picture& pic, const Slice& slice, SeiFgc& sei )
+// How the bands of periods count in the lost-grain fit of an intensity interval: weighted by the eye's sensitivity at the
+// display luminance of the interval's middle. A chroma interval is one of chroma values, which say nothing about the
+// luminance: mid grey stands in. PQ is told from the transfer characteristics; every other curve (HLG too) is taken as
+// an SDR display's.
+static FGAnalyzer::LostGrainBands lostGrainBandsOf( const VVEncCfg& cfg, bool luma, bool chroma420, const SeiFgc::CompModelIntensityValues& iv )
 {
-  constexpr int N = 16 * 16;
+  constexpr int TRANSFER_PQ = 16;    // SMPTE ST 2084
+  constexpr int MID_GREY    = 128;   // 8 bits
+  const int    luma8     = luma ? ( iv.intensityIntervalLowerBound + iv.intensityIntervalUpperBound ) / 2 : MID_GREY;
+  const double luminance = FGAnalyzer::displayLuminance( luma8, cfg.m_transferCharacteristics == TRANSFER_PQ );
+  return FGAnalyzer::lostGrainBands( chroma420, cfg.m_SourceHeight, luminance );
+}
+
+// The state a picture's lost-grain fit goes on with. A random access point starts over: its pooled spectra and scaling
+// factors are its own. Its leading pictures are coded after it but shown before it, as the end of what came before, so
+// they go on with the state from before it: with the state started over they took the cut-offs fitted to the random
+// access point's one picture, often the first of another scene (Top Gun, a real encode at QP 31: pictures 154 to 185
+// at cut-offs 5 / 5, the 15 leading pictures 186 to 200 of the clean random access picture 201 at its 2 / 3, a step
+// of 30 % in the decoded grain's standard deviation between pictures 185 and 186 of one scene; from 202 on 5 / 4).
+// The cut-offs go on over the random access point, and so do the costs they are chosen by (LostGrainStates): they
+// change there only as at any layer-0 picture (xFitLostGrain). With the costs summed anew the random access point's
+// picture alone could change them, and the first layer-0 picture after it chose them for the next 31 pictures from
+// those two pictures. The first is an intra picture, which loses coarser grain than the inter pictures after it: in
+// real encodes of two Top Gun scenes it alone took 3 / 3 where the pictures before it had 5 / 5, and the two together
+// 4 / 4 (kept for the scene's 143 pictures) and 3 / 3 (then 3 / 4), where the same two pictures' costs summed with
+// those of the 17 and 31 leading pictures coded between them gave 5 / 5 and 4 / 5 (the decoded grain's standard
+// deviation at periods of up to 25 samples: 0.80-0.87 of the lost grain's against 0.93-0.99).
+// The stream's first pictures, leading pictures of its first random access point, have no state from before it: they
+// take its cut-offs.
+EncGOP::LostGrainState& EncGOP::xLostGrainStateOf( const Picture& pic, const Slice& slice )
+{
+  LostGrainStates& states = m_lostGrain;
   if( slice.isIRAP() || slice.picHeader->gdrPic )
   {
-    m_lostGrainHistory.clear();
-    m_lostGrainShift.clear();
-    m_lostGrainFitted.clear();
+    states.leading = std::move( states.current );
+    states.current = LostGrainState();
+    states.current.cutoffs = states.leading.cutoffs;
+    states.irapPoc = pic.poc;
   }
+  if( pic.poc >= states.irapPoc )
+  {
+    return states.current;
+  }
+  if( states.leading.cutoffs.empty() )
+  {
+    states.leading.cutoffs = states.current.cutoffs;
+  }
+  return states.leading;
+}
+
+// The pictures whose lost grain the latest coded picture (the last of pictures) is fitted to: the LOST_GRAIN_POOL
+// coded pictures of its scene nearest to it in output order, itself first; of two equally near, the one coded later.
+// A picture of another scene lost another scene's grain.
+std::vector<const EncGOP::LostGrainPicture*> EncGOP::xLostGrainPool( const std::deque<LostGrainPicture>& pictures )
+{
+  const LostGrainPicture& current = pictures.back();
+  std::vector<const LostGrainPicture*> pool;
+  for( auto p = pictures.rbegin(); p != pictures.rend(); ++p )
+  {
+    if( p->scene == current.scene )
+    {
+      pool.push_back( &*p );
+    }
+  }
+  std::stable_sort( pool.begin(), pool.end(), [ &current ]( const LostGrainPicture* a, const LostGrainPicture* b )
+                    { return std::abs( a->poc - current.poc ) < std::abs( b->poc - current.poc ); } );
+  if( pool.size() > LOST_GRAIN_POOL )
+  {
+    pool.resize( LOST_GRAIN_POOL );
+  }
+  return pool;
+}
+
+// Which pictures of a pool (xLostGrainPool; the first is the picture the pool is of) are also fitted alone, each a limit
+// of the picture's scaling factor (lowestPictureFit; LOST_GRAIN_POOL_SPAN): the near ones, the picture itself among
+// them; if it has no other near one, also the far ones of higher temporal layers than its own.
+std::vector<char> EncGOP::xLostGrainFittedAlone( const std::vector<const LostGrainPicture*>& pool )
+{
+  const LostGrainPicture& current = *pool.front();
+  auto isNear = [ &current ]( const LostGrainPicture* p ) { return std::abs( p->poc - current.poc ) <= LOST_GRAIN_POOL_SPAN; };
+  const bool hasNearPicture = std::any_of( pool.begin() + 1, pool.end(), isNear );
+  std::vector<char> fittedAlone( pool.size() );
+  for( size_t p = 0; p < pool.size(); p++ )
+  {
+    fittedAlone[ p ] = isNear( pool[ p ] ) || ( !hasNearPicture && pool[ p ]->layer > current.layer );
+  }
+  return fittedAlone;
+}
+
+// A picture's spectra summed per intensity interval of cm: a tile mean belongs to the first interval holding it.
+static std::vector<LostGrainSpectrum> lostGrainIntervalSums( const std::vector<LostGrainSpectrum>& spectra, const SeiFgc::CompModel& cm )
+{
+  std::vector<LostGrainSpectrum> sums( cm.numIntensityIntervals );
+  for( const LostGrainSpectrum& s : spectra )
+  {
+    for( int i = 0; i < cm.numIntensityIntervals; i++ )
+    {
+      const SeiFgc::CompModelIntensityValues& iv = cm.intensityValues[ i ];
+      if( s.mean8 >= iv.intensityIntervalLowerBound && s.mean8 <= iv.intensityIntervalUpperBound )
+      {
+        sums[ i ].add( s );
+        break;
+      }
+    }
+  }
+  return sums;
+}
+
+// Fits each intensity interval's grain to the grain the coding lost: the analyzer measures the source's grain, but the
+// coding keeps part of it (the full synthesis would add it twice) and loses the fine grain first (the analyzer's cut-offs
+// are those of the source's grain). Per component: the summed spectra of each interval over the picture's pool
+// (xLostGrainPool), over the pool's near pictures (LOST_GRAIN_POOL_SPAN) and of each of its pictures that is fitted
+// alone (xLostGrainFittedAlone), then xFitLostGrain or xFitLostGrainAr, on the picture's state (xLostGrainStateOf).
+void EncGOP::xScaleToLostGrain( Picture& pic, const Slice& slice, SeiFgc& sei )
+{
+  LostGrainState& state = xLostGrainStateOf( pic, slice );
+  // The picture's spectra are kept for the pictures coded after it, those of two groups of pictures (the nearest coded
+  // pictures of a group's first picture are the last ones of the group before it), at least of two pools.
+  const size_t keptPictures = std::max<size_t>( 2 * m_pcEncCfg->m_GOPSize, 2 * LOST_GRAIN_POOL );
+  state.pictures.emplace_back();
+  state.pictures.back().poc   = pic.poc;
+  state.pictures.back().scene = pic.m_picShared->fgaSceneCut() ? pic.poc : pic.m_picShared->fgaLastSceneCutPoc();
+  state.pictures.back().layer = slice.TLayer;
+  for( int c = 0; c < getNumberValidComponents( pic.chromaFormat ); c++ )
+  {
+    state.pictures.back().spectra[ c ] = std::move( pic.lostGrainSpectra[ c ] );   // the picture needs them no more
+    pic.lostGrainSpectra[ c ].clear();
+  }
+  if( state.pictures.size() > keptPictures )
+  {
+    state.pictures.pop_front();
+  }
+  const std::vector<const LostGrainPicture*> pool        = xLostGrainPool( state.pictures );
+  const std::vector<char>                    fittedAlone = xLostGrainFittedAlone( pool );
   for( int c = 0; c < getNumberValidComponents( pic.chromaFormat ); c++ )
   {
     SeiFgc::CompModel& cm = sei.compModel[ c ];
-    const std::vector<LostGrainSpectrum>& spectra = pic.lostGrainSpectra[ c ];
     if( !cm.presentFlag || cm.numIntensityIntervals == 0 )
     {
       continue;
@@ -3062,99 +3180,210 @@ void EncGOP::xScaleToLostGrain( Picture& pic, const Slice& slice, SeiFgc& sei )
     {
       signalBothCutoffs( cm );
     }
-    const int n = cm.numIntensityIntervals;
-    // the picture's sums per interval: a block mean belongs to the first interval holding it
-    std::vector<LostGrainSums> sums( n );
-    for( const LostGrainSpectrum& s : spectra )
+    const int  n         = cm.numIntensityIntervals;
+    const bool chroma420 = c != COMP_Y && pic.chromaFormat == CHROMA_420;
+    // the intervals' sums of all pictures of the pool, of the near ones and of each picture that is fitted alone, reduced
+    // to the grain power the coding lost per band (of a single picture: the most its tiles say it lost)
+    std::vector<LostGrainSpectrum> poolSums( n ), nearSums( n );
+    std::vector<std::vector<FGAnalyzer::LostGrainPower>> picturePower;   // [ picture fitted alone ][ interval ]
+    for( size_t p = 0; p < pool.size(); p++ )
     {
+      const std::vector<LostGrainSpectrum> sums   = lostGrainIntervalSums( pool[ p ]->spectra[ c ], cm );
+      const bool                           isNear = std::abs( pool[ p ]->poc - pic.poc ) <= LOST_GRAIN_POOL_SPAN;
+      if( fittedAlone[ p ] )
+      {
+        picturePower.emplace_back();
+      }
       for( int i = 0; i < n; i++ )
       {
-        const SeiFgc::CompModelIntensityValues& iv = cm.intensityValues[ i ];
-        if( s.mean8 >= iv.intensityIntervalLowerBound && s.mean8 <= iv.intensityIntervalUpperBound )
+        poolSums[ i ].add( sums[ i ] );
+        if( isNear )
         {
-          for( int k = 0; k < N; k++ )
-          {
-            sums[ i ].orig[ k ] += s.orig[ k ];
-            sums[ i ].reco[ k ] += s.reco[ k ];
-          }
-          sums[ i ].blocks += s.blocks;
-          break;
+          nearSums[ i ].add( sums[ i ] );
+        }
+        if( fittedAlone[ p ] )
+        {
+          picturePower.back().push_back( FGAnalyzer::lostGrainPowerAtMost( sums[ i ] ) );
         }
       }
     }
-    // pooled with the layer's previous pictures, then reduced to the fit's mean power per frequency group
-    std::vector<FGAnalyzer::LostGrainPower> power( n );
+    std::vector<FGAnalyzer::LostGrainPower> power( n ), nearPower( n );
+    std::vector<FGAnalyzer::LostGrainBands> bands( n );
     for( int i = 0; i < n; i++ )
     {
-      const SeiFgc::CompModelIntensityValues& iv = cm.intensityValues[ i ];
-      const LostGrainKey key( c, iv.intensityIntervalLowerBound, iv.intensityIntervalUpperBound, slice.TLayer );
-      std::deque<LostGrainSums>& history = m_lostGrainHistory[ key ];
-      sums[ i ].poc = pic.poc;
-      history.push_back( sums[ i ] );
-      if( history.size() > LOST_GRAIN_POOL )
-      {
-        history.pop_front();
-      }
-      LostGrainSums pooled;
-      for( const LostGrainSums& h : history )
-      {
-        if( std::abs( pic.poc - h.poc ) > LOST_GRAIN_POOL_SPAN )
-        {
-          continue;
-        }
-        for( int k = 0; k < N; k++ )
-        {
-          pooled.orig[ k ] += h.orig[ k ];
-          pooled.reco[ k ] += h.reco[ k ];
-        }
-        pooled.blocks += h.blocks;
-      }
-      power[ i ] = FGAnalyzer::lostGrainPower( pooled.orig, pooled.reco, pooled.blocks );
+      power[ i ]     = FGAnalyzer::lostGrainPower( poolSums[ i ] );
+      nearPower[ i ] = FGAnalyzer::lostGrainPower( nearSums[ i ] );
+      bands[ i ]     = lostGrainBandsOf( *m_pcEncCfg, c == COMP_Y, chroma420, cm.intensityValues[ i ] );
     }
     const ComponentID compId   = ComponentID( c );
     const int         bitDepth = m_pcEncCfg->m_internalBitDepth[ toChannelType( compId ) ];
     if( arModel )
     {
-      xFitLostGrainAr( c, slice.TLayer, bitDepth, sei.log2ScaleFactor, power, cm );
+      xFitLostGrainAr( state, c, slice.TLayer, bitDepth, sei.log2ScaleFactor, power, nearPower, bands, cm );
     }
     else
     {
-      xFitLostGrain( c, slice.TLayer, bitDepth, c != COMP_Y && pic.chromaFormat == CHROMA_420, sei.log2ScaleFactor, power, cm );
+      xFitLostGrain( state, m_lostGrain.cutoffCosts[ c ], c, slice.TLayer, bitDepth, chroma420, sei.log2ScaleFactor, power, picturePower,
+                     bands, cm );
     }
-    eraseOtherIntervals( m_lostGrainHistory, c, slice.TLayer, cm );
-    eraseOtherIntervals( m_lostGrainFitted, c, slice.TLayer, cm );
+    eraseOtherIntervals( state.fitted, c, slice.TLayer, cm );
   }
-  for( auto& spectra : pic.lostGrainSpectra )
+  if( sei.filmGrainModelId == 0 )   // the AR model's log2 scale factor is the unit of its filter too: its fit stays in range
   {
-    spectra.clear();
-    spectra.shrink_to_fit();
+    sei.log2ScaleFactor -= FGAnalyzer::lostGrainSignalledScales( sei.log2ScaleFactor, sei.compModel );
   }
 }
 
-// An interval needs this many pooled blocks to be fitted (xFitLostGrain).
-static constexpr int MIN_POOLED_BLOCKS = 32;
+// An interval needs this many pooled 64x64 tiles to be fitted (xFitLostGrain): the band of the longest fitted periods
+// has about 31 coefficients per tile and direction, so 12 tiles give its power to about 7 % (its amplitude to 4 %).
+static constexpr int MIN_POOLED_TILES = 12;
 
-// One shift (dh, dw) of every interval's cut-offs, the same for all intervals of the component (so the synthesis's limit on
-// different cut-off pairs still holds), chosen by the blocks-weighted sum of the intervals' FGAnalyzer::lostGrainFit costs.
-// Luma shifts only toward finer grain (dh, dw >= 0): the coding loses luma grain from the fine end first. Chroma also shifts
-// toward coarser grain: the coding can lose nearly all of it, and the analyzer's chroma cut-offs can be finer than the
-// chroma grain (Top Gun, 4K HDR: cut-offs 7 / 6 put 49 % of the synthesized U grain at u + v 13-30, where the coding lost
-// 7 % of its U grain, and 10 % at 3-5, where it lost 44 %). Shifts are tried as 0, 1, -1, 2, -2, ... so that the smallest
-// wins a tie. Then per interval the scaling factor fitted at the shifted cut-offs, never more grain
-// power than FGAnalyzer::LOST_GRAIN_CAP_POWER times the analyzer's. An interval needs MIN_POOLED_BLOCKS pooled blocks
-// to be fitted. So that the synthesized grain does not pulse, per picture of a temporal layer the shift moves at most 1 and
-// the scaling factor rises at most max(1, s0 / 8) (s0 the analyzer's scaling factor) from its last value moved to the new
-// cut-offs at equal power; a lower fit is taken at once (a limit on the way down held the grain above the fit for many
-// pictures, see xFitLostGrainAr). A picture with nothing to fit keeps the shift, an interval without a fit keeps its last
-// grain power (at first the analyzer's).
-void EncGOP::xFitLostGrain( int c, unsigned layer, int bitDepth, bool chroma420, int log2ScaleFactor,
-                            const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm )
+// The lowest of poolFit, the fit to interval i of the pool, and the fits to that interval of each picture fitted alone
+// (picturePower, xLostGrainFittedAlone) that has MIN_POOLED_TILES tiles of it; fitTo( power, scale ) fits a scaling
+// factor to a lost grain power and returns whether it could.
+template<typename FitTo>
+static int lowestPictureFit( int poolFit, const std::vector<std::vector<FGAnalyzer::LostGrainPower>>& picturePower, int i, FitTo fitTo )
 {
-  constexpr int MAX_SHIFT         = 12;
+  int lowest = poolFit;
+  for( const std::vector<FGAnalyzer::LostGrainPower>& ofPicture : picturePower )
+  {
+    int fit;
+    if( ofPicture[ i ].tiles >= MIN_POOLED_TILES && fitTo( ofPicture[ i ], fit ) )
+    {
+      lowest = std::min( lowest, fit );
+    }
+  }
+  return lowest;
+}
+
+// An interval that was never fitted (too few flat tiles at its brightness) would keep the analyzer's grain, all of the
+// source's grain on top of the grain the coding kept, beside intervals reduced to the grain the coding lost. It takes
+// the share of the analyzer's grain that the nearest fitted interval got, but never more than the analyzer's grain.
+// analyzerScale: the analyzer's scaling factors; hasFit: the intervals with a fit of their own, now or before.
+static void scaleUnfittedLikeNeighbours( const std::vector<int>& analyzerScale, const std::vector<char>& hasFit, std::vector<int>& scale )
+{
+  const int n = (int) scale.size();
+  for( int i = 0; i < n; i++ )
+  {
+    if( hasFit[ i ] )
+    {
+      continue;
+    }
+    int nearest = -1;
+    for( int j = 0; j < n; j++ )
+    {
+      if( hasFit[ j ] && analyzerScale[ j ] > 0 && ( nearest < 0 || std::abs( j - i ) < std::abs( nearest - i ) ) )
+      {
+        nearest = j;
+      }
+    }
+    if( nearest >= 0 )
+    {
+      const int like = (int) std::lround( double( analyzerScale[ i ] ) * scale[ nearest ] / analyzerScale[ nearest ] );
+      scale[ i ] = std::min( scale[ i ], like );
+    }
+  }
+}
+
+// The cut-offs are chosen by every cut-off pair's costs summed over the pictures, where a picture's sum counts this
+// much of its value one picture (in coding order) later: about the last ten pictures decide, of all temporal layers.
+// With a choice per temporal layer, each following its own pictures by a step per picture, neighbouring pictures were
+// synthesized at different cut-offs, and a change of cut-offs is a change of the grain's look and of its strength (the
+// scaling factor moves with it only at equal power in a 16x16 block): on meridian_talk the cut-offs changed between
+// 112 of 360 consecutive pictures and the decoded grain's standard deviation stepped by up to 10 % with them, on
+// nocturne_grain between 102 of 600 (9 %).
+static constexpr double LOST_GRAIN_CUTOFF_MEMORY = 0.9;
+// The cut-offs are chosen in two steps, with margins in shares of the cost of no grain at all, so that they mean the
+// same whatever the grain's power: a share of 0.01 is the band the eye weighs most missing 10 % of its amplitude.
+// The eye's cost decides first: only the pairs whose seen cost is within LOST_GRAIN_SEEN_MARGIN of the least are
+// candidates. Among them the cost that counts every fitted band decides: the fine grain is kept where that costs the
+// coarse grain little, and pairs the eye cannot tell apart do not take turns with the pictures' noise. The current
+// pair stays while its seen cost is within LOST_GRAIN_SEEN_KEEP_MARGIN of the least and no candidate's all-bands
+// cost is lower by LOST_GRAIN_ALL_BANDS_MARGIN.
+// The seen margin is for what the eye's weights hardly count but a viewer sees. At 4K they count the grain of periods
+// of 6.25-3.125 samples 0.02-0.05 of that of 25-12.5 samples, yet on Top Gun (4K HDR, QP 31) it is 0.28-0.33 of the
+// lost grain's power at periods of up to 25 samples, and no pair holds both: the lost grain's amplitude rises 1.3-1.6
+// times from 25-12.5 to 12.5-6.25 samples, the synthesis's is flat up to its cut-off. Replayed on the spectra of real
+// encodes' pictures (seen cost above the least; synthesized over lost amplitude at periods of 25-12.5 / 12.5-6.25 /
+// 6.25-3.125 samples; synthesized over lost standard deviation at periods of up to 25 samples), 62 pictures of one
+// scene: 3 / 3 +0.002, 1.00 / 0.94 / 0.43, 0.77; 4 / 4 +0.000, 0.90 / 1.03 / 0.76, 0.88; 4 / 5 +0.003, 0.88 / 1.03 /
+// 0.96, 0.94; 5 / 5 +0.008, 0.85 / 1.03 / 1.14, 1.00; in two other scenes 4 / 4 is at +0.011 and +0.033 (0.85 and 0.78
+// at 25-12.5 samples). With a seen margin of 0.005 the choice among these fell to the first pictures of a scene and
+// stayed by the keep margin: in real encodes the decoded grain had 0.71-0.87 of the lost grain's standard deviation
+// at 3 / 3 to 4 / 4 (grain of 0.85 looked a little weak) and 0.83-0.99 at 4 / 5 to 5 / 5, with 0.85-0.94 of its
+// amplitude at 25-12.5 samples. There 5 / 5 stayed by a keep margin of 0.02, but in the replay it is at +0.020 and
+// +0.024 at two of the scene's layer-0 pictures, so the keep margin is above that.
+// meridian_talk, where the eye's cost alone moved the cut-offs from 12 / 8 to 7 / 7 with a step of 29 % in the
+// grain's standard deviation, stays at 14 / 10 over its 240 pictures (0.85 / 0.99 / 1.07, and 1.01 at finer periods;
+// by the eye's cost alone 0.87 / 1.02 / 1.02 and 0.60). A keep margin of 0.01 let meridian_talk change once (7.5 %).
+static constexpr double LOST_GRAIN_SEEN_MARGIN      = 0.02;
+static constexpr double LOST_GRAIN_SEEN_KEEP_MARGIN = 0.03;
+static constexpr double LOST_GRAIN_ALL_BANDS_MARGIN = 0.02;
+
+// The pair of cut-offs (its index in sums) the component should have by the costs summed so far; current: the pair it
+// has, below 0: none yet. See LOST_GRAIN_SEEN_MARGIN.
+int EncGOP::xBestLostGrainCutoffs( const LostGrainCosts& sums, int current )
+{
+  const double leastSeen = *std::min_element( sums.seen.begin(), sums.seen.end() );
+  int best = -1;   // the candidate of the least all-bands cost, the first of equal ones
+  for( int k = 0; k < (int) sums.seen.size(); k++ )
+  {
+    const bool candidate = sums.seen[ k ] <= leastSeen + LOST_GRAIN_SEEN_MARGIN * sums.seenOfNone;
+    if( candidate && ( best < 0 || sums.allBands[ k ] < sums.allBands[ best ] - 1e-12 ) )
+    {
+      best = k;
+    }
+  }
+  if( current < 0 )
+  {
+    return best;
+  }
+  const bool seenAlike     = sums.seen[ current ] <= leastSeen + LOST_GRAIN_SEEN_KEEP_MARGIN * sums.seenOfNone;
+  const bool clearlyBetter = sums.allBands[ best ] < sums.allBands[ current ] - LOST_GRAIN_ALL_BANDS_MARGIN * sums.allBandsOfNone;
+  return seenAlike && !clearlyBetter ? current : best;
+}
+
+// One pair of cut-offs for all intensity intervals of the component, whatever the analyzer's. The analyzer's cut-offs
+// are those of the source's grain, which can be finer than the grain the coding lost: on Top Gun (4K HDR, QP 31) the
+// eye sees the lost grain mostly at periods of 6 to 25 samples, where cut-offs of 5 to 10 put back 0.44-0.48 of its
+// amplitude; the synthesis's grain is flat up to ( cut-off + 1 ) / 32 cycles per sample, and at cut-offs 4 to 5 it can
+// match the lost grain there within the tolerances. And they change with every new analysis and from interval to
+// interval: cut-offs at a shift from them would change with them, and the summed costs of a shift would be those of
+// different cut-offs from one analysis to the next. (Replayed on the spectra of meridian_talk, whose intervals have
+// cut-offs from 13 / 13 to 10 / 10, one pair for all costs next to nothing: the eye-weighted synthesized over lost
+// amplitude is 0.93 against 0.94 with one shift.)
+// The pair is chosen by the tiles-weighted sums of the intervals' fits at every pair (FGAnalyzer::lostGrainFit,
+// xBestLostGrainCutoffs). So that the synthesized grain does not pulse, the costs of the latest pictures of all temporal
+// layers decide together (LOST_GRAIN_CUTOFF_MEMORY), and the pair changes only at a picture of the lowest temporal
+// layer: the pictures between two of those are coded after the later one, so in output order the cut-offs change once,
+// there, while a change in the middle of a group of pictures would alternate between neighbouring pictures coded before
+// and after it. The component's first fit sets the pair at once (until then the analyzer's cut-offs stay). A random
+// access point starts neither the pair nor the summed costs (costs) over, and its leading pictures add their costs
+// like every picture but keep the pair from before it (xLostGrainStateOf).
+// Then per interval the scaling factor fitted at the pair, the lowest of the fits to the pool and to each of its pictures
+// that is fitted alone (picturePower, lowestPictureFit), never more grain power than FGAnalyzer::LOST_GRAIN_CAP_POWER
+// times the analyzer's.
+// An interval needs MIN_POOLED_TILES pooled tiles to be fitted.
+// Per picture of a temporal layer the scaling factor rises at most max(1, s0 / 8) (s0 the analyzer's scaling factor)
+// from its last value (a picture the coding served badly loses far more than grain, and the limit keeps that out of
+// its neighbours); a lower fit is taken at once (a limit on the way down held the grain above the fit for many
+// pictures, see xFitLostGrainAr), and so is the first fit at new cut-offs: the last value, moved to them at equal power
+// in a 16x16 block, is not the same grain to the eye, and rising from it would dim every layer's next pictures in
+// turn. A picture with nothing to fit keeps the pair, an interval without a fit keeps its last grain power, and one
+// that never had a fit follows its neighbours (scaleUnfittedLikeNeighbours).
+void EncGOP::xFitLostGrain( LostGrainState& state, LostGrainCosts& costs, int c, unsigned layer, int bitDepth, bool chroma420,
+                            int log2ScaleFactor, const std::vector<FGAnalyzer::LostGrainPower>& power,
+                            const std::vector<std::vector<FGAnalyzer::LostGrainPower>>& picturePower,
+                            const std::vector<FGAnalyzer::LostGrainBands>& bands, SeiFgc::CompModel& cm ) const
+{
   // static: the lambdas below read them without a capture (MSVC C3493). The cut-offs' range, which
   // FGAnalyzer::lostGrainShape clips to as well (2 .. 14).
-  static constexpr int MIN_CUTOFF = 2;
-  static constexpr int MAX_CUTOFF = 14;
+  static constexpr int MIN_CUTOFF  = 2;
+  static constexpr int MAX_CUTOFF  = 14;
+  static constexpr int NUM_CUTOFFS = MAX_CUTOFF - MIN_CUTOFF + 1;
+  static constexpr int NUM_PAIRS   = NUM_CUTOFFS * NUM_CUTOFFS;
+  auto cutoff = []( int x ) { return Clip3( MIN_CUTOFF, MAX_CUTOFF, x ); };
+  auto pairOf = []( int h, int w ) { return ( h - MIN_CUTOFF ) * NUM_CUTOFFS + w - MIN_CUTOFF; };
   const int n = cm.numIntensityIntervals;
   std::vector<int> s0( n ), h0( n ), w0( n );   // the analyzer's values
   for( int i = 0; i < n; i++ )
@@ -3164,136 +3393,125 @@ void EncGOP::xFitLostGrain( int c, unsigned layer, int bitDepth, bool chroma420,
     h0[ i ] = v[ 1 ];
     w0[ i ] = v[ 2 ];
   }
-  const bool coarser   = c != COMP_Y;
-  const int  numShifts = coarser ? 2 * MAX_SHIFT + 1 : MAX_SHIFT + 1;
-  auto shiftAt = [coarser]( int k ) { return coarser ? ( k & 1 ? ( k + 1 ) / 2 : -k / 2 ) : k; };
-  auto cutoff  = [coarser]( int x ) { return coarser ? Clip3( MIN_CUTOFF, MAX_CUTOFF, x ) : std::min( MAX_CUTOFF, x ); };
+  // the scaling factors fitted here can be above the largest one signalled: xScaleToLostGrain lowers the SEI's log2
+  // scale factor for them; the values kept for the next pictures stay in the analyzer's units
+  const int largestScale = FGAnalyzer::lostGrainLargestScale( log2ScaleFactor );
 
-  // Many shifts give an interval the same clipped cut-offs, so every interval is fitted once per distinct pair, when a
-  // shift first asks for it, and the grain's shape at a pair is computed once for all intervals.
-  static constexpr int NUM_CUTOFFS = MAX_CUTOFF - MIN_CUTOFF + 1;
-  struct Fit
+  // Every interval with enough tiles is fitted at every pair ([ interval ][ pair ]; the grain's shape at a pair is the
+  // same for all intervals), and the picture's costs of a pair are the sums of its fits; an interval is fitted or not
+  // whatever the pair.
+  std::vector<std::vector<FGAnalyzer::LostGrainFit>> fits( n );
+  LostGrainCosts pictureCosts( NUM_PAIRS );
+  bool           anyFit      = false;
+  const bool     enoughTiles = std::any_of( power.begin(), power.end(), []( const FGAnalyzer::LostGrainPower& p ) { return p.tiles >= MIN_POOLED_TILES; } );
+  for( int pair = 0; enoughTiles && pair < NUM_PAIRS; pair++ )
   {
-    double cost  = 0.0;
-    int    scale = 0;
-    bool   known = false;
-  };
-  struct IntervalFits
-  {
-    Fit at[ NUM_CUTOFFS ][ NUM_CUTOFFS ];
-  };
-  std::vector<IntervalFits>  intervalFits( n );
-  FGAnalyzer::LostGrainShape shapes    [ NUM_CUTOFFS ][ NUM_CUTOFFS ];
-  bool                       shapeKnown[ NUM_CUTOFFS ][ NUM_CUTOFFS ] = {};
-  auto fitAt = [&]( int i, int h, int w ) -> const Fit&
-  {
-    const int hIdx = Clip3( MIN_CUTOFF, MAX_CUTOFF, h ) - MIN_CUTOFF;
-    const int wIdx = Clip3( MIN_CUTOFF, MAX_CUTOFF, w ) - MIN_CUTOFF;
-    Fit& fit = intervalFits[ i ].at[ hIdx ][ wIdx ];
-    if( !fit.known )
+    const int h = MIN_CUTOFF + pair / NUM_CUTOFFS, w = MIN_CUTOFF + pair % NUM_CUTOFFS;
+    const FGAnalyzer::LostGrainShape shape = m_fgAnalyzer.lostGrainShape( chroma420, h, w );
+    for( int i = 0; i < n; i++ )
     {
-      if( !shapeKnown[ hIdx ][ wIdx ] )
+      if( power[ i ].tiles < MIN_POOLED_TILES )
       {
-        shapes    [ hIdx ][ wIdx ] = FGAnalyzer::lostGrainShape( chroma420, hIdx + MIN_CUTOFF, wIdx + MIN_CUTOFF );
-        shapeKnown[ hIdx ][ wIdx ] = true;
+        continue;
       }
-      fit.cost  = FGAnalyzer::lostGrainFit( power[ i ], bitDepth, chroma420, log2ScaleFactor, s0[ i ], h0[ i ], w0[ i ],
-                                            shapes[ hIdx ][ wIdx ], fit.scale );
-      fit.known = true;
-    }
-    return fit;
-  };
-
-  double bestCost = -1.0;
-  int    bestH = 0, bestW = 0;
-  for( int kh = 0; kh < numShifts; kh++ )
-  {
-    const int dh = shiftAt( kh );
-    for( int kw = 0; kw < numShifts; kw++ )
-    {
-      const int dw = shiftAt( kw );
-      double total  = 0.0;
-      bool   fitted = false;
-      for( int i = 0; i < n; i++ )
+      fits[ i ].push_back( FGAnalyzer::lostGrainFit( power[ i ], bands[ i ], bitDepth, chroma420, log2ScaleFactor, s0[ i ], h0[ i ], w0[ i ],
+                                                     shape, largestScale ) );
+      const FGAnalyzer::LostGrainFit& fit = fits[ i ].back();
+      if( fit.seenCost < 0 )
       {
-        if( power[ i ].blocks < MIN_POOLED_BLOCKS )
-        {
-          continue;
-        }
-        const double cost = fitAt( i, cutoff( h0[ i ] + dh ), cutoff( w0[ i ] + dw ) ).cost;
-        if( cost >= 0 )
-        {
-          total += cost * power[ i ].blocks;
-          fitted = true;
-        }
+        continue;
       }
-      if( fitted && ( bestCost < 0 || total < bestCost - 1e-12 ) )
+      anyFit = true;
+      pictureCosts.seen    [ pair ] += fit.seenCost     * power[ i ].tiles;
+      pictureCosts.allBands[ pair ] += fit.allBandsCost * power[ i ].tiles;
+      if( pair == 0 )   // the costs of no grain are the same at every pair
       {
-        bestCost = total;
-        bestH    = dh;
-        bestW    = dw;
+        pictureCosts.seenOfNone     += fit.seenCostOfNone     * power[ i ].tiles;
+        pictureCosts.allBandsOfNone += fit.allBandsCostOfNone * power[ i ].tiles;
       }
     }
   }
-  const auto layerKey  = std::make_pair( c, layer );
-  const auto lastShift = m_lostGrainShift.find( layerKey );
-  int dh = bestH, dw = bestW;
-  if( lastShift != m_lostGrainShift.end() )
+  const auto lastCutoffs = state.cutoffs.find( c );
+  const bool firstFit    = lastCutoffs == state.cutoffs.end();
+  int pair = firstFit ? -1 : pairOf( lastCutoffs->second.h, lastCutoffs->second.w );   // below 0: the analyzer's cut-offs
+  if( anyFit )   // a picture with nothing to fit records nothing: the component's first fit ever then sets the pair
   {
-    const int lastH = lastShift->second.first, lastW = lastShift->second.second;
-    dh = bestCost < 0 ? lastH : Clip3( lastH - 1, lastH + 1, bestH );
-    dw = bestCost < 0 ? lastW : Clip3( lastW - 1, lastW + 1, bestW );
+    costs.fadeAndAdd( pictureCosts, LOST_GRAIN_CUTOFF_MEMORY );
+    if( firstFit || layer == 0 )
+    {
+      pair = xBestLostGrainCutoffs( costs, pair );
+    }
+    LostGrainCutoffs& cutoffs = state.cutoffs[ c ];
+    cutoffs.h = MIN_CUTOFF + pair / NUM_CUTOFFS;
+    cutoffs.w = MIN_CUTOFF + pair % NUM_CUTOFFS;
   }
-  if( bestCost >= 0 )   // a picture with nothing to fit records no shift: the layer's first fit is then free, not 1 per picture from 0
-  {
-    m_lostGrainShift[ layerKey ] = std::make_pair( dh, dw );
-  }
+  std::vector<int>  analyzerScale( n ), scale( n );
+  std::vector<char> hasFit( n );
   for( int i = 0; i < n; i++ )
   {
     SeiFgc::CompModelIntensityValues& iv = cm.intensityValues[ i ];
-    const int h = cutoff( h0[ i ] + dh ), w = cutoff( w0[ i ] + dw );
-    const int analyzerScale = FGAnalyzer::equalPowerScale( s0[ i ], chroma420, h0[ i ], w0[ i ], h, w );   // the analyzer's power
-    const int cap           = FGAnalyzer::lostGrainCapScale( s0[ i ], chroma420, h0[ i ], w0[ i ], h, w );
+    const int h = pair < 0 ? cutoff( h0[ i ] ) : MIN_CUTOFF + pair / NUM_CUTOFFS;
+    const int w = pair < 0 ? cutoff( w0[ i ] ) : MIN_CUTOFF + pair % NUM_CUTOFFS;
+    analyzerScale[ i ] = FGAnalyzer::equalPowerScale( s0[ i ], chroma420, h0[ i ], w0[ i ], h, w );   // the analyzer's power
+    const int cap      = FGAnalyzer::lostGrainCapScale( s0[ i ], chroma420, h0[ i ], w0[ i ], h, w, largestScale );
     const LostGrainKey key( c, iv.intensityIntervalLowerBound, iv.intensityIntervalUpperBound, layer );
     // the interval's last value moved to the new cut-offs at equal power; before its first fit, the analyzer's grain, which
     // is not recorded: the first fit is then free instead of starting max(1, s0 / 8) per picture down from the analyzer's
-    const auto last   = m_lostGrainFitted.find( key );
-    const bool fitted = last != m_lostGrainFitted.end();
-    const int  held   = fitted ? FGAnalyzer::equalPowerScale( last->second.scale, chroma420, last->second.h, last->second.w, h, w ) : analyzerScale;
-    int  scale = held;
-    const Fit* lostFit = power[ i ].blocks >= MIN_POOLED_BLOCKS ? &fitAt( i, h, w ) : nullptr;
-    const bool fits    = lostFit && lostFit->cost >= 0;
-    if( fits )
+    const auto last   = state.fitted.find( key );
+    const bool fitted = last != state.fitted.end();
+    const int  held   = fitted ? FGAnalyzer::equalPowerScale( last->second.scale, chroma420, last->second.h, last->second.w, h, w ) : analyzerScale[ i ];
+    scale[ i ] = held;
+    const FGAnalyzer::LostGrainFit* lostFit = fits[ i ].empty() ? nullptr : &fits[ i ][ pairOf( h, w ) ];
+    const bool fitsNow = lostFit && lostFit->seenCost >= 0;
+    if( fitsNow )
     {
-      const int fit  = lostFit->scale;
-      const int step = std::max( 1, s0[ i ] / 8 );
-      scale = fitted ? std::min( fit, held + step ) : fit;
+      const FGAnalyzer::LostGrainShape shape = m_fgAnalyzer.lostGrainShape( chroma420, h, w );
+      const int fit = lowestPictureFit( lostFit->scale, picturePower, i, [ & ]( const FGAnalyzer::LostGrainPower& ofPicture, int& pictureFit )
+      {
+        const FGAnalyzer::LostGrainFit single = FGAnalyzer::lostGrainFit( ofPicture, bands[ i ], bitDepth, chroma420, log2ScaleFactor, s0[ i ],
+                                                                          h0[ i ], w0[ i ], shape, largestScale );
+        pictureFit = single.scale;
+        return single.seenCost >= 0;
+      } );
+      const bool sameCutoffs = fitted && last->second.h == h && last->second.w == w;
+      const int  step        = std::max( 1, s0[ i ] / 8 );
+      scale[ i ] = sameCutoffs ? std::min( fit, held + step ) : fit;
     }
-    scale = std::min( scale, cap );
-    iv.compModelValue[ 0 ] = scale;
+    scale[ i ]  = std::min( scale[ i ], cap );
+    hasFit[ i ] = fitsNow || fitted;
+    if( hasFit[ i ] )
+    {
+      state.fitted[ key ] = { h, w, scale[ i ] };
+    }
     iv.compModelValue[ 1 ] = h;
     iv.compModelValue[ 2 ] = w;
-    if( fits || fitted )
-    {
-      m_lostGrainFitted[ key ] = { h, w, scale };
-    }
+  }
+  scaleUnfittedLikeNeighbours( analyzerScale, hasFit, scale );
+  for( int i = 0; i < n; i++ )
+  {
+    cm.intensityValues[ i ].compModelValue[ 0 ] = scale[ i ];
   }
 }
 
 // The lost-grain fit of the auto-regressive model (--fga 3): the filter stays the analyzer's (one per component; fitting
-// its shape to the lost grain as well gained little: on Top Gun's sky the bands u + v 3-5 / 6-8 / 9-12 / 13-30 of
-// reconstruction plus synthesis reached 0.22 / 0.38 / 1.39 / 1.21 of the original's power against 0.21 / 0.31 / 1.32 /
-// 1.33), and every interval's scaling factor is fitted to the grain the coding lost (FGAnalyzer::lostGrainFitAr), at most
-// FGAnalyzer::LOST_GRAIN_CAP_POWER times the analyzer's grain power. Without it the whole analysed grain was synthesized
-// on top of the grain the coding kept. As in xFitLostGrain, an interval needs MIN_POOLED_BLOCKS pooled blocks to be
-// fitted and an interval without a fit keeps its last value (at first the analyzer's). A fit below the last value of the
+// its shape to the lost grain as well gained little when the fit compared 16x16 blocks: on Top Gun's sky the groups
+// u + v 3-5 / 6-8 / 9-12 / 13-30 of reconstruction plus synthesis reached 0.22 / 0.38 / 1.39 / 1.21 of the original's
+// power against 0.21 / 0.31 / 1.32 / 1.33), and every interval's scaling factor is fitted to the grain the coding lost as
+// the eye sees it (FGAnalyzer::lostGrainFitAr): the fit to the pool, never above the fit to the pool's near pictures
+// (nearPower; not the lowest fit of single pictures as in xFitLostGrain, whose steps are less than half this
+// model's: LOST_GRAIN_POOL_SPAN), at most FGAnalyzer::LOST_GRAIN_CAP_POWER times the analyzer's grain power. Without
+// it the whole analysed grain was synthesized on top of the grain the coding kept. As in xFitLostGrain, an interval
+// needs MIN_POOLED_TILES pooled tiles to be fitted, an interval without a fit keeps its last value, and one that never
+// had a fit follows its neighbours. A fit below the last value of the
 // interval and temporal layer is taken at once: a limit on the way down held the grain far above what the fit asked
 // for, and it did so for many pictures (gangster_chase: after one fit of 112 the fits fell to 84 and 48, the value only
 // to 105 and 97, and that picture had 1.96 times the source's finest band between neighbours at 1.0). On the way up the
 // scaling factor rises at most an eighth of its last value per picture of the layer (at least 1, at most s0 / 8), so
 // that the grain does not pulse; the price is that a value near 0 rises slowly.
-void EncGOP::xFitLostGrainAr( int c, unsigned layer, int bitDepth, int log2ScaleFactor,
-                              const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm )
+void EncGOP::xFitLostGrainAr( LostGrainState& state, int c, unsigned layer, int bitDepth, int log2ScaleFactor,
+                              const std::vector<FGAnalyzer::LostGrainPower>& power,
+                              const std::vector<FGAnalyzer::LostGrainPower>& nearPower,
+                              const std::vector<FGAnalyzer::LostGrainBands>& bands, SeiFgc::CompModel& cm ) const
 {
   if( cm.numIntensityIntervals == 0 )
   {
@@ -3303,44 +3521,60 @@ void EncGOP::xFitLostGrainAr( int c, unsigned layer, int bitDepth, int log2Scale
   const std::vector<int>& first = cm.intensityValues[ 0 ].compModelValue;
   std::vector<int> filter( first.begin() + 1, first.end() );
   filter.insert( filter.begin(), log2ScaleFactor );
-  if( m_arGrain[ c ].filter != filter )
+  if( state.arGrain[ c ].filter != filter )
   {
     const FGAnalyzer::ArGrain newGrain = FGAnalyzer::arGrain( first, log2ScaleFactor, bitDepth, c == COMP_Y );
     // the scaling factors last written are in units of the old filter's grain: keep their grain level, so that a new
     // analysis does not make the grain jump
-    for( auto& fitted : m_lostGrainFitted )
+    for( auto& fitted : state.fitted )
     {
-      if( std::get<0>( fitted.first ) == c && !m_arGrain[ c ].filter.empty() && newGrain.stddevPerScale > 0.0 )
+      if( std::get<0>( fitted.first ) == c && !state.arGrain[ c ].filter.empty() && newGrain.stddevPerScale > 0.0 )
       {
-        fitted.second.scale = (int) std::lround( fitted.second.scale * m_arGrain[ c ].grain.stddevPerScale / newGrain.stddevPerScale );
+        fitted.second.scale = (int) std::lround( fitted.second.scale * state.arGrain[ c ].grain.stddevPerScale / newGrain.stddevPerScale );
       }
     }
-    m_arGrain[ c ].grain  = newGrain;
-    m_arGrain[ c ].filter = filter;
+    state.arGrain[ c ].grain  = newGrain;
+    state.arGrain[ c ].filter = filter;
   }
-  const FGAnalyzer::ArGrain& grain = m_arGrain[ c ].grain;
+  const FGAnalyzer::ArGrain& grain = state.arGrain[ c ].grain;
 
-  for( int i = 0; i < cm.numIntensityIntervals; i++ )
+  const int n = cm.numIntensityIntervals;
+  std::vector<int>  analyzerScale( n ), scale( n );
+  std::vector<char> hasFit( n );
+  for( int i = 0; i < n; i++ )
   {
-    SeiFgc::CompModelIntensityValues& iv = cm.intensityValues[ i ];
+    const SeiFgc::CompModelIntensityValues& iv = cm.intensityValues[ i ];
     const int s0 = iv.compModelValue[ 0 ];   // the analyzer's
     const LostGrainKey key( c, iv.intensityIntervalLowerBound, iv.intensityIntervalUpperBound, layer );
-    const auto last   = m_lostGrainFitted.find( key );
-    const bool fitted = last != m_lostGrainFitted.end();
-    int  scale = fitted ? last->second.scale : s0;
+    const auto last   = state.fitted.find( key );
+    const bool fitted = last != state.fitted.end();
+    analyzerScale[ i ] = s0;
+    scale[ i ]         = fitted ? last->second.scale : s0;
     int  fit;
-    const bool fits = power[ i ].blocks >= MIN_POOLED_BLOCKS && FGAnalyzer::lostGrainFitAr( power[ i ], grain, s0, fit ) >= 0;
+    const bool fits = power[ i ].tiles >= MIN_POOLED_TILES && FGAnalyzer::lostGrainFitAr( power[ i ], bands[ i ], grain, s0, fit ) >= 0;
+    // the near pictures have a fit of their own with enough tiles, and fewer than the pool's (with as many, they are the pool)
+    int  nearFit;
+    if( fits && nearPower[ i ].tiles >= MIN_POOLED_TILES && nearPower[ i ].tiles < power[ i ].tiles
+        && FGAnalyzer::lostGrainFitAr( nearPower[ i ], bands[ i ], grain, s0, nearFit ) >= 0 )
+    {
+      fit = std::min( fit, nearFit );
+    }
     if( fits )
     {
-      const int step = std::max( 1, std::min( s0, scale ) / 8 );
-      scale = fitted ? std::min( fit, scale + step ) : fit;   // the first fit is free
+      const int step = std::max( 1, std::min( s0, scale[ i ] ) / 8 );
+      scale[ i ] = fitted ? std::min( fit, scale[ i ] + step ) : fit;   // the first fit is free
     }
-    scale = std::min( scale, FGAnalyzer::lostGrainCapScaleAr( s0 ) );
-    iv.compModelValue[ 0 ] = scale;
-    if( fits || fitted )
+    scale[ i ]  = std::min( scale[ i ], FGAnalyzer::lostGrainCapScaleAr( s0 ) );
+    hasFit[ i ] = fits || fitted;
+    if( hasFit[ i ] )
     {
-      m_lostGrainFitted[ key ] = { 0, 0, scale };
+      state.fitted[ key ] = { 0, 0, scale[ i ] };
     }
+  }
+  scaleUnfittedLikeNeighbours( analyzerScale, hasFit, scale );
+  for( int i = 0; i < n; i++ )
+  {
+    cm.intensityValues[ i ].compModelValue[ 0 ] = scale[ i ];
   }
 }
 

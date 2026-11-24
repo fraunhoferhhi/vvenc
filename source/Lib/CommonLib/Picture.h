@@ -135,15 +135,32 @@ struct PicApsGlobal{
   PicApsGlobal( int _p, unsigned _t ) : poc(_p), tid(_t), apsMap( MAX_NUM_APS * MAX_NUM_APS_TYPE ) {}
 };
 
-// Film grain analysis: the 16x16 DCT power of a picture component's flat original blocks with one 8-bit block mean, and of
-// the same blocks of the reconstruction, summed over the picture (FGAnalyzer::lostGrainSpectra). The film grain SEI is
-// scaled down to the grain power the coding lost (EncGOP::xScaleToLostGrain).
+// Film grain analysis: what the coding took from a picture component's flat 64x64 original tiles with one 8-bit tile
+// mean: the power of original minus reconstruction per band of periods and direction (FGAnalyzer::LostGrainPower),
+// summed over the tiles (FGAnalyzer::lostGrainSpectra). The film grain SEI is fitted to the grain the coding lost
+// (EncGOP::xScaleToLostGrain).
 struct LostGrainSpectrum
 {
-  int    mean8  = 0;
-  int    blocks = 0;
-  double orig[ 256 ] = {};
-  double reco[ 256 ] = {};
+  static constexpr int BANDS      = 5;
+  static constexpr int DIRECTIONS = 2;
+  int    mean8 = 0;
+  int    tiles = 0;
+  double lost       [ BANDS ][ DIRECTIONS ] = {};   // the power of original minus reconstruction
+  double lostSquared[ BANDS ][ DIRECTIONS ] = {};   // the squares of the single tiles' powers: how far the tiles differ
+
+  // Adds the tiles and powers of other (the sums of an intensity interval, of several pictures).
+  void add( const LostGrainSpectrum& other )
+  {
+    tiles += other.tiles;
+    for( int b = 0; b < BANDS; b++ )
+    {
+      for( int d = 0; d < DIRECTIONS; d++ )
+      {
+        lost       [ b ][ d ] += other.lost       [ b ][ d ];
+        lostSquared[ b ][ d ] += other.lostSquared[ b ][ d ];
+      }
+    }
+  }
 };
 
 struct Picture : public UnitArea
