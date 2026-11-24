@@ -863,6 +863,61 @@ int checkSDKHdrChromaQpMappingTables()
   return 0;
 }
 
+template<size_t N>
+static void setQpVals( int* dst, const int (&vals)[N] )
+{
+  static_assert( N <= VVENC_MAX_QP_VALS_CHROMA, "too many QP vals" );
+  for( int i = 0; i < VVENC_MAX_QP_VALS_CHROMA; i++ )
+  {
+    dst[ i ] = i < (int)N ? vals[ i ] : 0;
+  }
+}
+
+static bool isIdentityAt( const vvencChromaQpMappingTableParams& t, int qp )
+{
+  return t.m_qpTableStartMinus26[ 0 ] == qp - 26 && t.m_numPtsInCQPTableMinus1[ 0 ] == 0
+      && t.m_deltaQpInValMinus1[ 0 ][ 0 ] == 0   && t.m_deltaQpOutVal[ 0 ][ 0 ] == 1;
+}
+
+int checkSDKChromaQpMappingLastPointOutOfRange()
+{
+  vvenc_config c;
+  vvenc_init_default( &c, 1920, 1080, 50, VVENC_RC_OFF, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
+  setQpVals( c.m_qpInValsCb,  { 17, 64 } );
+  setQpVals( c.m_qpOutValsCb, { 17, 64 } );
+  if( vvenc_init_config_parameter( &c ) )
+  {
+    return -1;
+  }
+  return 0;
+}
+
+int checkSDKChromaQpMappingSinglePoint()
+{
+  vvenc_config c;
+  vvenc_init_default( &c, 1920, 1080, 50, VVENC_RC_OFF, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
+  setQpVals( c.m_qpInValsCb,  { 30 } );
+  setQpVals( c.m_qpOutValsCb, { 30 } );
+  if( vvenc_init_config_parameter( &c ) )
+  {
+    return -1;
+  }
+  return isIdentityAt( c.m_chromaQpMappingTableParams, 30 ) ? 0 : -1;
+}
+
+int checkSDKChromaQpMappingLengthMismatch()
+{
+  vvenc_config c;
+  vvenc_init_default( &c, 1920, 1080, 50, VVENC_RC_OFF, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
+  setQpVals( c.m_qpInValsCb,  { 17, 22, 34 } );
+  setQpVals( c.m_qpOutValsCb, { 17, 23 } );
+  if( vvenc_init_config_parameter( &c ) )
+  {
+    return -1;
+  }
+  return 0;
+}
+
 int checkSDKStringApiDefault()
 {
   vvenc_config c;
@@ -1284,6 +1339,9 @@ int testSDKDefaultBehaviour()
 {
   testfunc( "checkSDKDefaultBehaviourRC", &checkSDKDefaultBehaviourRC, false );
   testfunc( "checkSDKHdrChromaQpMappingTables", &checkSDKHdrChromaQpMappingTables, false );
+  testfunc( "checkSDKChromaQpMappingLastPointOutOfRange", &checkSDKChromaQpMappingLastPointOutOfRange, true  );
+  testfunc( "checkSDKChromaQpMappingSinglePoint",         &checkSDKChromaQpMappingSinglePoint,         false );
+  testfunc( "checkSDKChromaQpMappingLengthMismatch",      &checkSDKChromaQpMappingLengthMismatch,      true  );
   return 0;
 }
 
