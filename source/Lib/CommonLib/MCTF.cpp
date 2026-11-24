@@ -865,16 +865,22 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   double   meanRmsAcrossPic    = 0.0;
   uint64_t sumSRmsAcrossPic    = 0;
   uint16_t nMax = 0, maxRmsCTU = 0;
-  bool  isFilterThisFrame      = mctfIdx >= 0;
+  bool  isFilterThisFrame      = mctfIdx >= 0 && ( pic->useMCTF || pic->gopEntry->m_isStartOfGop );
+  // A picture the film grain analysis looks at (GOPCfg::xSetFgaLayer) that MCTF does not filter: its motion is
+  // estimated for the analysis copies only, nothing that changes the coding (the filtered picture, the QP offsets).
+  const bool fgaOnly           = m_encCfg->m_fga && m_isFinalPass && pic->gopEntry->m_isFgaPicture && !isFilterThisFrame;
 
   int dropFrames = ( m_encCfg->m_usePerceptQPA ? VVENC_MCTF_RANGE >> 1 : 0 );
-  if( mctfIdx >= 0 )
+  if( isFilterThisFrame || fgaOnly )
   {
-    const int idxTLayer = m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1);
+    // the reference range of the picture's temporal level: for an analysis-only picture that of its analysis layer,
+    // at most 4 (MCTF has a level 5 only for GOP 64 below QP 16)
+    const int fgaTLayer = std::min( pic->gopEntry->m_fgaLayer, 4 );
+    const int idxTLayer = isFilterThisFrame ? m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1) : fgaTLayer;
     const int threshold = (m_MCTFSpeedVal >> (idxTLayer * 3)) & 7;
 
     dropFrames          = std::min(VVENC_MCTF_RANGE, threshold);
-    isFilterThisFrame   = threshold < VVENC_MCTF_RANGE;
+    isFilterThisFrame   = isFilterThisFrame && threshold < VVENC_MCTF_RANGE;
   }
 
   const int filterFrames = VVENC_MCTF_RANGE - 2 - dropFrames;
@@ -882,12 +888,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames + 2 );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames + 2 );
 
-  if( !pic->useMCTF && !pic->gopEntry->m_isStartOfGop )
-  {
-    isFilterThisFrame = false;
-  }
-
-  if ( isFilterThisFrame )
+  if ( isFilterThisFrame || fgaOnly )
   {
     bool  useMCTFadaptation = true;
     const bool condAddLevel = useMCTFadaptation && m_area.width >= 1920;
@@ -994,7 +995,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     }
 
     // filter
-    if( pic->useMCTF )
+    if( isFilterThisFrame && pic->useMCTF )
     {
       fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
       bilateralFilter( origBuf, srcFrameInfo, fltrBuf, filterStrength );
@@ -1002,14 +1003,15 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
     // The film grain analysis compares the original with a filtered copy of fixed strength, independent of the
     // filtering for the encoding, as the dedicated temporal filter of the VTM analysis does (strength 1.5). It analyses
-    // the start picture of every GOP, whose motion has just been estimated.
-    if( m_encCfg->m_fga && m_isFinalPass && pic->gopEntry->m_isStartOfGop )
+    // the start picture of every GOP and the pictures FgaMaxTempDepth adds (GOPCfg::xSetFgaLayer), whose motion has
+    // just been estimated.
+    if( m_encCfg->m_fga && m_isFinalPass && ( pic->gopEntry->m_isStartOfGop || pic->gopEntry->m_isFgaPicture ) )
     {
       static constexpr double FGA_FILTER_STRENGTH = 1.5;
-      if( pic->useMCTF && filterStrength == FGA_FILTER_STRENGTH )
+      if( isFilterThisFrame && pic->useMCTF && filterStrength == FGA_FILTER_STRENGTH )
       {
         // the picture filtered for the encoding is exactly the one the analysis needs (from QP 20 on with MCTFLevelTilt
-        // off; the tilt raises the key pictures' strength, so the analysis filters its own copy)
+        // off; the tilt raises the upper temporal levels' strength, so for those the analysis filters its own copy)
         pic->m_picShared->fgaUsesFilteredBuf() = true;
       }
       else
@@ -1025,7 +1027,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         ? fgaTemporalResidual( origBuf, pic->poc, picFifo, srcFrameInfo, pic->m_picShared->getFgaResidualBuf() ) : 0;
     }
 
-    if( m_encCfg->hasBlockQpOffsets() || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop )
+    if( isFilterThisFrame && ( m_encCfg->hasBlockQpOffsets() || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop ) )
     {
       const int ctuSize        = m_encCfg->m_bimCtuSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
@@ -1220,7 +1222,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       }
     }
   }
-  else
+  if( !isFilterThisFrame )
   {
     pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
   }
