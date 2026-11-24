@@ -182,33 +182,18 @@ static inline int columnVerticalError_common( const Pel* org, const ptrdiff_t or
   return squares.sum();
 }
 
-// MCTF::m_motionErrorLumaFracColumn, as motionErrorLumaFracColumn_loRes_AVX2 (MCTFX86.h): the exact errors of num
-// vectors with the same horizontal position. The horizontal pass of the union of their rows is done once into a
-// buffer, in 32 bits (exact for every 16-bit input, as the C code's int sums), then the vertical pass per vector,
-// rowOffset[i] rows lower, from samples clipped to [0, max] as motionErrorLumaFrac_loRes2D_neon does it.
-template<typename SquareSum>
-static inline void motionErrorLumaFracColumn_loRes_common( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
-                                                           const ptrdiff_t buffStride, const int w, const int h,
-                                                           const int16_t* xFilter, const int num,
-                                                           const int16_t* const* yFilter, const int* rowOffset,
-                                                           const int bitDepth, int* error )
+// MCTF::m_filterColumn4, as filterColumn4_AVX2 (MCTFX86.h): the horizontal 4-tap pass of numRows rows into filtered
+// (stride w), row r from source row r - 1, taps on columns x - 1 .. x + 2. The sums are 32 bits (exact for every 16-bit
+// input, as the C code's int sums), rounded and clipped to [0, max] by vqrshrun_n_s32 and the min.
+static inline void filterColumn4_common( const Pel* buf, const ptrdiff_t buffStride, const int w, const int numRows,
+                                         const int16_t* xFilter, const int bitDepth, Pel* filtered )
 {
-  static constexpr int MAX_SIZE = 32;   // the block size of the subpel search, MCTFUnitSize, is at most 32 (vvencCfg)
-  CHECKD( w > MAX_SIZE || h > MAX_SIZE || ( w & 7 ) != 0, "Unsupported block size" );
+  // MCTFUnitSize is at most 32 (vvencCfg); a column holds h + 3 rows plus a one-row spread of its vectors
+  CHECKD( w > 32 || numRows > 36 || ( w & 7 ) != 0, "Unsupported block size" );
 
-  const Pel        maxSampleValue = ( 1 << bitDepth ) - 1;
-  const int16x4_t  xf             = vld1_s16( xFilter );
-  const uint16x8_t vmax           = vdupq_n_u16( maxSampleValue );
-
-  // row r of filtered is the horizontal pass of source row r - 1; a vector needs h + 3 rows from its offset on
-  int maxOffset = 0;
-  for( int i = 0; i < num; i++ )
-  {
-    maxOffset = std::max( maxOffset, rowOffset[i] );
-  }
-  CHECKD( maxOffset > 1, "The vectors of a column span more than two rows" );
-  Pel filtered[( MAX_SIZE + 4 ) * MAX_SIZE];
-  for( int r = 0; r < h + 3 + maxOffset; r++ )
+  const int16x4_t  xf   = vld1_s16( xFilter );
+  const uint16x8_t vmax = vdupq_n_u16( ( 1 << bitDepth ) - 1 );
+  for( int r = 0; r < numRows; r++ )
   {
     const Pel* src = buf + ( r - 1 ) * buffStride - 1;
     for( int x = 0; x < w; x += 8 )
@@ -228,9 +213,25 @@ static inline void motionErrorLumaFracColumn_loRes_common( const Pel* org, const
       vst1q_s16( filtered + r * w + x, vreinterpretq_s16_u16( v ) );
     }
   }
+}
 
+// MCTF::m_motionErrorLumaFracColumn, as motionErrorLumaFracColumn_loRes_AVX2 (MCTFX86.h): the exact errors of num
+// vectors with the same horizontal position, from the rows of m_filterColumn4 (filterColumn4_common): the vertical pass
+// per vector, rowOffset[i] rows lower (a vector reads h + 3 rows from there), from samples clipped to [0, max] as
+// motionErrorLumaFrac_loRes2D_neon does it.
+template<typename SquareSum>
+static inline void motionErrorLumaFracColumn_loRes_common( const Pel* org, const ptrdiff_t origStride, const Pel* filtered,
+                                                           const int w, const int h, const int num,
+                                                           const int16_t* const* yFilter, const int* rowOffset,
+                                                           const int bitDepth, int* error )
+{
+  // MCTFUnitSize is at most 32 (vvencCfg); the caller passes multiples of 16, the kernel needs multiples of 8
+  CHECKD( w > 32 || h > 32 || ( w & 7 ) != 0, "Unsupported block size" );
+
+  const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
   for( int i = 0; i < num; i++ )
   {
+    CHECKD( rowOffset[i] < 0 || rowOffset[i] > 1, "The vectors of a column span more than two rows" );
     const Pel* rows = filtered + rowOffset[i] * w;
     switch( selectFilterType4( yFilter[i] ) )
     {
