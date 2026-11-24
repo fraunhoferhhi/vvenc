@@ -1392,6 +1392,8 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
     {
       bChromaDeltaQPEnabled = m_gopCfg->isChromaDeltaQPEnabled();
     }
+    // CuTreePicStrength keeps chroma from getting coarser by slice chroma QP offsets, see EncSlice::xInitSliceLambdaQP
+    bChromaDeltaQPEnabled |= m_pcEncCfg->m_cuTreePicScale > 0.0 && ( m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400 );
   }
   pps.sliceChromaQpFlag                 = bChromaDeltaQPEnabled;
   pps.outputFlagPresent                 = false;
