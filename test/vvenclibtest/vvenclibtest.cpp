@@ -930,7 +930,7 @@ int checkSDKStringApiDefault()
   settings.push_back(std::make_tuple( VVENC_OPT_FRAMERATE,    "60") );
   settings.push_back(std::make_tuple( VVENC_OPT_FRAMESCALE,   "1") );
   settings.push_back(std::make_tuple( VVENC_OPT_FPS,          "60/1") );
-  settings.push_back(std::make_tuple( VVENC_OPT_TICKSPERSEC,  "900000") );
+  settings.push_back(std::make_tuple( VVENC_OPT_TICKSPERSEC,  "900000 ") ); // trailing whitespace is fine
   settings.push_back(std::make_tuple( VVENC_OPT_INPUTBITDEPTH,"10") );
   settings.push_back(std::make_tuple( VVENC_OPT_FRAMES,       "2") );
   settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "medium") );
@@ -1023,6 +1023,12 @@ int checkSDKStringApiInvalid()
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1;5M") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1m") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1K") );
+  // characters after a valid value: an error, not the leading value
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1M5") );
+  settings.push_back(std::make_tuple( VVENC_OPT_INTRAPERIOD,  "32x") );
+  settings.push_back(std::make_tuple( VVENC_OPT_SIZE,         "176x144y") );
+  settings.push_back(std::make_tuple( VVENC_OPT_FPS,          "23.976") );
+  settings.push_back(std::make_tuple( "BIM",                  "1,CuTreePicStrength 2") ); // what --additional BIM=1,CuTreePicStrength=2 passes
 
   int ret=0;
 
