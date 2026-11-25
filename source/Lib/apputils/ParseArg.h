@@ -188,6 +188,16 @@ const std::string Option<T>::getDefault( )
   return oss.str(); 
 }
 
+/* A value must be the whole argument: "1,CuTreePicStrength=2" is not the value 1. Trailing whitespace is allowed.
+ * (std::ws on a stream already at its end would set failbit, hence the eof checks.) */
+inline void failOnTrailingChars( std::istringstream& arg_ss )
+{
+  if( !arg_ss.eof() && !( arg_ss >> std::ws ).eof() )
+  {
+    arg_ss.setstate( std::ios::failbit ); // throws, failbit exceptions are on
+  }
+}
+
 /* Generic parsing */
 template<typename T>
 inline void
@@ -209,6 +219,7 @@ Option<T>::parse(const std::string& arg, ErrorReporter&)
   try
   {
     arg_ss >> opt_storage;
+    failOnTrailingChars( arg_ss );
   }
   catch (...)
   {
@@ -240,6 +251,7 @@ Option<bool>::parse(const std::string& arg, ErrorReporter&)
     try
     {
       arg_ss >> opt_storage;
+      failOnTrailingChars( arg_ss );
     }
     catch (...)
     {

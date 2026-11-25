@@ -67,6 +67,15 @@ struct SVPair
   E           value;
 };
 
+// reads one list token; fails unless the whole token is the value ("1920y" is not 1920)
+template<typename T>
+inline bool readWholeToken( const std::string& token, T& val )
+{
+  std::stringstream convStream( token );
+  convStream >> val;
+  return !convStream.fail() && convStream.eof();
+}
+
 // ====================================================================================================================
 // string <-> vector
 // ====================================================================================================================
@@ -124,10 +133,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
       if ( ! token.length() )
         continue;
       // convert to value
-      std::stringstream convStream( token );
       T val;
-      convStream >> val;
-      fail |= convStream.fail();
+      fail |= !readWholeToken( token, val );
       if( idx >= maxSize )
       {
         fail = true;//try to write behind buffer
@@ -261,8 +268,9 @@ inline std::istream& operator >> ( std::istream& in, IStreamToInt8& toInt8 )
 {
   std::string str;
   in >> str;
-  int ret = std::stoi( str );
-  if( ret < std::numeric_limits<int8_t>::min() || ret > std::numeric_limits<int8_t>::max() )
+  size_t used = 0;
+  int ret = std::stoi( str, &used );
+  if( used != str.size() || ret < std::numeric_limits<int8_t>::min() || ret > std::numeric_limits<int8_t>::max() )
   {
     in.setstate( std::ios::failbit );
   }
@@ -541,10 +549,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
         if ( ! token.length() )
           continue;
         // convert to value
-        std::stringstream convStream( token );
         T val;
-        convStream >> val;
-        fail |= convStream.fail();
+        fail |= !readWholeToken( token, val );
         valVec->push_back( val );
       }
     }
@@ -653,10 +659,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
         if ( ! token.length() )
           continue;
         // convert to value
-        std::stringstream convStream( token );
         T val;
-        convStream >> val;
-        fail |= convStream.fail();
+        fail |= !readWholeToken( token, val );
 
         if ( pos < toArr._maxSize )
         {
@@ -817,8 +821,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToAbbr<T,A>& toValue
   for ( const auto& map : *toValue.toMap )
   {
     std::string key(map.str);
-    std::size_t n = str.find( key );
-    if (n!=std::string::npos)
+    std::size_t n = str.rfind( key );
+    if( n != std::string::npos && n + key.length() == str.size() ) // a unit only as the suffix: "1M5" is not 1.5M
     {
       str.erase(n, key.length());                                                 // remove the scaling unit, e.g. 1.5M -> 1.5
       replace_if( str.begin(), str.end(), []( int c ){ return c == ','; }, '.' ); // use correct comma syntax for double representaion
