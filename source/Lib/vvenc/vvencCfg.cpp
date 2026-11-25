@@ -3550,12 +3550,6 @@ VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *va
   {
     return VVENC_PARAM_BAD_NAME;
   }
-  else
-  {
-    std::string namePrefix="--";  // add long option name prefix
-    n = namePrefix;
-    n.append(name);
-  }
 
   // without a value, v stays empty: the option parser switches boolean options on for an empty value
   // and rejects it for all other options (VVENC_PARAM_BAD_VALUE)
@@ -3596,8 +3590,9 @@ VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *va
     return 0;
   }
 
+  const std::string longName = std::string( "--" ) + name;  // the option parser takes long option names
   char *argv[2];
-  argv[0]=(char*)n.c_str();
+  argv[0]=(char*)longName.c_str();
   argv[1]=(char*)v.c_str();
 
   int ret = vvenc_set_param_list ( c, 2, argv);
