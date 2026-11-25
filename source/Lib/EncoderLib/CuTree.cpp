@@ -1399,6 +1399,7 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
   PicShared* picShared = pic->m_picShared;
   picShared->m_ctuBimQpOffset.assign( widthInCtus * heightInCtus, 0 );
   picShared->m_picAuxQpOffset = frame.picQpOffset;
+  picShared->m_picQpOffsetNoPicStrength = frame.picQpOffset;
   picShared->m_noiseFloorQp    = -1;
   picShared->m_noiseFloorRaise = 0;
   if( m_blkWidth == 0 || m_blkHeight == 0 || ! frame.analysed )
@@ -1478,6 +1479,7 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
   const int mean = ( sum + ( sum < 0 ? -( numCtu >> 1 ) : numCtu >> 1 ) ) / numCtu;
   for( int& offset : picShared->m_ctuBimQpOffset ) offset -= mean;
   picShared->m_picAuxQpOffset += mean;
+  picShared->m_picQpOffsetNoPicStrength += mean;
 }
 
 } // namespace vvenc
