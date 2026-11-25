@@ -803,7 +803,11 @@ typedef struct vvenc_config
   uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
   int8_t              m_reservedInt8_2[2];
   int32_t             m_reservedInt32;
-  double              m_reservedDouble[7];
+  int8_t              m_fastAMVR;                                                        // 1: no AMVR search where the best mode is skip, where the motion search with quarter-sample MVDs costs more than
+                                                                                         // 1.1 times the best mode or its largest MVD is below half a sample, and no 4-sample MVDs where that MVD
+                                                                                         // is below 4 samples (default 0: off)
+  int8_t              m_reservedInt8_7[7];                                               // with the field above in place of the first of seven reserved doubles: the same layout on every ABI
+  double              m_reservedDouble[6];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )
