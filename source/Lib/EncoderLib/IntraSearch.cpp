@@ -563,6 +563,7 @@ bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, 
   //===== loop over partitions =====
 
   const TempCtx ctxStart           ( m_CtxCache, m_CABACEstimator->getCtx() );
+  m_modeBestResi.known = false;
 
   // variables for saving fast intra modes scan results across multiple LFNST passes
   double costInterCU = xFindInterCUCost( cu );
@@ -799,6 +800,7 @@ bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, 
       {
         validReturn   = true;
         std::swap(csTemp, csBest);
+        m_modeBestResi.swap( m_trialBestResi );
         bestPUMode    = testMode;
         bestLfnstIdx  = csBest->cus[0]->lfnstIdx;
         bestISP       = csBest->cus[0]->ispMode;
@@ -816,7 +818,8 @@ bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, 
         }
       }
 
-      // reset context models (xIntraCodingLumaQT leaves its last test's contexts, not its best's: nothing reads them)
+      // reset context models (xIntraCodingLumaQT leaves its last test's contexts or, where xKeepLumaResiOfTrial took
+      // those, a stale set: nothing reads them)
       m_CABACEstimator->getCtx() = ctxStart;
 
       csTemp->releaseIntermediateData();
@@ -1379,7 +1382,16 @@ void IntraSearch::xEncCoeffQT(CodingStructure& cs, Partitioner& partitioner, con
     {
       if( isLuma(compID) )
       {
-        m_CABACEstimator->residual_coding( currTU, compID, cuCtx );
+        // kept for the CU's final count (xKeepLumaResiOfTrial): the residual's bits and the flags it sets
+        const uint64_t bitsBefore = m_CABACEstimator->getEstFracBits();
+        m_lumaResiCallFlags       = CUCtx();
+        m_CABACEstimator->residual_coding( currTU, compID, &m_lumaResiCallFlags );
+        m_lumaResiCallBits        = m_CABACEstimator->getEstFracBits() - bitsBefore;
+        m_lumaResiCalls++;
+        if( cuCtx )
+        {
+          cuCtx->addResidualFlags( m_lumaResiCallFlags );
+        }
         m_CABACEstimator->mts_idx( *currTU.cu, cuCtx );
       }
       else
@@ -1397,6 +1409,7 @@ uint64_t IntraSearch::xGetIntraFracBitsQT( CodingStructure &cs, Partitioner &par
 
   if( luma )
   {
+    m_lumaResiCalls = 0;
     xEncCoeffQT( cs, partitioner, COMP_Y, cuCtx );
 
     CodingUnit &cu = *cs.cus[0];
@@ -1708,6 +1721,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
 void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode, bool disableMTS, const Ctx& ctxStart)
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 0, _TPROF, P_INTRA_RD_SEARCH_LUMA, &cs, partitioner.chType );
+  m_trialBestResi.known     = false;
   const UnitArea& currArea  = partitioner.currArea();
   uint32_t        currDepth = partitioner.currTrDepth;
   Distortion singleDistLuma = 0;
@@ -1912,6 +1926,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
         cuCtx.lfnstLastScanPos               = false;
         cuCtx.violatesLfnstConstrained[CH_L] = false;
         cuCtx.violatesLfnstConstrained[CH_C] = false;
+        cuCtx.violatesMtsCoeffConstraint     = false;
 
         if ((lfnstIdx != startLfnstIdx) || (modeId))
         {
@@ -2033,6 +2048,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
           singleFracBits = singleTmpFracBits;
           bestLfnstIdx   = lfnstIdx;
           bestMTS        = modeId;
+          xKeepLumaResiOfTrial( cu, tu );
 
           if (dSingleCost < bestCostForISP)
           {
@@ -2173,6 +2189,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
       m_ispTestedModes[0].subTuCounter = -1;
       singleFracBits = xGetIntraFracBitsQT(cs, partitioner, true);
       dSingleCost = m_pcRdCost->calcRdCost(singleFracBits, singleDistLuma);
+      xKeepLumaResiOfTrial( cu, tu );
     }
   }
 
@@ -2192,6 +2209,50 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
 
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_RD_TESTS][0][!cs.slice->isIntra() + cs.slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !cs.slice->isIntra(), g_cuCounters2D[CU_RD_TESTS][Log2( cs.area.lheight() )][Log2( cs.area.lwidth() )] );
+}
+
+// Called when a luma trial of xIntraCodingLumaQT has just counted its bits and become the best: keeps what its luma
+// residual_coding counted, for the CU's final count (takeLumaResiOfSearch). That count repeats the trial's estimate:
+// the same coefficients from the same contexts, since every trial starts from the search's start contexts, as the
+// final count does, and codes only other contexts before the residual. Kept only for a CU coded as one luma TU with a
+// regular residual: not for ISP (its sub-TUs pass contexts on to each other) nor for transform skip and BDPCM (their
+// residual contexts are shared with chroma).
+void IntraSearch::xKeepLumaResiOfTrial( const CodingUnit& cu, const TransformUnit& tu )
+{
+  m_trialBestResi.known = m_lumaResiCalls == 1 && !cu.ispMode && !cu.bdpcmM[CH_L] && tu.mtsIdx[COMP_Y] != MTS_SKIP;
+  if( m_trialBestResi.known )
+  {
+    m_trialBestResi.bits  = m_lumaResiCallBits;
+    m_trialBestResi.flags = m_lumaResiCallFlags;
+    // takes the trial's end contexts without a copy: the estimator's are not read again before the next trial or the
+    // mode loop restores the start contexts
+    m_trialBestResi.ctx.swap( m_CABACEstimator->getCtx() );
+  }
+}
+
+// For EncCu's final count of the CU that estIntraPredLumaQT searched last: when the chosen trial's luma residual count
+// can stand in for the final one, sets the estimator's luma residual contexts to what that count left and returns
+// its bits and flags (once); nullptr otherwise. Called before the count, which codes nothing that reads these contexts
+// before luma's residual; the chroma transform skip flag's context, which the trial did not code, keeps its value.
+const IntraSearch::LumaResi* IntraSearch::takeLumaResiOfSearch( const CodingUnit& cu )
+{
+  if( !m_modeBestResi.known || cu.firstTU != cu.lastTU || cu.ispMode || cu.colorTransform || cu.bdpcmM[CH_L]
+      || !TU::getCbf( *cu.firstTU, COMP_Y ) || cu.firstTU->mtsIdx[COMP_Y] == MTS_SKIP )
+  {
+    return nullptr;
+  }
+  m_modeBestResi.known = false;
+
+  // the contexts luma's residual_coding codes outside transform skip (CoeffCodingContext, ContextModelling.cpp), and
+  // its transform skip flag
+  Ctx& ctx = m_CABACEstimator->getCtx();
+  for( const CtxSet& set : { Ctx::SigCoeffGroup[CH_L], Ctx::LastX[CH_L], Ctx::LastY[CH_L], Ctx::SigFlag[CH_L],
+                             Ctx::SigFlag[CH_L + 2], Ctx::SigFlag[CH_L + 4], Ctx::ParFlag[CH_L], Ctx::GtxFlag[CH_L],
+                             Ctx::GtxFlag[CH_L + 2], Ctx::TransformSkipFlag } )
+  {
+    ctx = SubCtx( set, m_modeBestResi.ctx );
+  }
+  return &m_modeBestResi;
 }
 
 // keepBestCtx: leave the best mode's contexts in the estimator; when false the caller overwrites them, so the copies that only

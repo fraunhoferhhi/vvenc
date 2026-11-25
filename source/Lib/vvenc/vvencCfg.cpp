@@ -761,28 +761,37 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FrameScale <= 0,                                                       "Frame scale must be greater than 0" );
   vvenc_confirmParameter( c, c->m_TicksPerSecond < -1 || c->m_TicksPerSecond == 0 || c->m_TicksPerSecond > 27000000, "TicksPerSecond must be in range from 1 to 27000000, or -1 for ticks per frame=1" );
 
-  std::stringstream css;
-  if ( c->m_FrameScale != 1  && c->m_FrameScale != 1001 && c->m_TicksPerSecond == VVENC_TICKS_PER_SEC_DEF )
+  // Every frame must last a whole number of ticks: TicksPerSecond * FrameScale / FrameRate is an integer exactly when
+  // TicksPerSecond is a multiple of FrameRate / gcd( FrameRate, FrameScale ). The message suggests the largest such value
+  // in range, which keeps the timing as fine as the default.
+  if( c->m_TicksPerSecond > 0 && c->m_FrameRate > 0 && c->m_FrameScale > 0
+      && ( (int64_t)c->m_TicksPerSecond * c->m_FrameScale ) % c->m_FrameRate )
   {
-    double dFrameRate = c->m_FrameRate/(double)c->m_FrameScale;
-    css << "Detected non-standard Frame Rate " << c->m_FrameRate << "/" << c->m_FrameScale;
-    css << " (" << std::fixed << std:: setprecision(2) << dFrameRate <<  std::setprecision(-1) << " Hz).";
-    css << " Default TicksPerSecond (" << VVENC_TICKS_PER_SEC_DEF << ") can not be used.";
+    int a = c->m_FrameRate, b = c->m_FrameScale;
+    while( b ) { const int r = a % b; a = b; b = r; }   // a = gcd( FrameRate, FrameScale )
+    const int ticksStep = c->m_FrameRate / a;
 
-    if ( c->m_FrameRate * c->m_FrameScale <= VVENC_TICKS_PER_SEC_DEF )
+    std::stringstream css;
+    if( c->m_TicksPerSecond == VVENC_TICKS_PER_SEC_DEF )
     {
-      css << " possible TicksPerSecond: " << (c->m_FrameRate * c->m_FrameScale) << std::endl;
+      css << "Detected non-standard Frame Rate " << c->m_FrameRate << "/" << c->m_FrameScale;
+      css << " (" << std::fixed << std::setprecision(2) << c->m_FrameRate / (double)c->m_FrameScale << std::setprecision(-1) << " Hz).";
+      css << " Default TicksPerSecond (" << VVENC_TICKS_PER_SEC_DEF << ") can not be used.";
     }
     else
     {
-      css << " cannot find a proper value for TicksPerSecond in the range (1-" << VVENC_TICKS_PER_SEC_DEF << ")" << std::endl;
+      css << "TicksPerSecond (" << c->m_TicksPerSecond << ") does not fit Frame Rate " << c->m_FrameRate << "/" << c->m_FrameScale << ".";
     }
+    if( ticksStep <= VVENC_TICKS_PER_SEC_DEF )
+    {
+      css << " TicksPerSecond must be a multiple of " << ticksStep << ", e.g. " << VVENC_TICKS_PER_SEC_DEF / ticksStep * ticksStep;
+    }
+    else
+    {
+      css << " No TicksPerSecond in the range (1-" << VVENC_TICKS_PER_SEC_DEF << ") fits, use -1 (ticks per frame=1)";
+    }
+    vvenc_confirmParameter( c, true, css.str().c_str() );
   }
-  else
-  {
-    css << "TicksPerSecond must be a multiple of FrameRate/Framescale (" << c->m_FrameRate << "/" << c->m_FrameScale << "). Use 27000000 for NTSC content"  << std::endl;
-  }
-  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 && c->m_FrameRate > 0) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, css.str().c_str() );
 
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,                              "Number of threads out of range (-1 <= t <= 256)");
@@ -1326,26 +1335,31 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   std::vector<int> qpOutValsCr= vvenc_getQpValsAsVec( c->m_qpOutValsCr );
   std::vector<int> qpOutValsCbCr= vvenc_getQpValsAsVec( c->m_qpOutValsCbCr );
 
+  // a single point means identity: expand it to (qp, qp), (qp + 1, qp + 1)
+  if( qpInValsCb.size() == 1 )   { qpInValsCb.push_back( qpInValsCb[0] + 1 );     qpOutValsCb.push_back( qpOutValsCb[0] + 1 ); }
+  if( qpInValsCr.size() == 1 )   { qpInValsCr.push_back( qpInValsCr[0] + 1 );     qpOutValsCr.push_back( qpOutValsCr[0] + 1 ); }
+  if( qpInValsCbCr.size() == 1 ) { qpInValsCbCr.push_back( qpInValsCbCr[0] + 1 ); qpOutValsCbCr.push_back( qpOutValsCbCr[0] + 1 ); }
+
   c->m_chromaQpMappingTableParams.m_numQpTables = c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag? 1 : (c->m_JointCbCrMode ? 3 : 2);
-  c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[0] = (qpOutValsCb.size() > 1) ? (int)qpOutValsCb.size() - 2 : 0;
-  c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] = (qpOutValsCb.size() > 1) ? -26 + qpInValsCb[0] : 0;
-  for ( size_t i = 0; i < qpInValsCb.size() - 1; i++)
+  c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[0] = (int)qpOutValsCb.size() - 2;
+  c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] = -26 + qpInValsCb[0];
+  for ( size_t i = 0; i < std::min( qpInValsCb.size(), qpOutValsCb.size() ) - 1; i++)
   {
     c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0][i] = qpInValsCb[i + 1] - qpInValsCb[i] - 1;
     c->m_chromaQpMappingTableParams.m_deltaQpOutVal[0][i] = qpOutValsCb[i + 1] - qpOutValsCb[i];
   }
   if (!c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
   {
-    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[1] = (qpOutValsCr.size() > 1) ? (int)qpOutValsCr.size() - 2 : 0;
-    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] = (qpOutValsCr.size() > 1) ? -26 + qpInValsCr[0] : 0;
-    for (size_t i = 0; i < qpInValsCr.size() - 1; i++)
+    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[1] = (int)qpOutValsCr.size() - 2;
+    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] = -26 + qpInValsCr[0];
+    for (size_t i = 0; i < std::min( qpInValsCr.size(), qpOutValsCr.size() ) - 1; i++)
     {
       c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1][i] = qpInValsCr[i + 1] - qpInValsCr[i] - 1;
       c->m_chromaQpMappingTableParams.m_deltaQpOutVal[1][i] = qpOutValsCr[i + 1] - qpOutValsCr[i];
     }
-    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[2] = (qpOutValsCbCr.size() > 1) ? (int)qpOutValsCbCr.size() - 2 : 0;
-    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] = (qpOutValsCbCr.size() > 1) ? -26 + qpInValsCbCr[0] : 0;
-    for (size_t i = 0; i < qpInValsCbCr.size() - 1; i++)
+    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[2] = (int)qpOutValsCbCr.size() - 2;
+    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] = -26 + qpInValsCbCr[0];
+    for (size_t i = 0; i < std::min( qpInValsCbCr.size(), qpOutValsCbCr.size() ) - 1; i++)
     {
       c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2][i] = qpInValsCbCr[i + 1] - qpInValsCbCr[i] - 1;
       c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = qpOutValsCbCr[i + 1] - qpOutValsCbCr[i];
@@ -1993,7 +2007,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
   vvenc_confirmParameter( c,c->m_qpInValsCb[0] != c->m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
-  for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCb) - 1; i++)
+  for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCb); i++)
   {
     vvenc_confirmParameter( c,c->m_qpInValsCb[i]  < -qpBdOffsetC || c->m_qpInValsCb[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
     vvenc_confirmParameter( c,c->m_qpOutValsCb[i] < -qpBdOffsetC || c->m_qpOutValsCb[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
@@ -2002,14 +2016,14 @@ static bool checkCfgParameter( vvenc_config *c )
   {
     vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
     vvenc_confirmParameter( c,c->m_qpInValsCr[0] != c->m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
-    for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCr) - 1; i++)
+    for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCr); i++)
     {
       vvenc_confirmParameter( c,c->m_qpInValsCr[i] < -qpBdOffsetC || c->m_qpInValsCr[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
       vvenc_confirmParameter( c,c->m_qpOutValsCr[i] < -qpBdOffsetC || c->m_qpOutValsCr[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
     }
     vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
     vvenc_confirmParameter( c,c->m_qpInValsCbCr[0] != c->m_qpOutValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
-    for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCbCr) - 1; i++)
+    for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCbCr); i++)
     {
       vvenc_confirmParameter( c,c->m_qpInValsCbCr[i]  < -qpBdOffsetC || c->m_qpInValsCbCr[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
       vvenc_confirmParameter( c,c->m_qpOutValsCbCr[i] < -qpBdOffsetC || c->m_qpOutValsCbCr[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");

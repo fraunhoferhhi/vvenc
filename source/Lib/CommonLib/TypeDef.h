@@ -376,7 +376,10 @@ enum DFunc : uint8_t
   DF_HAD64_fast      = DF_HAD_fast+6,      ///<  64xM fast HAD
   DF_HAD128_fast     = DF_HAD_fast+7,      ///< 16NxM fast HAD
 
-  DF_TOTAL_FUNCTIONS = 34,
+  DF_HAD_STOP        = 34,            ///< general size HAD that stops after a row of tiles once its sum exceeds maximumDistortionForEarlyExit
+  DF_HAD_STOP_fast   = 35,            ///< the same for the fast HAD
+
+  DF_TOTAL_FUNCTIONS = 36,
 };
 
 /// motion vector predictor direction used in AMVP

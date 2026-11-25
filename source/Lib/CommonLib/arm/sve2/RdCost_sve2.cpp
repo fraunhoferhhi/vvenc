@@ -435,7 +435,10 @@ Distortion xCalcHAD4x8_sve2( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
 }
 
 // With fastHad, square blocks of 32x32 and larger use the subsampled 16x16 transform, like RdCost::xGetHADs<true>.
-template<bool fastHad>
+// With stop (DF_HAD_STOP*), the sum so far is returned after a row of tiles once it exceeds
+// maximumDistortionForEarlyExit, like RdCost::xGetHADs<fastHad, true>. The tiling does not change with stop, so a
+// sum that does not stop equals the non-stop result.
+template<bool fastHad, bool stop = false>
 Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
 {
   const Pel* piOrg = rcDtParam.org.buf;
@@ -460,6 +463,10 @@ Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
       iRows -= 8;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( iCols < iRows && iRows % 16 == 0 && iCols % 8 == 0 )
@@ -473,6 +480,10 @@ Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
       piOrg += 16 * iStrideOrg;
       piCur += 16 * iStrideCur;
       iRows -= 16;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( iCols > iRows && iCols % 8 == 0 && iRows % 4 == 0 )
@@ -491,6 +502,10 @@ Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
       iRows -= 8;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( fastHad && iCols % 32 == 0 && iRows == iCols )
@@ -504,6 +519,10 @@ Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
       piOrg += 16 * iStrideOrg;
       piCur += 16 * iStrideCur;
       iRows -= 16;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( iCols % 8 == 0 && iRows == iCols )
@@ -517,6 +536,10 @@ Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
       iRows -= 8;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( iRows % 4 == 0 && iCols % 4 == 0 )
@@ -530,6 +553,10 @@ Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
       piOrg += 4 * iStrideOrg;
       piCur += 4 * iStrideCur;
       iRows -= 4;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else
@@ -543,6 +570,10 @@ Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
       piOrg += 2 * iStrideOrg;
       piCur += 2 * iStrideCur;
       iRows -= 2;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
 
@@ -708,6 +739,9 @@ void RdCost::_initRdCostARM<SVE2>()
   m_afpDistortFunc[0][DF_HAD32_fast] = xGetHADs_fast_sve2<32>;
   m_afpDistortFunc[0][DF_HAD64_fast] = xGetHADs_fast_sve2<64>;
   m_afpDistortFunc[0][DF_HAD128_fast] = xGetHADs_fast_sve2<128>;
+
+  m_afpDistortFunc[0][DF_HAD_STOP] = xGetHADs_generic_sve2<false, true>;
+  m_afpDistortFunc[0][DF_HAD_STOP_fast] = xGetHADs_generic_sve2<true, true>;
 }
 
 #endif // defined( TARGET_SIMD_ARM )

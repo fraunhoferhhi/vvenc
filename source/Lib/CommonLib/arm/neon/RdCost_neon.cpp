@@ -775,7 +775,10 @@ Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
 }
 
 // With fastHad, square blocks of 32x32 and larger use the subsampled 16x16 transform, like RdCost::xGetHADs<true>.
-template<bool fastHad>
+// With stop (DF_HAD_STOP*), the sum so far is returned after a row of tiles once it exceeds
+// maximumDistortionForEarlyExit, like RdCost::xGetHADs<fastHad, true>. The tiling does not change with stop, so a
+// sum that does not stop equals the non-stop result.
+template<bool fastHad, bool stop = false>
 Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
 {
   const Pel* piOrg = rcDtParam.org.buf;
@@ -800,6 +803,10 @@ Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
       iRows -= 8;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( iCols < iRows && iRows % 16 == 0 && iCols % 8 == 0 )
@@ -813,6 +820,10 @@ Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
       piOrg += 16 * iStrideOrg;
       piCur += 16 * iStrideCur;
       iRows -= 16;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( iCols > iRows && iCols % 8 == 0 && iRows % 4 == 0 )
@@ -831,6 +842,10 @@ Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
       iRows -= 8;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( fastHad && iCols % 32 == 0 && iRows == iCols )
@@ -844,6 +859,10 @@ Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
       piOrg += 16 * iStrideOrg;
       piCur += 16 * iStrideCur;
       iRows -= 16;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( iCols % 8 == 0 && iRows == iCols )
@@ -857,6 +876,10 @@ Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
       iRows -= 8;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else if( iRows % 4 == 0 && iCols % 4 == 0 )
@@ -870,6 +893,10 @@ Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
       piOrg += 4 * iStrideOrg;
       piCur += 4 * iStrideCur;
       iRows -= 4;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
   else
@@ -883,6 +910,10 @@ Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
       piOrg += 2 * iStrideOrg;
       piCur += 2 * iStrideCur;
       iRows -= 2;
+      if( stop && RdCost::xHadStops( uiSum, rcDtParam ) )
+      {
+        break;
+      }
     } while( iRows != 0 );
   }
 
@@ -1844,6 +1875,105 @@ Distortion lumaWeightedSSE_neon( const DistParam& rcDtParam, ChromaFormat chmFmt
   return uiSum;
 }
 
+// IBC block vector bits (RdCost::getBitsMultiplePredsIBC) for a line of vectors ( x0 + i * xStep, y ), four per vector.
+// The bits of a vector difference component d = a - b are 2 * floorLog2( u ) + 1 with u = d > 0 ? 2 * d : 1 - 2 * d
+// (getIComponentBitsIBC), that is u = 2 * |d| + ( d <= 0 ). u >= 1, so floorLog2( u ) = 31 - clz( u ): the bits are
+// 63 - 2 * clz( u ).
+static inline int32x4_t bvComponentClz_neon( const int32x4_t a, const int32x4_t b, const int32x4_t absDiff )
+{
+  // the mask of a <= b is -1 where it holds: subtracting it adds the 1 of d <= 0
+  const int32x4_t u = vsubq_s32( vaddq_s32( absDiff, absDiff ), vreinterpretq_s32_u32( vcleq_s32( a, b ) ) );
+  return vclzq_s32( u );
+}
+
+// The vertical difference is the same for every vector of the line. Per predictor: its absolute value, and its bits
+// plus the 63 of the horizontal component's bits, so that a vector's bits are bits[p] - 2 * clz( u ) of its horizontal
+// difference.
+struct BvVerticalPart_neon
+{
+  int32x4_t absDiff[2];
+  int32x4_t bits[2];
+
+  // the bits with the first predictor where its sum of absolute differences is smaller, else with the second, for the
+  // horizontal differences x - pred0 and x - pred1
+  int32x4_t selectBits( const int32x4_t x, const int32x4_t pred0, const int32x4_t pred1 ) const
+  {
+    const int32x4_t absH0 = vabdq_s32( x, pred0 );
+    const int32x4_t absH1 = vabdq_s32( x, pred1 );
+    const int32x4_t bits0 = vmlsq_n_s32( bits[0], bvComponentClz_neon( x, pred0, absH0 ), 2 );
+    const int32x4_t bits1 = vmlsq_n_s32( bits[1], bvComponentClz_neon( x, pred1, absH1 ), 2 );
+    return vbslq_s32( vcltq_s32( vaddq_s32( absH0, absDiff[0] ), vaddq_s32( absH1, absDiff[1] ) ), bits0, bits1 );
+  }
+};
+
+// Both vertical parts, in vector and in sample precision, from the four differences { vert 0, vert 1, sample 0,
+// sample 1 } in one pass, each then broadcast
+static void bvVerticalParts_neon( const int32x4_t diffs, BvVerticalPart_neon& vert,
+                                  BvVerticalPart_neon& vertSamplePrec )
+{
+  const int32x4_t absDiff = vabsq_s32( diffs );
+  // 63 - 2 * clz( u ) of the vertical component, plus the horizontal component's 63
+  const int32x4_t bits = vmlsq_n_s32( vdupq_n_s32( 126 ), bvComponentClz_neon( diffs, vdupq_n_s32( 0 ), absDiff ), 2 );
+
+  vert.absDiff[0]           = vdupq_lane_s32( vget_low_s32( absDiff ), 0 );
+  vert.absDiff[1]           = vdupq_lane_s32( vget_low_s32( absDiff ), 1 );
+  vertSamplePrec.absDiff[0] = vdupq_lane_s32( vget_high_s32( absDiff ), 0 );
+  vertSamplePrec.absDiff[1] = vdupq_lane_s32( vget_high_s32( absDiff ), 1 );
+  vert.bits[0]              = vdupq_lane_s32( vget_low_s32( bits ), 0 );
+  vert.bits[1]              = vdupq_lane_s32( vget_low_s32( bits ), 1 );
+  vertSamplePrec.bits[0]    = vdupq_lane_s32( vget_high_s32( bits ), 0 );
+  vertSamplePrec.bits[1]    = vdupq_lane_s32( vget_high_s32( bits ), 1 );
+}
+
+static void bvBitsLine_neon( const Mv* predictors, const int x0, const int xStep, const int count, const int y,
+                             const bool useIMV, unsigned* bits )
+{
+  // with useIMV, vectors of whole samples ( x and y multiples of 4 ) may also be coded in sample precision
+  const bool          samplePrecRow = useIMV && ( y & 3 ) == 0;
+  const int32_t       vertDiffs[4]  = { y - predictors[0].ver, y - predictors[1].ver,
+                                        ( y >> 2 ) - ( ( predictors[0].ver + 2 ) >> 2 ),
+                                        ( y >> 2 ) - ( ( predictors[1].ver + 2 ) >> 2 ) };
+  BvVerticalPart_neon vert, vertSamplePrec;
+  bvVerticalParts_neon( vld1q_s32( vertDiffs ), vert, vertSamplePrec );
+  const int32x4_t predH0       = vdupq_n_s32( predictors[0].hor );
+  const int32x4_t predH1       = vdupq_n_s32( predictors[1].hor );
+  const int32x4_t predH0Sample = vdupq_n_s32( ( predictors[0].hor + 2 ) >> 2 );
+  const int32x4_t predH1Sample = vdupq_n_s32( ( predictors[1].hor + 2 ) >> 2 );
+
+  static const int32_t lanes[4] = { 0, 1, 2, 3 };
+  int32x4_t            xs         = vmlaq_n_s32( vdupq_n_s32( x0 ), vld1q_s32( lanes ), xStep );
+  const int32x4_t      step       = vdupq_n_s32( 4 * xStep );
+  // the step is a multiple of 4: x & 3 stays the same on every step and x >> 2 grows by xStep
+  const uint32x4_t     wholeX     = vceqq_s32( vandq_s32( xs, vdupq_n_s32( 3 ) ), vdupq_n_s32( 0 ) );
+  int32x4_t            xSample    = vshrq_n_s32( xs, 2 );
+  const int32x4_t      stepSample = vdupq_n_s32( xStep );
+
+  for( int i = 0; i < count; i += 4, xs = vaddq_s32( xs, step ), xSample = vaddq_s32( xSample, stepSample ) )
+  {
+    uint32x4_t result = vreinterpretq_u32_s32( vert.selectBits( xs, predH0, predH1 ) );
+    if( samplePrecRow )
+    {
+      const uint32x4_t sampleBits =
+        vreinterpretq_u32_s32( vertSamplePrec.selectBits( xSample, predH0Sample, predH1Sample ) );
+      result = vbslq_u32( wholeX, vminq_u32( result, sampleBits ), result );
+    }
+
+    if( i + 4 <= count )
+    {
+      vst1q_u32( &bits[i], result );
+    }
+    else
+    {
+      unsigned last[4];
+      vst1q_u32( last, result );
+      for( int k = 0; k < count - i; k++ )
+      {
+        bits[i + k] = last[k];
+      }
+    }
+  }
+}
+
 Distortion fixWeightedSSE_neon( const DistParam& rcDtParam, uint32_t fixedPTweight )
 {
   int iRows = rcDtParam.org.height;
@@ -2049,6 +2179,7 @@ void RdCost::_initRdCostARM<NEON>()
 
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_neon;
   m_afpDistortFunc[0][DF_HAD_2SAD ] = xGetHAD2SADs_neon;
+  m_bvBitsLineIBC = bvBitsLine_neon;
 
   m_afpDistortFunc[0][DF_HAD] = xGetHADs_generic_neon<false>;
   m_afpDistortFunc[0][DF_HAD2] = xGetHADs_neon<2>;
@@ -2067,6 +2198,9 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_HAD32_fast] = xGetHADs_fast_neon<32>;
   m_afpDistortFunc[0][DF_HAD64_fast] = xGetHADs_fast_neon<64>;
   m_afpDistortFunc[0][DF_HAD128_fast] = xGetHADs_fast_neon<128>;
+
+  m_afpDistortFunc[0][DF_HAD_STOP] = xGetHADs_generic_neon<false, true>;
+  m_afpDistortFunc[0][DF_HAD_STOP_fast] = xGetHADs_generic_neon<true, true>;
 
   m_afpDistortFunc[0][DF_SAD] = xGetSAD_neon;
   m_afpDistortFunc[0][DF_SAD2] = xGetSAD2_neon;

@@ -281,6 +281,7 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
   {
     m_tmpPredStorage[i].create( UnitArea( cform, Area( 0, 0, ctuSize, ctuSize ) ) );
   }
+  m_symStartPredB.create( CHROMA_400, Area( 0, 0, ctuSize, ctuSize ) );
   m_tmpStorageLCU.create( UnitArea( cform, Area( 0, 0, ctuSize, ctuSize ) ) );
   // The zero residual of the distortion checks: nothing writes to it, so clearing it here is enough.
   m_pTempPel = new Pel[ctuSize * ctuSize]();
@@ -309,6 +310,7 @@ void InterSearch::destroy()
   {
     m_tmpPredStorage[i].destroy();
   }
+  m_symStartPredB.destroy();
   m_tmpStorageLCU.destroy();
   m_tmpAffiStorage.destroy();
   if (m_tmpAffiError != NULL)
@@ -1537,6 +1539,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
         int curRefList = REF_PIC_LIST_0;
         int tarRefList = 1 - curRefList;
         RefPicList eCurRefList = (curRefList ? REF_PIC_LIST_1 : REF_PIC_LIST_0);
+        RefPicList eTarRefList = (tarRefList ? REF_PIC_LIST_1 : REF_PIC_LIST_0);
         int refIdxCur = cs.slice->symRefIdx[ curRefList ];
         int refIdxTar = cs.slice->symRefIdx[ tarRefList ];
         if( aacAMVPInfo[ curRefList ][ refIdxCur ].mvCand[ 0 ] == aacAMVPInfo[ curRefList ][ refIdxCur ].mvCand[ 1 ] )
@@ -1548,22 +1551,41 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
           aacAMVPInfo[ tarRefList ][ refIdxTar ].numCand = 1;
         }
 
-        MvField cCurMvField, cTarMvField;
-        Distortion costStart = MAX_DISTORTION;
-        for ( int i = 0; i < aacAMVPInfo[curRefList][refIdxCur].numCand; i++ )
+        // The cost of a candidate pair (i, j) needs the list-A prediction of candidate i with its high-frequency buffer, and
+        // the list-B prediction of candidate j. Each is made once: list B first (the last target candidate into the list's
+        // usual buffer m_tmpPredStorage, an earlier one into m_symStartPredB), then list A per i.
+        static_assert( AMVP_MAX_NUM_CANDS == 2, "m_symStartPredB holds the one list-B prediction before the last" );
+        const int numCandCur = aacAMVPInfo[curRefList][refIdxCur].numCand;
+        const int numCandTar = aacAMVPInfo[tarRefList][refIdxTar].numCand;
+        MvField   cCurMvField, cTarMvField;
+        CPelBuf   predBufB[AMVP_MAX_NUM_CANDS];
+        for ( int j = 0; j < numCandTar; j++ )
         {
-          for ( int j = 0; j < aacAMVPInfo[tarRefList][refIdxTar].numCand; j++ )
+          GCC_WARNING_DISABLE_array_bounds // probably a bug in gcc-10 static analyzer: It thinks the indices are -1 and therefore triggers -Werror=array-bounds
+          cTarMvField.setMvField( aacAMVPInfo[tarRefList][refIdxTar].mvCand[j], refIdxTar );
+          GCC_WARNING_RESET
+          if( m_pcEncCfg->m_ifpLines )
           {
-            GCC_WARNING_DISABLE_array_bounds // probably a bug in gcc-10 static analyzer: It thinks the indices are -1 and therefore triggers -Werror=array-bounds
-            cCurMvField.setMvField( aacAMVPInfo[curRefList][refIdxCur].mvCand[i], refIdxCur );
-            cTarMvField.setMvField( aacAMVPInfo[tarRefList][refIdxTar].mvCand[j], refIdxTar );
-            GCC_WARNING_RESET
-            if( m_pcEncCfg->m_ifpLines )
-            {
-              xCheckAndClipMvToFppLine( cCurMvField.mv, cu.ly(), cu.lheight(), m_pcEncCfg->m_ifpLines, *cu.cs->pcv );
-              xCheckAndClipMvToFppLine( cTarMvField.mv, cu.ly(), cu.lheight(), m_pcEncCfg->m_ifpLines, *cu.cs->pcv );
-            }
-            Distortion cost = xGetSymCost( cu, origBuf, eCurRefList, cCurMvField, cTarMvField, BcwIdx );
+            xCheckAndClipMvToFppLine( cTarMvField.mv, cu.ly(), cu.lheight(), m_pcEncCfg->m_ifpLines, *cu.cs->pcv );
+          }
+          PelUnitBuf predStorageB = j + 1 < numCandTar ? m_symStartPredB.getCompactBuf( cu ) : m_tmpPredStorage[tarRefList].getCompactBuf( cu );
+          predBufB[j]             = xSymPred( cu, eTarRefList, cTarMvField, predStorageB );
+        }
+        Distortion costStart = MAX_DISTORTION;
+        for ( int i = 0; i < numCandCur; i++ )
+        {
+          GCC_WARNING_DISABLE_array_bounds // probably a bug in gcc-10 static analyzer: It thinks the indices are -1 and therefore triggers -Werror=array-bounds
+          cCurMvField.setMvField( aacAMVPInfo[curRefList][refIdxCur].mvCand[i], refIdxCur );
+          GCC_WARNING_RESET
+          if( m_pcEncCfg->m_ifpLines )
+          {
+            xCheckAndClipMvToFppLine( cCurMvField.mv, cu.ly(), cu.lheight(), m_pcEncCfg->m_ifpLines, *cu.cs->pcv );
+          }
+          PelUnitBuf    predStorageA = m_tmpPredStorage[curRefList].getCompactBuf( cu );
+          const CPelBuf highFreqA    = xSymHighFreq( cu, origBuf, xSymPred( cu, eCurRefList, cCurMvField, predStorageA ) );
+          for ( int j = 0; j < numCandTar; j++ )
+          {
+            Distortion cost = xSymHadCost( cu, highFreqA, predBufB[j], eTarRefList );
             if ( cost < costStart )
             {
               costStart = cost;
@@ -2991,31 +3013,37 @@ CPelBuf InterSearch::xPredLumaReadOnly( const CodingUnit& cu, const Picture* ref
 
 Distortion InterSearch::xGetSymCost( const CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList eCurRefPicList, const MvField& cCurMvField, MvField& cTarMvField, int BcwIdx )
 {
-  Distortion cost = MAX_DISTORTION;
-  RefPicList eTarRefPicList = (RefPicList)(1 - (int)eCurRefPicList);
+  const RefPicList eTarRefPicList = (RefPicList)(1 - (int)eCurRefPicList);
+  PelUnitBuf       predStorageA   = m_tmpPredStorage[eCurRefPicList].getCompactBuf( cu );
+  const CPelBuf    predBufA       = xSymPred( cu, eCurRefPicList, cCurMvField, predStorageA );
+  PelUnitBuf       predStorageB   = m_tmpPredStorage[eTarRefPicList].getCompactBuf( cu );
+  const CPelBuf    predBufB       = xSymPred( cu, eTarRefPicList, cTarMvField, predStorageB );
+  return xSymHadCost( cu, xSymHighFreq( cu, origBuf, predBufA ), predBufB, eTarRefPicList );
+}
 
-  // get prediction of eCurRefPicList
-  PelUnitBuf  predStorageA = m_tmpPredStorage[eCurRefPicList].getCompactBuf( cu );
-  const Picture* picRefA = cu.slice->getRefPic( eCurRefPicList, cCurMvField.refIdx );
-  Mv mvA = cCurMvField.mv;
-  clipMv( mvA, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
-  const CPelBuf predBufA = xPredSymLuma( cu, picRefA, mvA, predStorageA );
+// The luma prediction of one list of the symmetric MVD search, its MV clipped to the picture.
+CPelBuf InterSearch::xSymPred( const CodingUnit& cu, RefPicList refList, const MvField& mvField, PelUnitBuf& predStorage )
+{
+  const Picture* refPic = cu.slice->getRefPic( refList, mvField.refIdx );
+  Mv mv = mvField.mv;
+  clipMv( mv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
+  return xPredSymLuma( cu, refPic, mv, predStorage );
+}
 
-  // get prediction of eTarRefPicList
-  PelUnitBuf predStorageB = m_tmpPredStorage[eTarRefPicList].getCompactBuf( cu );
-  const Picture* picRefB = cu.slice->getRefPic( eTarRefPicList, cTarMvField.refIdx );
-  Mv mvB = cTarMvField.mv;
-  clipMv( mvB, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
-  const CPelBuf predBufB = xPredSymLuma( cu, picRefB, mvB, predStorageB );
+// Twice the original minus the list-A prediction (removeHighFreq), into m_tmpStorageLCU: the target the list-B prediction is
+// compared with, since the bi-prediction averages the two lists.
+CPelBuf InterSearch::xSymHighFreq( const CodingUnit& cu, CPelUnitBuf& origBuf, const CPelBuf& predBufA )
+{
+  PelBuf bufTmp = m_tmpStorageLCU.getCompactBuf( cu.Y() );
+  bufTmp.removeHighFreq( origBuf.Y(), predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs[ COMP_Y ]/*, getBcwWeight( cu.BcwIdx, eTarRefPicList )*/ );
+  return bufTmp;
+}
 
-  PelUnitBuf bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
-  bufTmp.Y().removeHighFreq( origBuf.Y(), predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs[ COMP_Y ]/*, getBcwWeight( cu.BcwIdx, eTarRefPicList )*/ );
-  double fWeight = xGetMEDistortionWeight( cu.BcwIdx, eTarRefPicList );
-
-  // calc distortion
-  cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB, cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
-
-  return(cost);
+// The symmetric MVD cost of a pair: the weighted HAD of the list-B prediction against the list-A high-frequency buffer.
+Distortion InterSearch::xSymHadCost( const CodingUnit& cu, const CPelBuf& highFreqA, const CPelBuf& predBufB, RefPicList eTarRefPicList )
+{
+  const double fWeight = xGetMEDistortionWeight( cu.BcwIdx, eTarRefPicList );
+  return ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( highFreqA, predBufB, cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
 }
 
 Distortion InterSearch::xSymRefineMvSearch( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList, MvField& rCurMvField, 

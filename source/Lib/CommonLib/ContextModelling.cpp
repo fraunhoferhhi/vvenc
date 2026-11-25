@@ -61,32 +61,86 @@ const uint8_t g_sigCtxOfsSum [32] = { 0, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
 const uint8_t g_sigCtxOfsDiag[MAX_NUM_CH][128] = { { 8, 8, 4, 4, 4 }, { 4, 4 } };   // 0 from there on
 const uint8_t g_absCtxOfsDiag[MAX_NUM_CH][128] = { { 15, 10, 10, 5, 5, 5, 5, 5, 5, 5 }, { 5 } };
 
+// The fields of a CoeffCodingContext that depend only on the channel type and the block size. They are worked out for
+// every size once, when the library loads (from constant tables only), so that a context copies them.
+struct CoeffCodingContext::SizeInfo
+{
+  unsigned           log2CGWidth, log2CGHeight;
+  unsigned           widthInGroups, heightInGroups, log2WidthInGroups;
+  const ScanElement* scan;
+  const ScanElement* scanCG;
+  unsigned           maxLastPosX, maxLastPosY;
+  int                lastOffsetX, lastOffsetY;
+  int                lastShiftX, lastShiftY;
+
+  SizeInfo() = default;
+  SizeInfo( const ChannelType chType, const unsigned log2Width, const unsigned log2Height )
+  {
+    const unsigned width  = 1u << log2Width;
+    const unsigned height = 1u << log2Height;
+    log2CGWidth       = g_log2SbbSize[log2Width][log2Height][0];
+    log2CGHeight      = g_log2SbbSize[log2Width][log2Height][1];
+    widthInGroups     = std::min<unsigned>( JVET_C0024_ZERO_OUT_TH, width ) >> log2CGWidth;
+    heightInGroups    = std::min<unsigned>( JVET_C0024_ZERO_OUT_TH, height ) >> log2CGHeight;
+    log2WidthInGroups = Log2( widthInGroups );
+    scan              = getScanOrder( SCAN_GROUPED_4x4, log2Width, log2Height );
+    scanCG            = getScanOrder( SCAN_UNGROUPED, Log2( widthInGroups ), Log2( heightInGroups ) );
+    maxLastPosX       = g_uiGroupIdx[std::min<unsigned>( JVET_C0024_ZERO_OUT_TH, width ) - 1];
+    maxLastPosY       = g_uiGroupIdx[std::min<unsigned>( JVET_C0024_ZERO_OUT_TH, height ) - 1];
+    lastOffsetX       = chType == CH_C ? 0 : prefix_ctx[log2Width];
+    lastOffsetY       = chType == CH_C ? 0 : prefix_ctx[log2Height];
+    lastShiftX        = chType == CH_C ? Clip3( 0, 2, int( width >> 3 ) ) : ( log2Width + 1 ) >> 2;
+    lastShiftY        = chType == CH_C ? Clip3( 0, 2, int( height >> 3 ) ) : ( log2Height + 1 ) >> 2;
+  }
+};
+
+struct CoeffCodingContext::SizeInfoTable
+{
+  SizeInfo info[MAX_NUM_CH][MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX];
+
+  SizeInfoTable()
+  {
+    for( int ch = 0; ch < MAX_NUM_CH; ch++ )
+      for( unsigned log2Width = 0; log2Width < MAX_TU_SIZE_IDX; log2Width++ )
+        for( unsigned log2Height = 0; log2Height < MAX_TU_SIZE_IDX; log2Height++ )
+          info[ch][log2Width][log2Height] = SizeInfo( ChannelType( ch ), log2Width, log2Height );
+  }
+};
+
+const CoeffCodingContext::SizeInfoTable CoeffCodingContext::s_sizeInfo;
+
 CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm, CtxTpl* tplBuf, int scanPosLast )
+  : CoeffCodingContext( tu, component, signHide, bdpcm, tplBuf, scanPosLast,
+                        s_sizeInfo.info[toChannelType( component )][Log2( tu.block( component ).width )][Log2( tu.block( component ).height )] )
+{
+}
+
+CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm, CtxTpl* tplBuf, int scanPosLast, const SizeInfo& size )
   : m_compID                    (component)
   , m_chType                    (toChannelType(m_compID))
   , m_width                     (tu.block(m_compID).width)
   , m_height                    (tu.block(m_compID).height)
-  , m_log2CGWidth               ( g_log2SbbSize[ Log2(m_width) ][ Log2(m_height) ][0] )
-  , m_log2CGHeight              ( g_log2SbbSize[ Log2(m_width) ][ Log2(m_height) ][1] )
+  , m_log2CGWidth               (size.log2CGWidth)
+  , m_log2CGHeight              (size.log2CGHeight)
   , m_log2CGSize                (m_log2CGWidth + m_log2CGHeight)
-  , m_widthInGroups             (std::min<unsigned>(JVET_C0024_ZERO_OUT_TH, m_width) >> m_log2CGWidth)
-  , m_heightInGroups            (std::min<unsigned>(JVET_C0024_ZERO_OUT_TH, m_height) >> m_log2CGHeight)
-  , m_log2WidthInGroups         (Log2(m_widthInGroups))
+  , m_widthInGroups             (size.widthInGroups)
+  , m_heightInGroups            (size.heightInGroups)
+  , m_log2WidthInGroups         (size.log2WidthInGroups)
   , m_log2BlockWidth            (Log2(m_width))
   , m_log2BlockHeight           (Log2(m_height))
   , m_maxNumCoeff               (m_width * m_height)
   , m_signHiding                (signHide)
   , m_maxLog2TrDynamicRange     (tu.cs->sps->getMaxLog2TrDynamicRange())
-  , m_scan                      (getScanOrder( SCAN_GROUPED_4x4, m_log2BlockWidth, m_log2BlockHeight ))
-  , m_scanCG                    (getScanOrder( SCAN_UNGROUPED  , Log2(m_widthInGroups), Log2(m_heightInGroups)))
+  , m_scan                      (size.scan)
+  , m_scanCG                    (size.scanCG)
   , m_CtxSetLastX               (Ctx::LastX[m_chType])
   , m_CtxSetLastY               (Ctx::LastY[m_chType])
-  , m_maxLastPosX               (g_uiGroupIdx[std::min<unsigned>(JVET_C0024_ZERO_OUT_TH, m_width) - 1])
-  , m_maxLastPosY               (g_uiGroupIdx[std::min<unsigned>(JVET_C0024_ZERO_OUT_TH, m_height) - 1])
-  , m_lastOffsetX               ((m_chType == CH_C) ? 0 :prefix_ctx[ m_log2BlockWidth ])
-  , m_lastOffsetY               ((m_chType == CH_C) ? 0 :prefix_ctx[ m_log2BlockHeight ])
-  , m_lastShiftX                ((m_chType == CH_C) ? Clip3( 0, 2, int( m_width >> 3) )  : (m_log2BlockWidth + 1) >> 2)
-  , m_lastShiftY                ((m_chType == CH_C) ? Clip3( 0, 2, int( m_height >> 3) ) : (m_log2BlockHeight + 1) >> 2)
+  , m_maxLastPosX               (size.maxLastPosX)
+  , m_maxLastPosY               (size.maxLastPosY)
+  , m_lastOffsetX               (size.lastOffsetX)
+  , m_lastOffsetY               (size.lastOffsetY)
+  , m_lastShiftX                (size.lastShiftX)
+  , m_lastShiftY                (size.lastShiftY)
   , m_scanPosLast               (-1)
   , m_subSetId                  (-1)
   , m_subSetPos                 (-1)

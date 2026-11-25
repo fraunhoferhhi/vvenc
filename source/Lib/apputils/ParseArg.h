@@ -809,7 +809,7 @@ inline void saveConfig(std::ostream& out, Options& opts, std::list<std::string> 
   }
 
   unsigned max_width_opt_value = max_width_optname + max_width_value +3; // max size of option + " : " + value
-  unsigned desc_width = columns - max_width_opt_value;                   // max. size for description
+  unsigned desc_width = (columns > max_width_opt_value) ? (columns - max_width_opt_value) : 1;  // nj-fix: guard unsigned underflow
 
   /* 3rd pass: write out formatted option + current value +  help text + default value.
     * format is:
@@ -939,6 +939,7 @@ struct ArgvParser : public OptionWriter
     std::string arg(argv[0]);
     size_t arg_opt_start = arg.find_first_not_of('-');
     size_t arg_opt_sep = arg.find_first_of('=');
+    if (arg_opt_start == std::string::npos) arg_opt_start = arg.size();  // nj-fix: all-dash token, avoid substr(npos) throw
     std::string option = arg.substr(arg_opt_start, arg_opt_sep - arg_opt_start);
 
     std::transform( option.begin(), option.end(), option.begin(), ::tolower ); // compare option always in lower case

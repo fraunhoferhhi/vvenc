@@ -2578,7 +2578,7 @@ Distortion RdCost::xGetSADwMask_SIMD(const DistParam &rcDtParam)
   return sum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
 }
 
-template<X86_VEXT vext, bool fastHad>
+template<X86_VEXT vext, bool fastHad, bool stop>
 Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
 {
   const Pel*  piOrg = rcDtParam.org.buf;
@@ -2591,6 +2591,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
 
   int  x, y;
   Distortion uiSum = 0;
+  // With stop, each row of tiles is checked once it is summed: the sum so far is returned once it exceeds
+  // maximumDistortionForEarlyExit. The tiles stay those of the whole block, so a complete sum is unchanged.
 
   if( iCols > iRows && ( iCols & 15 ) == 0 && ( iRows & 7 ) == 0 )
   {
@@ -2605,6 +2607,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( iCols < iRows && ( iRows & 15 ) == 0 && ( iCols & 7 ) == 0 )
@@ -2620,6 +2624,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 16*iStrideOrg;
       piCur += 16*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( iCols > iRows && ( iCols & 7 ) == 0 && ( iRows & 3 ) == 0 )
@@ -2635,6 +2641,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 4*iStrideOrg;
       piCur += 4*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( iCols < iRows && ( iRows & 7 ) == 0 && ( iCols & 3 ) == 0 )
@@ -2650,6 +2658,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( fastHad && vext >= AVX2 && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
@@ -2662,6 +2672,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 32 * iStrideOrg;
       piCur += 32 * iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( fastHad && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
@@ -2674,6 +2686,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 16 * iStrideOrg;
       piCur += 16 * iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( vext >= AVX2 && ( ( ( iRows | iCols ) & 15 ) == 0 ) && ( iRows == iCols ) )
@@ -2686,6 +2700,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 16*iStrideOrg;
       piCur += 16*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( ( ( ( iRows | iCols ) & 7 ) == 0 ) && ( iRows == iCols ) )
@@ -2701,6 +2717,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
@@ -2713,6 +2731,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 4*iStrideOrg;
       piCur += 4*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else if( ( iRows % 2 == 0 ) && ( iCols % 2 == 0 ) )
@@ -2725,6 +2745,8 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       }
       piOrg += 2*iStrideOrg;
       piCur += 2*iStrideCur;
+      if( stop && xHadStops( uiSum, rcDtParam ) )
+        break;
     }
   }
   else
@@ -3896,6 +3918,9 @@ void RdCost::_initRdCostX86()
   m_afpDistortFunc[0][DF_HAD32_fast]   = RdCost::xGetHADs_SIMD<vext, true>;
   m_afpDistortFunc[0][DF_HAD64_fast]   = RdCost::xGetHADs_SIMD<vext, true>;
   m_afpDistortFunc[0][DF_HAD128_fast]  = RdCost::xGetHADs_SIMD<vext, true>;
+
+  m_afpDistortFunc[0][DF_HAD_STOP]      = RdCost::xGetHADs_SIMD<vext, false, true>;
+  m_afpDistortFunc[0][DF_HAD_STOP_fast] = RdCost::xGetHADs_SIMD<vext, true, true>;
 
   m_afpDistortFunc[0][DF_HAD_2SAD ]     = RdCost::xGetHAD2SADs_SIMD<vext>;
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_SIMD<vext>;

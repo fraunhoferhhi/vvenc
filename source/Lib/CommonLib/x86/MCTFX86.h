@@ -71,11 +71,8 @@ static inline int sumOfLanes_AVX2( const __m256i v )
   return _mm_cvtsi128_si32( x );
 }
 
-// The largest block whose squared error cannot overflow 32 bits: 2048 * 1023^2 < 2^31 (samples of at most 10 bits).
-static constexpr int MAX_EXACT_INT_AREA = 2048;
-
-// motionErrorLumaInt_SIMD for blocks of a width that is a multiple of 16 and at most MAX_EXACT_INT_AREA samples. It
-// returns the exact error when that is not above besterror and a partial sum above besterror otherwise, as every other
+// motionErrorLumaInt_SIMD for blocks of a width that is a multiple of 16 and at most MCTF::MAX_EXACT_INT_AREA samples.
+// It returns the exact error when that is not above besterror and a partial sum above besterror otherwise, as every other
 // kernel does (only a smaller error replaces the best, so the values above besterror are never used). Blocks of up to
 // 16 rows are summed in full: for them the checks cost more than the early exits save. Taller blocks check the exact
 // running sum after every 4 rows, which never computes more rows than the general path's check after every row pair
@@ -108,13 +105,67 @@ static int motionErrorLumaInt_AVX2( const Pel* org, const ptrdiff_t origStride, 
   }
   return sumOfLanes_AVX2( vsum );
 }
+
+// The squared error of two rows of 16 samples each against one reference position, added to sum.
+static inline __m256i addErrorOfRows_AVX2( const __m256i sum, const __m256i org0, const __m256i org1, const Pel* row0, const Pel* row1 )
+{
+  const __m256i diff0 = _mm256_sub_epi16( org0, _mm256_loadu_si256( ( const __m256i* ) row0 ) );
+  const __m256i diff1 = _mm256_sub_epi16( org1, _mm256_loadu_si256( ( const __m256i* ) row1 ) );
+  return _mm256_add_epi32( sum, _mm256_add_epi32( _mm256_madd_epi16( diff0, diff0 ), _mm256_madd_epi16( diff1, diff1 ) ) );
+}
+
+// The four sums of the lanes of sum0 to sum3.
+static inline void storeSumsOfLanes_AVX2( const __m256i sum0, const __m256i sum1, const __m256i sum2, const __m256i sum3, int* errors )
+{
+  const __m256i sums = _mm256_hadd_epi32( _mm256_hadd_epi32( sum0, sum1 ), _mm256_hadd_epi32( sum2, sum3 ) );
+  _mm_storeu_si128( ( __m128i* ) errors, _mm_add_epi32( _mm256_castsi256_si128( sums ), _mm256_extracti128_si256( sums, 1 ) ) );
+}
+
+// MCTF::m_motionErrorLumaInt4: motionErrorLumaInt_AVX2 for four reference positions at once. Each pair of original rows
+// is loaded once and subtracted from the four references' rows, instead of once per position, and the four sums leave
+// the vectors together. An error is exact when not above besterror. As in motionErrorLumaInt_AVX2, blocks of up to 16
+// rows are summed in full and taller ones check after every 4 rows; they stop only once all four sums are above
+// besterror, so the caller gets an exact error for every position that can still win.
+static void motionErrorLumaInt4_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* const* refs, const ptrdiff_t buffStride,
+                                      const int w, const int h, const int besterror, int* errors )
+{
+  const bool check = h > 16;
+  __m256i sum0 = _mm256_setzero_si256(), sum1 = sum0, sum2 = sum0, sum3 = sum0;
+  for( int y = 0; y < h; y += 2 )
+  {
+    const Pel* orgRow = org + y * origStride;
+    const Pel* ref0   = refs[0] + y * buffStride;
+    const Pel* ref1   = refs[1] + y * buffStride;
+    const Pel* ref2   = refs[2] + y * buffStride;
+    const Pel* ref3   = refs[3] + y * buffStride;
+    for( int x = 0; x < w; x += 16 )
+    {
+      const __m256i org0 = _mm256_loadu_si256( ( const __m256i* ) ( orgRow + x ) );
+      const __m256i org1 = _mm256_loadu_si256( ( const __m256i* ) ( orgRow + origStride + x ) );
+      sum0 = addErrorOfRows_AVX2( sum0, org0, org1, ref0 + x, ref0 + buffStride + x );
+      sum1 = addErrorOfRows_AVX2( sum1, org0, org1, ref1 + x, ref1 + buffStride + x );
+      sum2 = addErrorOfRows_AVX2( sum2, org0, org1, ref2 + x, ref2 + buffStride + x );
+      sum3 = addErrorOfRows_AVX2( sum3, org0, org1, ref3 + x, ref3 + buffStride + x );
+    }
+    // after rows 4, 8, ...; the last check is the final sum
+    if( check && ( y & 2 ) && y + 2 < h )
+    {
+      storeSumsOfLanes_AVX2( sum0, sum1, sum2, sum3, errors );
+      if( std::min( std::min( errors[0], errors[1] ), std::min( errors[2], errors[3] ) ) > besterror )
+      {
+        return;
+      }
+    }
+  }
+  storeSumsOfLanes_AVX2( sum0, sum1, sum2, sum3, errors );
+}
 #endif
 
 template<X86_VEXT vext>
 int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
 #if USE_AVX2
-  if( vext >= AVX2 && ( w & 15 ) == 0 && w * h <= MAX_EXACT_INT_AREA )
+  if( vext >= AVX2 && ( w & 15 ) == 0 && w * h <= MCTF::MAX_EXACT_INT_AREA )
   {
     return motionErrorLumaInt_AVX2( org, origStride, buf, buffStride, w, h, besterror );
   }
@@ -485,7 +536,6 @@ int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const 
 }
 
 
-#if USE_AVX2
 // Filter 0 of the 4-tap table is { 0, 64, 0, 0 }: its pass only clips the samples to the sample range
 // ( ( 64 * s + 32 ) >> 6 = s ), so a vector whose horizontal or vertical part is a full sample needs only the other pass.
 static inline bool isIdentityFilter4( const int16_t* filter )
@@ -493,6 +543,7 @@ static inline bool isIdentityFilter4( const int16_t* filter )
   return filter[0] == 0 && filter[1] == 64 && filter[2] == 0 && filter[3] == 0;
 }
 
+#if USE_AVX2
 static inline __m256i clipToSampleRange_AVX2( const __m256i v, const __m256i maxSample )
 {
   return _mm256_min_epi16( maxSample, _mm256_max_epi16( _mm256_setzero_si256(), v ) );
@@ -612,38 +663,35 @@ static int motionErrorLumaFracH_loRes_AVX2( const Pel* org, const ptrdiff_t orig
   return sumOfLanes_AVX2( verror );
 }
 
-// MCTF::m_motionErrorLumaFracColumn: the exact errors of num vectors with the same horizontal position. The horizontal
-// pass of the union of their rows is done once into a buffer, then the vertical pass per vector, rowOffset[i] rows lower.
-static void motionErrorLumaFracColumn_loRes_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h,
-                                                  const int16_t* xFilter, const int num, const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error )
+// MCTF::m_filterColumn4: the horizontal pass of a column of vectors, row r of filtered from source row r - 1 (unaligned
+// stores: the caller's alignment only avoids split loads in the vertical pass).
+static void filterColumn4_AVX2( const Pel* buf, const ptrdiff_t buffStride, const int w, const int numRows, const int16_t* xFilter, const int bitDepth, Pel* filtered )
 {
-  static constexpr int MAX_SIZE = 32;   // the block size of the subpel search, MCTFUnitSize, is at most 32 (vvencCfg)
-  CHECKD( w > MAX_SIZE || h > MAX_SIZE || ( w & 15 ), "Unsupported block size" );
+  CHECKD( w > 32 || numRows > 36 || ( w & 15 ), "Unsupported block size" );   // MCTFUnitSize is at most 32 (vvencCfg)
 
   const __m256i xfilt12   = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[0] ), _mm256_set1_epi16( xFilter[1] ) );
   const __m256i xfilt34   = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[2] ), _mm256_set1_epi16( xFilter[3] ) );
   const __m256i maxSample = _mm256_set1_epi16( ( 1 << bitDepth ) - 1 );
   const __m256i rounding  = _mm256_set1_epi32( 1 << 5 );
-
-  // row r of filtered is the horizontal pass of source row r - 1; a vector needs h + 3 rows from its offset on
-  int maxOffset = 0;
-  for( int i = 0; i < num; i++ )
-  {
-    maxOffset = std::max( maxOffset, rowOffset[i] );
-  }
-  CHECKD( maxOffset > 1, "The vectors of a column span more than two rows" );
-  // h + 3 + maxOffset <= MAX_SIZE + 4 rows; unaligned stores, the alignment only avoids split loads
-  alignas( 32 ) Pel filtered[( MAX_SIZE + 4 ) * MAX_SIZE];
-  for( int r = 0; r < h + 3 + maxOffset; r++ )
+  for( int r = 0; r < numRows; r++ )
   {
     for( int x = 0; x < w; x += 16 )
     {
       _mm256_storeu_si256( ( __m256i* ) &filtered[r * w + x], horizontal4Tap_AVX2( buf + ( r - 1 ) * buffStride + x, xfilt12, xfilt34, rounding, maxSample ) );
     }
   }
+}
+
+// MCTF::m_motionErrorLumaFracColumn: the exact errors of num vectors with the same horizontal position, from the rows of
+// filterColumn4_AVX2: the vertical pass per vector, rowOffset[i] rows lower (a vector reads h + 3 rows from there).
+static void motionErrorLumaFracColumn_loRes_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* filtered, const int w, const int h, const int num,
+                                                  const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error )
+{
+  CHECKD( w > 32 || h > 32 || ( w & 15 ), "Unsupported block size" );   // MCTFUnitSize is at most 32 (vvencCfg)
 
   for( int i = 0; i < num; i++ )
   {
+    CHECKD( rowOffset[i] < 0 || rowOffset[i] > 1, "The vectors of a column span more than two rows" );
     const Pel* rows = filtered + rowOffset[i] * w;
     // a full-sample vertical position takes the filtered rows as they are: output row y is row y + 1
     error[i] = isIdentityFilter4( yFilter[i] ) ? squaredError_AVX2( org, origStride, rows + w, w, w, h )
@@ -903,6 +951,123 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
   error  = _mm_cvtsi128_si32( xerror );
 
   return error;
+}
+
+// The column kernels for SSE4.1 to AVX: filterColumn4_AVX2 and motionErrorLumaFracColumn_loRes_AVX2 on 8 samples per
+// register instead of 16, with the same arithmetic (see verticalPassError_AVX2 for the exact 16-bit vertical pass).
+static inline __m128i clipToSampleRange_SSE( const __m128i v, const __m128i maxSample )
+{
+  return _mm_min_epi16( maxSample, _mm_max_epi16( _mm_setzero_si128(), v ) );
+}
+
+static inline int sumOfLanes_SSE( const __m128i v )
+{
+  const __m128i sum = _mm_hadd_epi32( v, v );
+  return _mm_cvtsi128_si32( _mm_hadd_epi32( sum, sum ) );
+}
+
+// The horizontal 4-tap filter of 8 samples: output sample x from source samples x - 1 to x + 2, rounded and clipped.
+static inline __m128i horizontal4Tap_SSE( const Pel* src, const __m128i xfilt12, const __m128i xfilt34, const __m128i rounding, const __m128i maxSample )
+{
+  const __m128i s0 = _mm_loadu_si128( ( const __m128i* ) ( src - 1 ) );
+  const __m128i s1 = _mm_loadu_si128( ( const __m128i* ) src );
+  const __m128i s2 = _mm_loadu_si128( ( const __m128i* ) ( src + 1 ) );
+  const __m128i s3 = _mm_loadu_si128( ( const __m128i* ) ( src + 2 ) );
+  __m128i sumLo = _mm_add_epi32( rounding, _mm_madd_epi16( _mm_unpacklo_epi16( s0, s1 ), xfilt12 ) );
+  __m128i sumHi = _mm_add_epi32( rounding, _mm_madd_epi16( _mm_unpackhi_epi16( s0, s1 ), xfilt12 ) );
+  sumLo = _mm_add_epi32( sumLo, _mm_madd_epi16( _mm_unpacklo_epi16( s2, s3 ), xfilt34 ) );
+  sumHi = _mm_add_epi32( sumHi, _mm_madd_epi16( _mm_unpackhi_epi16( s2, s3 ), xfilt34 ) );
+  return clipToSampleRange_SSE( _mm_packs_epi32( _mm_srai_epi32( sumLo, 6 ), _mm_srai_epi32( sumHi, 6 ) ), maxSample );
+}
+
+// verticalPassError_AVX2 on 8 samples per register, for unclipped input (the rows of filterColumn4_SIMD are clipped).
+static int verticalPassError_SSE( const Pel* org, const ptrdiff_t origStride, const Pel* src, const ptrdiff_t srcStride, const int w, const int h, const int16_t* yFilter, const int bitDepth )
+{
+  static constexpr int BIAS = 160;
+  CHECKD( bitDepth > 10 || ( ( yFilter[0] | yFilter[1] | yFilter[2] | yFilter[3] ) & 1 ), "The 16-bit vertical pass needs even taps and at most 10 bits" );
+  const __m128i tap0      = _mm_set1_epi16( yFilter[0] / 2 );
+  const __m128i tap1      = _mm_set1_epi16( yFilter[1] / 2 );
+  const __m128i tap2      = _mm_set1_epi16( yFilter[2] / 2 );
+  const __m128i tap3      = _mm_set1_epi16( yFilter[3] / 2 );
+  const __m128i biased    = _mm_set1_epi16( 16 + ( BIAS << 5 ) );
+  const __m128i bias      = _mm_set1_epi16( BIAS );
+  const __m128i maxSample = _mm_set1_epi16( ( 1 << bitDepth ) - 1 );
+  __m128i verror = _mm_setzero_si128();
+
+  for( int x = 0; x < w; x += 8 )
+  {
+    __m128i row0 = _mm_loadu_si128( ( const __m128i* ) ( src + x ) );
+    __m128i row1 = _mm_loadu_si128( ( const __m128i* ) ( src + srcStride + x ) );
+    __m128i row2 = _mm_loadu_si128( ( const __m128i* ) ( src + 2 * srcStride + x ) );
+    for( int y = 0; y < h; y++ )
+    {
+      const __m128i row3 = _mm_loadu_si128( ( const __m128i* ) ( src + ( y + 3 ) * srcStride + x ) );
+      const __m128i sum  = _mm_add_epi16( _mm_add_epi16( _mm_mullo_epi16( row0, tap0 ), _mm_mullo_epi16( row1, tap1 ) ),
+                                          _mm_add_epi16( _mm_mullo_epi16( row2, tap2 ), _mm_mullo_epi16( row3, tap3 ) ) );
+      const __m128i pred = _mm_sub_epi16( _mm_srli_epi16( _mm_add_epi16( sum, biased ), 5 ), bias );
+
+      const __m128i org16 = _mm_loadu_si128( ( const __m128i* ) ( org + y * origStride + x ) );
+      const __m128i diff  = _mm_sub_epi16( clipToSampleRange_SSE( pred, maxSample ), org16 );
+      verror = _mm_add_epi32( verror, _mm_madd_epi16( diff, diff ) );
+
+      row0 = row1;
+      row1 = row2;
+      row2 = row3;
+    }
+  }
+  return sumOfLanes_SSE( verror );
+}
+
+// The squared error between the w x h blocks a and org, 8 samples per register.
+static int squaredError_SSE( const Pel* org, const ptrdiff_t origStride, const Pel* a, const ptrdiff_t aStride, const int w, const int h )
+{
+  __m128i verror = _mm_setzero_si128();
+  for( int y = 0; y < h; y++ )
+  {
+    for( int x = 0; x < w; x += 8 )
+    {
+      const __m128i diff = _mm_sub_epi16( _mm_loadu_si128( ( const __m128i* ) ( a + y * aStride + x ) ),
+                                          _mm_loadu_si128( ( const __m128i* ) ( org + y * origStride + x ) ) );
+      verror = _mm_add_epi32( verror, _mm_madd_epi16( diff, diff ) );
+    }
+  }
+  return sumOfLanes_SSE( verror );
+}
+
+// MCTF::m_filterColumn4 for SSE4.1 to AVX, as filterColumn4_AVX2.
+template<X86_VEXT vext>
+void filterColumn4_SIMD( const Pel* buf, const ptrdiff_t buffStride, const int w, const int numRows, const int16_t* xFilter, const int bitDepth, Pel* filtered )
+{
+  CHECKD( w > 32 || numRows > 36 || ( w & 15 ), "Unsupported block size" );   // MCTFUnitSize is at most 32 (vvencCfg)
+
+  const __m128i xfilt12   = _mm_unpacklo_epi16( _mm_set1_epi16( xFilter[0] ), _mm_set1_epi16( xFilter[1] ) );
+  const __m128i xfilt34   = _mm_unpacklo_epi16( _mm_set1_epi16( xFilter[2] ), _mm_set1_epi16( xFilter[3] ) );
+  const __m128i maxSample = _mm_set1_epi16( ( 1 << bitDepth ) - 1 );
+  const __m128i rounding  = _mm_set1_epi32( 1 << 5 );
+  for( int r = 0; r < numRows; r++ )
+  {
+    for( int x = 0; x < w; x += 8 )
+    {
+      _mm_storeu_si128( ( __m128i* ) &filtered[r * w + x], horizontal4Tap_SSE( buf + ( r - 1 ) * buffStride + x, xfilt12, xfilt34, rounding, maxSample ) );
+    }
+  }
+}
+
+// MCTF::m_motionErrorLumaFracColumn for SSE4.1 to AVX, as motionErrorLumaFracColumn_loRes_AVX2.
+template<X86_VEXT vext>
+void motionErrorLumaFracColumn_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* filtered, const int w, const int h, const int num,
+                                           const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error )
+{
+  CHECKD( w > 32 || h > 32 || ( w & 15 ), "Unsupported block size" );   // MCTFUnitSize is at most 32 (vvencCfg)
+
+  for( int i = 0; i < num; i++ )
+  {
+    CHECKD( rowOffset[i] < 0 || rowOffset[i] > 1, "The vectors of a column span more than two rows" );
+    const Pel* rows = filtered + rowOffset[i] * w;
+    // a full-sample vertical position takes the filtered rows as they are: output row y is row y + 1
+    error[i] = isIdentityFilter4( yFilter[i] ) ? squaredError_SSE( org, origStride, rows + w, w, w, h )
+                                               : verticalPassError_SSE( org, origStride, rows, w, w, h, yFilter[i], bitDepth );
+  }
 }
 
 #if USE_AVX2
@@ -1994,11 +2159,21 @@ template<X86_VEXT vext>
 void MCTF::_initMCTF_X86()
 {
   m_motionErrorLumaInt8     = motionErrorLumaInt_SIMD<vext>;
-  m_motionErrorLumaFrac8[0] = motionErrorLumaFrac_SIMD<vext>;
-  m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_SIMD<vext>;
+  m_motionErrorLumaInt4     = motionErrorLumaInt4Loop<motionErrorLumaInt_SIMD<vext>>;
 #if USE_AVX2
   if( vext >= AVX2 )
   {
+    m_motionErrorLumaInt4 = motionErrorLumaInt4_AVX2;
+  }
+#endif
+  m_motionErrorLumaFrac8[0] = motionErrorLumaFrac_SIMD<vext>;
+  m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_SIMD<vext>;
+  m_filterColumn4             = filterColumn4_SIMD<vext>;
+  m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_SIMD<vext>;
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    m_filterColumn4             = filterColumn4_AVX2;
     m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_AVX2;
   }
 #endif

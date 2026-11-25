@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
   \brief   This vvenclibtest.cpp file contains the main entry point of the test application.
 */
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <limits.h>
@@ -2952,22 +2953,30 @@ static bool check_motionErrorLumaFrac8( MCTF* ref, MCTF* opt, int w, int h )
   return true;
 }
 
-// One case of the column kernel against the per-vector 4-tap kernel of the reference (exact errors, no early exit).
+// One case of the column kernels (the horizontal pass, then the vertical pass per vector) against the per-vector 4-tap
+// kernel of the reference (exact errors, no early exit). The rows are filtered once as the column needs them and once with
+// one more row above, read from the second row on, as a column reusing the rows of a column that started a row higher.
 static bool check_one_motionErrorLumaFracColumn( MCTF* ref, MCTF* opt, const Pel* org, unsigned orgStride, const Pel* buff, unsigned bufStride,
                                                  int w, int h, int bitDepth, const int16_t* xFilter, int num, const int16_t* const* yFilter,
                                                  const int* rowOffset )
 {
-  int error[4];
-  opt->m_motionErrorLumaFracColumn( org, orgStride, buff, bufStride, w, h, xFilter, num, yFilter, rowOffset, bitDepth, error );
-  for( int i = 0; i < num; i++ )
+  const int maxOffset = *std::max_element( rowOffset, rowOffset + num );
+  std::vector<Pel> filtered( 36 * 32 );
+  for( int above = 0; above <= 1 && h + 3 + maxOffset + above <= 36; above++ )
   {
-    std::ostringstream sstm;
-    sstm << "motionErrorLumaFracColumn w=" << w << " h=" << h << " bitDepth=" << bitDepth << " vector " << i << " of " << num;
-    const int expected = ref->m_motionErrorLumaFrac8[1]( org, orgStride, buff + rowOffset[i] * bufStride, bufStride, w, h, xFilter, yFilter[i],
-                                                         bitDepth, INT_MAX );
-    if( !compare_value( sstm.str(), expected, error[i] ) )
+    int error[4];
+    opt->m_filterColumn4( buff - above * bufStride, bufStride, w, h + 3 + maxOffset + above, xFilter, bitDepth, filtered.data() );
+    opt->m_motionErrorLumaFracColumn( org, orgStride, filtered.data() + above * w, w, h, num, yFilter, rowOffset, bitDepth, error );
+    for( int i = 0; i < num; i++ )
     {
-      return false;
+      std::ostringstream sstm;
+      sstm << "motionErrorLumaFracColumn w=" << w << " h=" << h << " bitDepth=" << bitDepth << " rows above " << above << " vector " << i << " of " << num;
+      const int expected = ref->m_motionErrorLumaFrac8[1]( org, orgStride, buff + rowOffset[i] * bufStride, bufStride, w, h, xFilter, yFilter[i],
+                                                           bitDepth, INT_MAX );
+      if( !compare_value( sstm.str(), expected, error[i] ) )
+      {
+        return false;
+      }
     }
   }
   return true;
@@ -2977,10 +2986,6 @@ static bool check_one_motionErrorLumaFracColumn( MCTF* ref, MCTF* opt, const Pel
 // filter and row offset, 8- and 10-bit, inputs outside the sample range.
 static bool check_motionErrorLumaFracColumn( MCTF* ref, MCTF* opt, unsigned num_cases )
 {
-  if( !opt->m_motionErrorLumaFracColumn )
-  {
-    return true;
-  }
   printf( "Testing MCTF::motionErrorLumaFracColumn\n" );
 
   // Always the extremes: the largest block, four vectors one row down (the most buffered rows), every horizontal filter,
@@ -3124,6 +3129,79 @@ static bool check_motionErrorLumaInt8( MCTF* ref, MCTF* opt, unsigned num_cases,
   return true;
 }
 
+// The four-position kernel against the one-position reference. The positions' samples have different amplitudes, so their
+// errors lie far apart; besterror runs over the errors of the first rows of every position (and one below and above).
+// The contract per position is the one-position kernel's: the exact error when it is not above besterror, a value above
+// besterror otherwise.
+static bool check_motionErrorLumaInt4( MCTF* ref, MCTF* opt, unsigned num_cases, int w, int h )
+{
+  if( ( w & 15 ) || w * h > MCTF::MAX_EXACT_INT_AREA )
+  {
+    return true;
+  }
+  printf( "Testing MCTF::motionErrorLumaInt4 w=%d h=%d\n", w, h );
+  InputGenerator<Pel> g{ 10, /*is_signed=*/false };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    const unsigned orgStride = rng.get( w, 128 );
+    const unsigned bufStride = rng.get( w, 128 );
+    std::vector<Pel> org( orgStride * h );
+    std::vector<Pel> buf( 4 * bufStride * h );
+    std::generate( org.begin(), org.end(), [&]() { return Pel( g() >> 7 ); } );
+    const Pel* refs[4];
+    for( int k = 0; k < 4; k++ )
+    {
+      Pel* block = buf.data() + k * bufStride * h;
+      std::generate( block, block + bufStride * h, [&]() { return Pel( g() >> ( 3 * k ) ); } );
+      refs[k] = block;
+    }
+
+    int exact[4], errors[4];
+    for( int k = 0; k < 4; k++ )
+    {
+      exact[k] = ref->m_motionErrorLumaInt8( org.data(), orgStride, refs[k], bufStride, w, h, INT_MAX );
+    }
+    opt->m_motionErrorLumaInt4( org.data(), orgStride, refs, bufStride, w, h, INT_MAX, errors );
+    for( int k = 0; k < 4; k++ )
+    {
+      std::ostringstream sstm;
+      sstm << "motionErrorLumaInt4 w=" << w << " h=" << h << " position " << k;
+      if( !compare_value( sstm.str(), exact[k], errors[k] ) )
+      {
+        return false;
+      }
+    }
+
+    // besterror from each position in turn: from the position of the smallest error it lies below all four running sums,
+    // which is when the kernel may stop early
+    for( int k0 = 0; k0 < 4; k0++ )
+    {
+      for( int rows = 1; rows <= h; rows++ )
+      {
+        const int prefix = ref->m_motionErrorLumaInt8( org.data(), orgStride, refs[k0], bufStride, w, rows, INT_MAX );
+        for( int besterror : { prefix - 1, prefix, prefix + 1 } )
+        {
+          opt->m_motionErrorLumaInt4( org.data(), orgStride, refs, bufStride, w, h, besterror, errors );
+          // bound k: the smallest of besterror and the errors of the positions before k
+          int bound = besterror;
+          for( int k = 0; k < 4; k++ )
+          {
+            if( exact[k] <= bound ? errors[k] != exact[k] : errors[k] <= bound )
+            {
+              printf( "FAILED motionErrorLumaInt4 early exit w=%d h=%d besterror=%d: position %d exact %d, returned %d\n", w, h, besterror, k, exact[k], errors[k] );
+              return false;
+            }
+            bound = std::min( bound, exact[k] );
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
 // calcVar's mean uses a Log2(w)+Log2(h) shift, so the optimized path only
 // matches the scalar reference for power-of-two block sizes. MCTF edge blocks
 // can be non-power-of-two multiples of 8 (e.g. 24), where the optimized result
@@ -3215,6 +3293,7 @@ static bool test_MCTF()
       passed = check_motionErrorLumaFrac8</*lowRes=*/false>( &ref, &opt, w, h ) && passed;
 
       passed = check_motionErrorLumaInt8( &ref, &opt, num_cases, w, h ) && passed;
+      passed = check_motionErrorLumaInt4( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
   passed = check_motionErrorLumaFracColumn( &ref, &opt, num_cases ) && passed;
@@ -4029,19 +4108,57 @@ static bool check_SADX5( RdCost* ref, RdCost* opt, unsigned num_cases, int width
   return passed;
 }
 
+// DF_HAD_STOP(_fast) returns the sum so far after a row of tiles once it exceeds the limit, and the kernels' rows of tiles
+// differ in height (x86 AVX2 sums 16 or 32 rows of a square block at a time, the scalar kernel 8 or 16), so the partial
+// sums differ. Each kernel is checked for what the encoder relies on: the whole sum when it does not exceed the limit,
+// otherwise a sum above the limit and at most the whole sum. The limits go through 0, 1/8, ..., 8/8 of the whole sum.
+static bool check_HAD_stop( const std::string& context, RdCost* ref, RdCost* opt, DistParam& dtParam, bool fast,
+                            unsigned& eighths, bool stoppedEarly[2] )
+{
+  const Distortion whole = ref->m_afpDistortFunc[0][fast ? DF_HAD_fast : DF_HAD]( dtParam );
+  const Distortion limit = whole * ( eighths++ % 9 ) / 8;
+  dtParam.maximumDistortionForEarlyExit = limit;
+
+  bool passed = true;
+  RdCost* kernels[2] = { ref, opt };
+  for( int k = 0; k < 2; k++ )
+  {
+    const Distortion sum = kernels[k]->m_afpDistortFunc[0][fast ? DF_HAD_STOP_fast : DF_HAD_STOP]( dtParam );
+    if( whole <= limit ? sum != whole : sum <= limit || sum > whole )
+    {
+      std::cerr << "failed: " << context << ( k ? " opt" : " ref" ) << "\n"
+                << "  whole=" << whole << "  limit=" << limit << "  stop=" << sum << "\n";
+      passed = false;
+    }
+    stoppedEarly[k] |= sum < whole;
+  }
+  return passed;
+}
+
 // generic: test the general-size entry DF_HAD(_fast), which the encoder also calls for every block size, instead of the
 // entry for this width
-static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool fast, bool generic )
+// stop: test DF_HAD_STOP(_fast), the general-size entry that may stop after a row of tiles, with limits from 0 to the
+// whole sum
+static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool fast, bool generic,
+                        bool stop = false )
 {
   std::ostringstream sstm;
   const char* fast_str = fast ? "_fast" : "";
   sstm << "RdCost::m_afpDistortFunc[0][DF_HAD";
-  if( !generic )
+  if( stop )
+  {
+    sstm << "_STOP";
+  }
+  else if( !generic )
   {
     sstm << width;
   }
   sstm << fast_str << "] " << " w=" << width << " h=" << height;
   printf( "Testing %s\n", sstm.str().c_str() );
+
+  const int index = ( fast ? DF_HAD_fast : DF_HAD ) + ( generic ? 0 : log2( width ) );
+  unsigned  eighths = 0;                         // the first limit is 0: random residuals stop after the first row
+  bool      stoppedEarly[2] = { false, false };  // ref, opt
 
   DimensionGenerator rng;
   InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
@@ -4086,7 +4203,11 @@ static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width,
       }
     }
 
-    const int index = ( fast ? DF_HAD_fast : DF_HAD ) + ( generic ? 0 : log2( width ) );
+    if( stop )
+    {
+      passed = check_HAD_stop( sstm.str(), ref, opt, dtParam, fast, eighths, stoppedEarly ) && passed;
+      continue;
+    }
     Distortion sum_ref = ref->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     Distortion sum_opt = opt->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
@@ -4109,10 +4230,21 @@ static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width,
     dtParam.bitDepth = 10;
     dtParam.applyWeight = 0;
 
-    const int index = ( fast ? DF_HAD_fast : DF_HAD ) + ( generic ? 0 : log2( width ) );
+    if( stop )
+    {
+      passed = check_HAD_stop( sstm.str(), ref, opt, dtParam, fast, eighths, stoppedEarly ) && passed;
+      continue;
+    }
     Distortion sum_ref = ref->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     Distortion sum_opt = opt->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+  }
+
+  // 64 rows are at least two rows of tiles in every kernel, so a kernel that never stops early ignores the limit
+  if( stop && height >= 64 && !( stoppedEarly[0] && stoppedEarly[1] ) )
+  {
+    std::cerr << "failed: " << sstm.str() << ( stoppedEarly[0] ? " opt" : " ref" ) << " never stops early\n";
+    passed = false;
   }
   return passed;
 }
@@ -4420,6 +4552,8 @@ static bool test_RdCost()
           passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/true, generic ) && passed;
           passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/false, generic ) && passed;
         }
+        passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/true, /*generic=*/true, /*stop=*/true ) && passed;
+        passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/false, /*generic=*/true, /*stop=*/true ) && passed;
       }
 
       if (w >= GEO_MIN_CU_SIZE && h >= GEO_MIN_CU_SIZE && w <= GEO_MAX_CU_SIZE && h <= GEO_MAX_CU_SIZE)
@@ -7066,17 +7200,18 @@ static bool check_SAOcalcSaoStatisticsBo( SampleAdaptiveOffset* ref, SampleAdapt
   sstm_test << "SampleAdaptiveOffset::calcSaoStatisticsBo " << bd << " bit";
   std::cout << "Testing " << sstm_test.str() << '\n';
 
-  for( unsigned width : { 32, 64, 128 } )
+  // widths 8, 24 and 40 leave samples beyond the last whole 16 (8: all of them)
+  for( unsigned width : { 8, 24, 32, 40, 64, 128 } )
   {
     for( unsigned height : { 32, 64, 128 } )
     {
+      std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
+      std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
+
       for( int skipLinesX : { 0, 3, 5 } )
       {
         for( int skipLinesY : { 0, 2, 4 } )
         {
-          std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
-          std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
-
           // endX is the same, or -3, or -5 of the width.
           int endX = width - skipLinesX;
           // endY is the same, or -2, or -4 of the height.
@@ -7415,6 +7550,9 @@ static bool test_SampleAdaptiveOffset()
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, max_gen, min_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, min_gen, max_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+    // samples in the four lowest bands: long runs of the same band
+    InputGenerator<Pel> low_gen{ bd - 3, /*is_signed=*/false };
+    passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, low_gen, rand_gen ) && passed;
 
     passed = check_SAOcalcSaoStatisticsEo0( &ref, &opt, bd, max_gen, min_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsEo0( &ref, &opt, bd, min_gen, max_gen ) && passed;
