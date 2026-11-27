@@ -2042,6 +2042,116 @@ static uint64_t AvgHighPassWithDownsamplingDiff2nd_neon( const int width, const 
   return horizontal_add_u64x2( sum );
 }
 
+// sum( | p - value | ) over a block (the CTU pumping reduction of the perceptual QP adaptation). For samples and value
+// in 0 ... 2^15 - 1 each absolute difference is below 2^15, so the sum of a pair fits 16 bits unsigned; the pair sums
+// are added pairwise into 32-bit lanes.
+static uint32_t sumAbsDeviation_neon( const Pel* src, const ptrdiff_t stride, const int width, const int height,
+                                      const int value )
+{
+  CHECKD( value < 0 || value > 0x7fff, "value has to be in 0 ... 2^15 - 1" );
+
+  const uint16_t* const s16  = reinterpret_cast<const uint16_t*>( src );
+  const uint16x8_t      v    = vdupq_n_u16( value );
+  uint32x4_t            acc0 = vdupq_n_u32( 0 );
+  uint32x4_t            acc1 = vdupq_n_u32( 0 );
+  uint32_t              tail = 0;
+
+  for( int y = 0; y < height; y++ )
+  {
+    const uint16_t* const row = s16 + y * stride;
+    int x = 0;
+    for( ; x + 32 <= width; x += 32 )
+    {
+      const uint16x8_t p0 = vld1q_u16( row + x );
+      const uint16x8_t p1 = vld1q_u16( row + x + 8 );
+      const uint16x8_t p2 = vld1q_u16( row + x + 16 );
+      const uint16x8_t p3 = vld1q_u16( row + x + 24 );
+      acc0 = vpadalq_u16( acc0, vabaq_u16( vabdq_u16( p0, v ), p1, v ) );
+      acc1 = vpadalq_u16( acc1, vabaq_u16( vabdq_u16( p2, v ), p3, v ) );
+    }
+    if( x + 16 <= width )
+    {
+      const uint16x8_t p0 = vld1q_u16( row + x );
+      const uint16x8_t p1 = vld1q_u16( row + x + 8 );
+      acc0 = vpadalq_u16( acc0, vabaq_u16( vabdq_u16( p0, v ), p1, v ) );
+      x += 16;
+    }
+    if( x + 8 <= width )
+    {
+      const uint16x8_t p0 = vld1q_u16( row + x );
+      acc1 = vpadalq_u16( acc1, vabdq_u16( p0, v ) );
+      x += 8;
+    }
+    for( ; x < width; x++ )
+    {
+      tail += uint32_t( abs( row[x] - value ) );
+    }
+  }
+  return tail + horizontal_add_u32x4( vaddq_u32( acc0, acc1 ) );
+}
+
+// The plane checksum of the decoded picture hash SEI (PelBufferOps::pictureChecksum). Per sample, the terms
+// ( p & 0xff ) ^ m and ( p >> 8 ) ^ m (arithmetic shift) are in 0 ... 255 and -256 ... 255, so the sum of both terms of
+// two samples fits 16 bits; the 32-bit lane sums wrap around modulo 2^32 like the C sum. The positions x and y are
+// below 2^16, so each term of m = ( x & 0xff ) ^ ( x >> 8 ) ^ ( y & 0xff ) ^ ( y >> 8 ) is below 2^8 and m needs no
+// truncation to 8 bits. For x a multiple of 8 and i < 8, x + i only sets the low 3 bits, so m(x + i) = m(x) ^ i; for x
+// a multiple of 16, m(x + 8) = m(x) ^ 8.
+static uint32_t pictureChecksum_neon( const Pel* plane, const ptrdiff_t stride, const int width, const int height,
+                                      const bool twoBytes )
+{
+  CHECKD( width > 0xffff || height > 0xffff, "the positions of the mask have to fit 16 bits" );
+
+  const int16x8_t lanes = vreinterpretq_s16_u16( vld1q_u16( qpaLaneIndex16 ) );
+  const int16x8_t low   = vdupq_n_s16( 0xff );
+  const int16x8_t eight = vdupq_n_s16( 8 );
+  int32x4_t       acc   = vdupq_n_s32( 0 );
+  uint32_t        tail  = 0;
+
+  for( int y = 0; y < height; y++, plane += stride )
+  {
+    const int       yMask   = ( y & 0xff ) ^ ( y >> 8 );
+    const int16x8_t rowMask = veorq_s16( lanes, vdupq_n_s16( yMask ) );
+    int x = 0;
+    for( ; x + 16 <= width; x += 16 )
+    {
+      const int16x8_t mask0  = veorq_s16( rowMask, vdupq_n_s16( ( x & 0xff ) ^ ( x >> 8 ) ) );
+      const int16x8_t mask1  = veorq_s16( mask0, eight );
+      const int16x8_t p0     = vld1q_s16( plane + x );
+      const int16x8_t p1     = vld1q_s16( plane + x + 8 );
+      int16x8_t       terms0 = veorq_s16( vandq_s16( p0, low ), mask0 );
+      int16x8_t       terms1 = veorq_s16( vandq_s16( p1, low ), mask1 );
+      if( twoBytes )
+      {
+        terms0 = vaddq_s16( terms0, veorq_s16( vshrq_n_s16( p0, 8 ), mask0 ) );
+        terms1 = vaddq_s16( terms1, veorq_s16( vshrq_n_s16( p1, 8 ), mask1 ) );
+      }
+      acc = vpadalq_s16( acc, vaddq_s16( terms0, terms1 ) );
+    }
+    if( x + 8 <= width )
+    {
+      const int16x8_t mask0  = veorq_s16( rowMask, vdupq_n_s16( ( x & 0xff ) ^ ( x >> 8 ) ) );
+      const int16x8_t p0     = vld1q_s16( plane + x );
+      int16x8_t       terms0 = veorq_s16( vandq_s16( p0, low ), mask0 );
+      if( twoBytes )
+      {
+        terms0 = vaddq_s16( terms0, veorq_s16( vshrq_n_s16( p0, 8 ), mask0 ) );
+      }
+      acc = vpadalq_s16( acc, terms0 );
+      x += 8;
+    }
+    for( ; x < width; x++ )
+    {
+      const uint8_t xorMask = ( x & 0xff ) ^ yMask ^ ( x >> 8 );
+      tail += ( plane[x] & 0xff ) ^ xorMask;
+      if( twoBytes )
+      {
+        tail += ( plane[x] >> 8 ) ^ xorMask;
+      }
+    }
+  }
+  return tail + uint32_t( horizontal_add_s32x4( acc ) );
+}
+
 template<>
 void addAvg_strided_neon<4>( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest,
                              int destStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
@@ -2171,6 +2281,8 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   AvgHighPassWithDownsampling        = AvgHighPassWithDownsampling_neon;
   AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1st_neon;
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2nd_neon;
+  sumAbsDeviation                    = sumAbsDeviation_neon;
+  pictureChecksum                    = pictureChecksum_neon;
   reco     = recoCore_neon;
   copyBuffer = copyBuffer_neon;
   absGradientSums     = absGradientSums_neon;
