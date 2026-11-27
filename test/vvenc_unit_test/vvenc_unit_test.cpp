@@ -5287,6 +5287,17 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
     const SizeType predSize   = rng.getOneOf<SizeType>( { 4, 8 } );
     const unsigned log2Factor = rng.get( 1, 3 );
     const SizeType factor     = 1 << log2Factor;
+    // every fourth case alternates 0 and 4095: the steepest ramps, both signs
+    auto extremes = [i]( std::vector<Pel>& v )
+    {
+      if( i % 4 == 0 )
+      {
+        for( size_t k = 0; k < v.size(); k++ )
+        {
+          v[k] = ( k & 1 ) ? 4095 : 0;
+        }
+      }
+    };
 
     // horizontal
     {
@@ -5295,6 +5306,8 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
       std::vector<Pel> src( predSize * predSize ), bndry( bndryStep * predSize );
       std::generate( src.begin(), src.end(), samples );
       std::generate( bndry.begin(), bndry.end(), samples );
+      extremes( src );
+      extremes( bndry );
       std::vector<Pel> dstRef( dstStride * predSize, 0x5a5a ), dstOpt( dstStride * predSize, 0x5a5a );
       ref->mipUpsampleHor( dstRef.data(), src.data(), bndry.data(), dstStride, bndryStep, predSize, log2Factor );
       opt->mipUpsampleHor( dstOpt.data(), src.data(), bndry.data(), dstStride, bndryStep, predSize, log2Factor );
@@ -5317,6 +5330,9 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
       std::generate( src.begin(), src.end(), samples );
       std::vector<Pel> dstRef( outWidth * outHeight ), dstOpt( outWidth * outHeight );
       std::generate( dstRef.begin(), dstRef.end(), samples );
+      extremes( bndry );
+      extremes( src );
+      extremes( dstRef );
       dstOpt = dstRef;
 
       // in place: the source rows are the output rows k * factor + factor - 1
