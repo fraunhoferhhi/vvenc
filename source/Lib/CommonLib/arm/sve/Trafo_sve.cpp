@@ -58,6 +58,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_TRAFO
 
+#include "../Trafo_neon.h"
+#include "neon_sve_bridge.h"
+
 #include <arm_neon_sve_bridge.h>
 #include <arm_sve.h>
 
@@ -219,6 +222,48 @@ static void fastFwdCore_nVec_sve( const TMatrixCoeff* tc, const TCoeff* src, TCo
   }
 }
 
+// the four row dots of the LFNST (Trafo_neon.h): 8 int8 matrix values loaded as int16 and multiplied with 8 int16
+// inputs in one 16-bit dot product into 64-bit lanes; the four rows' sums, which fit 32 bits (see Trafo_neon.h), as
+// 32-bit values in row order
+struct LfnstRowDotsSve
+{
+  static inline int64x2_t dot( const int16x8_t* in, const int8_t* row, const int n )
+  {
+    const svbool_t first8 = svptrue_pat_b16( SV_VL8 );
+    int64x2_t      acc    = vdupq_n_s64( 0 );
+    for( int i = 0; i < n; i += 8 )
+    {
+      const int16x8_t m = svget_neonq_s16( svld1sb_s16( first8, row + i ) );
+      acc = vvenc_sdotq_s16( acc, in[i / 8], m );
+    }
+    return acc;
+  }
+
+  static inline int32x4_t dot4( const int16x8_t* in, const int8_t* row, const int rowStride, const int n )
+  {
+    const int64x2_t dot0  = dot( in, row, n );
+    const int64x2_t dot1  = dot( in, row + rowStride, n );
+    const int64x2_t dot2  = dot( in, row + 2 * rowStride, n );
+    const int64x2_t dot3  = dot( in, row + 3 * rowStride, n );
+    const int64x2_t sum01 = vpaddq_s64( dot0, dot1 );
+    const int64x2_t sum23 = vpaddq_s64( dot2, dot3 );
+    // the low 32 bits of each 64-bit sum
+    return vuzp1q_s32( vreinterpretq_s32_s64( sum01 ), vreinterpretq_s32_s64( sum23 ) );
+  }
+};
+
+static void invLfnstNxN_sve( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size,
+                             int zeroOutSize )
+{
+  invLfnstNxN_common<LfnstRowDotsSve>( src, dst, mode, index, size, zeroOutSize );
+}
+
+static void fwdLfnstNxN_sve( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size,
+                             int zeroOutSize )
+{
+  fwdLfnstNxN_common<LfnstRowDotsSve>( src, dst, mode, index, size, zeroOutSize );
+}
+
 template<>
 void TCoeffOps::_initTCoeffOpsARM<SVE>()
 {
@@ -243,6 +288,13 @@ void TCoeffOps::_initTCoeffOpsARM<SVE>()
     // Don't use SVE for other vector lengths, fall back to Neon.
     break;
   }
+}
+
+template<>
+void TrQuant::_initTrQuantARM<SVE>()
+{
+  m_invLfnstNxN = invLfnstNxN_sve;
+  m_fwdLfnstNxN = fwdLfnstNxN_sve;
 }
 
 }  // namespace vvenc
