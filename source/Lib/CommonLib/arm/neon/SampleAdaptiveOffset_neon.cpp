@@ -524,6 +524,172 @@ void calcSaoStatisticsEo45_neon( int width, int startX, int endX, int endY, Pel*
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// offsetBlock_core: every edge offset class is, per sample, edgeType = sign( c - a ) + sign( c - b ) with a and b its
+// two neighbours along the class direction (the C code's sign lines only keep the previous row's signs), so each row is
+// one run over the C code's x range. The offsets of a block are an 8-entry int8 table (exact: SAO offsets are at most
+// 31, scaled by 2^(bitDepth - 10) above 10 bits, so at most 124 up to 12 bits; the encoder takes 8 or 10 bits): edge
+// offset entry edgeType + 2, band offset entry ( band - startIdx ) mod 32 for the four signalled bands (entries 4 to 7
+// zero; vtbl gives 0 for 8 and more). Sample + offset fits int16 without saturation.
+// ---------------------------------------------------------------------------------------------------------------------
+
+static inline int8x8_t saoOffsets_neon( const uint8x8_t table, const uint16x8_t idx )
+{
+  return vreinterpret_s8_u8( vtbl1_u8( table, vmovn_u16( idx ) ) );
+}
+
+static inline int16x8_t saoApply_neon( const int16x8_t c, const int8x8_t offset, const int16x8_t vMax )
+{
+  return vminq_s16( vmaxq_s16( vaddw_s8( c, offset ), vdupq_n_s16( 0 ) ), vMax );
+}
+
+// one row of an edge offset class over x in [xStart, xEnd): a at src + x + aOff, b at src + x + bOff. Runs of 8 and
+// more in 8-sample steps, the last overlapping the one before (src and res are separate buffers), shorter runs scalar.
+static inline void saoEoRun_neon( const Pel* src, Pel* res, const ptrdiff_t aOff, const ptrdiff_t bOff,
+                                  const int xStart, const int xEnd, const uint8x8_t table, const int* offsets,
+                                  const int16x8_t vMax, const ClpRng& clpRng )
+{
+  if( xEnd - xStart < 8 )
+  {
+    for( int x = xStart; x < xEnd; x++ )
+    {
+      const int edgeType = sgn( src[x] - src[x + aOff] ) + sgn( src[x] - src[x + bOff] );
+      res[x]             = ClipPel<int>( src[x] + offsets[edgeType + 2], clpRng );
+    }
+    return;
+  }
+  auto step = [&]( const int x )
+  {
+    const int16x8_t c   = vld1q_s16( src + x );
+    const int16x8_t a   = vld1q_s16( src + x + aOff );
+    const int16x8_t b   = vld1q_s16( src + x + bOff );
+    const int16x8_t sum = vaddq_s16( sign_s16( c, a ), sign_s16( c, b ) );
+    const uint16x8_t idx = vreinterpretq_u16_s16( vaddq_s16( sum, vdupq_n_s16( 2 ) ) );
+    vst1q_s16( res + x, saoApply_neon( c, saoOffsets_neon( table, idx ), vMax ) );
+  };
+  int x = xStart;
+  for( ; x + 8 <= xEnd; x += 8 )
+  {
+    step( x );
+  }
+  if( x < xEnd )
+  {
+    step( xEnd - 8 );
+  }
+}
+
+static void offsetBlock_neon( const int channelBitDepth, const ClpRng& clpRng, int typeIdx, int* offset, int startIdx,
+                              const Pel* srcBlk, Pel* resBlk, ptrdiff_t srcStride, ptrdiff_t resStride, int width,
+                              int height, uint8_t availMask, std::vector<int8_t>& /*signLineBuf1*/,
+                              std::vector<int8_t>& /*signLineBuf2*/ )
+{
+  CHECKD( srcBlk == resBlk, "SAO works from a copy of the samples" );
+  const int16x8_t vMax = vdupq_n_s16( clpRng.max() );
+  int8_t          table[8] = { 0 };
+
+  if( typeIdx == SAO_TYPE_BO )
+  {
+    // the vectors read only the four bands from startIdx: the other bands' offsets are 0 (invertQuantOffsets), as the
+    // SSE kernel assumes too; the scalar rows read the whole table, as the C code
+    for( int k = 0; k < 4; k++ )
+    {
+      const int bandOffset = offset[( startIdx + k ) % MAX_NUM_SAO_CLASSES];
+      CHECKD( bandOffset != int8_t( bandOffset ), "SAO offsets fit 8 bits" );
+      table[k] = int8_t( bandOffset );
+    }
+    const int        shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+    const uint8x8_t  vTable    = vreinterpret_u8_s8( vld1_s8( table ) );
+    const int16x8_t  vShift    = vdupq_n_s16( -shiftBits );
+    const uint16x8_t vStart    = vdupq_n_u16( uint16_t( startIdx ) );
+    const uint16x8_t vBandMask = vdupq_n_u16( MAX_NUM_SAO_CLASSES - 1 );
+    auto step = [&]( const Pel* src, Pel* res, const int x )
+    {
+      const int16x8_t  c    = vld1q_s16( src + x );
+      const uint16x8_t band = vreinterpretq_u16_s16( vshlq_s16( c, vShift ) );
+      const uint16x8_t idx  = vandq_u16( vsubq_u16( band, vStart ), vBandMask );
+      vst1q_s16( res + x, saoApply_neon( c, saoOffsets_neon( vTable, idx ), vMax ) );
+    };
+    for( int y = 0; y < height; y++, srcBlk += srcStride, resBlk += resStride )
+    {
+      if( width < 8 )
+      {
+        for( int x = 0; x < width; x++ )
+        {
+          resBlk[x] = ClipPel<int>( srcBlk[x] + offset[srcBlk[x] >> shiftBits], clpRng );
+        }
+        continue;
+      }
+      int x = 0;
+      for( ; x + 8 <= width; x += 8 )
+      {
+        step( srcBlk, resBlk, x );
+      }
+      if( x < width )
+      {
+        step( srcBlk, resBlk, width - 8 );
+      }
+    }
+    return;
+  }
+
+  for( int k = 0; k < 5; k++ )
+  {
+    CHECKD( offset[k] != int8_t( offset[k] ), "SAO offsets fit 8 bits" );
+    table[k] = int8_t( offset[k] );
+  }
+  const uint8x8_t vTable = vreinterpret_u8_s8( vld1_s8( table ) );
+  const int       startX = availMask & LeftAvail ? 0 : 1;
+  const int       endX   = availMask & RightAvail ? width : width - 1;
+  auto row = [&]( const int y, const ptrdiff_t aOff, const ptrdiff_t bOff, const int xStart, const int xEnd )
+  {
+    saoEoRun_neon( srcBlk + y * srcStride, resBlk + y * resStride, aOff, bOff, xStart, xEnd, vTable, offset, vMax,
+                   clpRng );
+  };
+
+  switch( typeIdx )
+  {
+  case SAO_TYPE_EO_0:
+    for( int y = 0; y < height; y++ )
+    {
+      row( y, -1, 1, startX, endX );
+    }
+    break;
+  case SAO_TYPE_EO_90:
+  {
+    const int startY = availMask & AboveAvail ? 0 : 1;
+    const int endY   = availMask & BelowAvail ? height : height - 1;
+    for( int y = startY; y < endY; y++ )
+    {
+      row( y, -srcStride, srcStride, 0, width );
+    }
+    break;
+  }
+  case SAO_TYPE_EO_135:
+    // above-left and below-right; the first and last rows have their own ranges (the corner availabilities)
+    row( 0, -srcStride - 1, srcStride + 1, availMask & AboveLeftAvail ? 0 : 1, availMask & AboveAvail ? endX : 1 );
+    for( int y = 1; y < height - 1; y++ )
+    {
+      row( y, -srcStride - 1, srcStride + 1, startX, endX );
+    }
+    row( height - 1, -srcStride - 1, srcStride + 1, availMask & BelowAvail ? startX : width - 1,
+         availMask & BelowRightAvail ? width : width - 1 );
+    break;
+  case SAO_TYPE_EO_45:
+    // above-right and below-left
+    row( 0, -srcStride + 1, srcStride - 1, availMask & AboveAvail ? startX : width - 1,
+         availMask & AboveRightAvail ? width : width - 1 );
+    for( int y = 1; y < height - 1; y++ )
+    {
+      row( y, -srcStride + 1, srcStride - 1, startX, endX );
+    }
+    row( height - 1, -srcStride + 1, srcStride - 1, availMask & BelowLeftAvail ? 0 : 1,
+         availMask & BelowAvail ? endX : 1 );
+    break;
+  default:
+    THROW( "Not a supported SAO type" );
+  }
+}
+
 template<>
 void SampleAdaptiveOffset::_initSampleAdaptiveOffsetARM<NEON>()
 {
@@ -532,6 +698,7 @@ void SampleAdaptiveOffset::_initSampleAdaptiveOffsetARM<NEON>()
   calcSaoStatisticsEo90  = calcSaoStatisticsEo90_neon;
   calcSaoStatisticsEo135 = calcSaoStatisticsEo135_neon;
   calcSaoStatisticsEo45  = calcSaoStatisticsEo45_neon;
+  offsetBlock            = offsetBlock_neon;
 }
 
 #endif // ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_ARM )
