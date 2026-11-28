@@ -180,8 +180,6 @@ constexpr double BLOCK_VARIANCE_SHARE[ 2 ][ NUM_CUTOFFS ][ NUM_CUTOFFS ] =
   },
 };
 
-// After this many analyses in a row whose scaling function fit failed, a component's grain is no longer signalled.
-constexpr int    MAX_FAILED_FITS           = 3;
 // A picture whose mean grain strength differs from that of the accumulated data by more than this factor starts the
 // statistics anew (a new scene with different grain); it needs this many blocks for a reliable mean.
 constexpr double GRAIN_CHANGE_RATIO        = 2.0;
@@ -1080,6 +1078,13 @@ void FGAnalyzer::init( int width, int height, ChromaFormat chromaFormat, const i
   }
 }
 
+void FGAnalyzer::setAnalysesPerGop( int numAnalyses )
+{
+  // three GOPs of failed fits
+  CHECK( numAnalyses < 1, "the film grain analysis looks at one picture per GOP at least" );
+  m_maxFailedFits = 3 * numAnalyses;
+}
+
 // Drops the data accumulated over the analysed pictures of a component.
 void FGAnalyzer::resetStatistics( int c )
 {
@@ -1827,7 +1832,7 @@ void FGAnalyzer::estimateScalingFactors( std::vector<int>& dataX, std::vector<in
   }
 
   // Without a fit, for example because there were too few points, the previous parameters are kept for a while (VTM
-  // keeps them for good). The stored data age as if a picture without data had been added, and after MAX_FAILED_FITS
+  // keeps them for good). The stored data age as if a picture without data had been added, and after m_maxFailedFits
   // failures in a row the grain is no longer signalled, as it was measured on pictures too long ago: otherwise the
   // grain of a grainy scene stays on in the following clean scene when the fit fails there.
   if( !stored )
@@ -1840,7 +1845,7 @@ void FGAnalyzer::estimateScalingFactors( std::vector<int>& dataX, std::vector<in
       }
     }
   }
-  if( ++m_failedFits[ compId ] >= MAX_FAILED_FITS )
+  if( ++m_failedFits[ compId ] >= m_maxFailedFits )
   {
     m_compModel  [ compId ].presentFlag = false;
     m_cutoffPairs[ compId ] = 0;

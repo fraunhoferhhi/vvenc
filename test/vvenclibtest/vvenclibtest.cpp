@@ -378,6 +378,36 @@ int testLibParameterRanges()
   return 0;
 }
 
+// The film grain analysis' max temporal depth with the analysis on: 0 (the default) to 6, and with the look-ahead of
+// the one-pass rate control only 0.
+int checkFgaMaxTempDepth()
+{
+  struct Case { int targetBitrate; int maxTempDepth; bool valid; };
+  const Case cases[] = { { 0, 0, true }, { 0, 6, true }, { 0, -1, false }, { 0, 7, false },
+                         { 500000, 0, true }, { 500000, 1, false } };
+  vvencEncoder* enc = vvenc_encoder_create();
+  int result = 0;
+  for( const Case& t : cases )
+  {
+    vvenc_config c;
+    vvenc_config_default( &c );
+    if( c.m_fgaMaxTempDepth != 0 )
+    {
+      result = -1;
+    }
+    fillEncoderParameters( c, false );
+    c.m_fga             = 2;
+    c.m_RCTargetBitrate = t.targetBitrate;   // with one pass (the default) the look-ahead is on
+    c.m_fgaMaxTempDepth = t.maxTempDepth;
+    if( ( 0 == vvenc_check_config( enc, &c ) ) != t.valid )
+    {
+      result = -1;
+    }
+  }
+  vvenc_encoder_close( enc );
+  return result;
+}
+
 int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool expectedFail = false )
 {
   const int numFails = g_numFails;
@@ -1370,6 +1400,7 @@ int testLibCallingOrder()
 int testSDKDefaultBehaviour()
 {
   testfunc( "checkSDKDefaultBehaviourRC", &checkSDKDefaultBehaviourRC, false );
+  testfunc( "checkFgaMaxTempDepth", &checkFgaMaxTempDepth, false );
   testfunc( "checkSDKHdrChromaQpMappingTables", &checkSDKHdrChromaQpMappingTables, false );
   testfunc( "checkSDKChromaQpMappingLastPointOutOfRange", &checkSDKChromaQpMappingLastPointOutOfRange, true  );
   testfunc( "checkSDKChromaQpMappingSinglePoint",         &checkSDKChromaQpMappingSinglePoint,         false );
