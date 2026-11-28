@@ -847,6 +847,106 @@ void MCTF::motionEstimationMCTF(const std::vector<Picture*>& refPics, std::deque
   }
 }
 
+// Film grain analysis (--fga 2): whether the picture `other` repeats `pic` (both luma), grain included, so that their
+// difference holds none of the grain. Film shown slowed down or at another frame rate repeats pictures (Top Gun
+// Maverick's 1986 footage: every picture three times, or two of every three pictures twice), and a lossy source codes
+// a repeat as skipped blocks plus a few re-coded ones: there 61 to 100 % of the 16x16 blocks that are not one constant
+// value (black bars are, in every picture) are bit-identical in both pictures, their difference 0.0 to 2.9 (10 bit,
+// RMS) against 15 and more between two pictures with their own grain, which share no such block (0.0 to 0.3 %; a clean
+// fade from black: up to 11 %). A quarter of those blocks counts as a repeat. Grain never leaves a block identical, so
+// what else passes is clean and static there, be it another picture: two drawings of an animation share the parts
+// that stand still (fgaLeaveOutRepeats tells those from repeated film).
+static bool fgaRepeatsPicture( const CPelBuf& pic, const CPelBuf& other )
+{
+  constexpr int N = 16, MIN_IDENTICAL_SHARE_DEN = 4;
+  int textured = 0, identical = 0;
+  for( int y = 0; y + N <= ( int ) pic.height; y += N )
+  {
+    for( int x = 0; x + N <= ( int ) pic.width; x += N )
+    {
+      const Pel* p        = pic.bufAt( x, y );
+      const Pel  first    = p[ 0 ];
+      bool       constant = true, same = true;
+      for( int r = 0; r < N && ( constant || same ); r++ )
+      {
+        const Pel* rowPic   = p + r * pic.stride;
+        const Pel* rowOther = other.bufAt( x, y + r );
+        constant = constant && std::all_of( rowPic, rowPic + N, [ first ]( Pel v ) { return v == first; } );
+        same     = same && std::equal( rowPic, rowPic + N, rowOther );
+      }
+      textured  += !constant;
+      identical += !constant && same;
+    }
+  }
+  return identical > 0 && identical * MIN_IDENTICAL_SHARE_DEN >= textured;
+}
+
+// The POC of a filter reference: an entry's buffer wraps the original of its picture in picFifo.
+static int fgaPocOf( const TemporalFilterSourcePicInfo& ref, const std::deque<Picture*>& picFifo )
+{
+  for( const Picture* p : picFifo )
+  {
+    if( ref.picBuffer.Y().buf == p->getOrigBuf( COMP_Y ).buf )
+    {
+      return p->poc;
+    }
+  }
+  THROW( "a filter reference without its picture" );
+}
+
+// The filter's references without the pictures that repeat the picture `orig` with POC poc (fgaRepeatsPicture), in
+// grainRefs: the picture's neighbours for the film grain analysis, each with its vectors. The filter weighs a reference
+// by its distance (index), and a repeat is no step in time: the kept ones count theirs in kept pictures, so the
+// nearest one on each side filters as an adjacent picture does.
+// Grain is new in every picture of the film, so a repeated film picture is replaced, everywhere, a few pictures on:
+// its repeats end on both sides at a reference that is none (a side without references, the sequence's start or end,
+// has none to end at). Clean content holds what stands still for as long as it stands, through other pictures: a
+// drawing of an animation passes as a repeat of the ones before and after it (Detective Conan: 50 to 85 % of the
+// blocks identical between drawings that differ by 5 to 130 RMS), and the first reference that does not is no next
+// film picture but whatever changed everything: there the next shot, and a keyframe of the lossy source, whose coding
+// noise is new in every block. Read against those alone, the two pictures gave grain of mean strength 9 and 13; read
+// against all, 0. Returns false, with grainRefs left empty, when no reference repeats the picture or when, on a side,
+// all do: the analysis then reads all the references, as without repeats, and finds no grain in what stands still.
+static bool fgaLeaveOutRepeats( const PelStorage& orig, int poc, const std::deque<Picture*>& picFifo,
+                                const std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo,
+                                std::deque<TemporalFilterSourcePicInfo>& grainRefs )
+{
+  enum Side { BEFORE, AFTER, NUM_SIDES };
+  bool repeated[ NUM_SIDES ] = { false, false };   // a reference on that side repeats the picture
+  bool replaced[ NUM_SIDES ] = { false, false };   // one does not
+  std::vector<int> offsets;   // of the kept references, in pictures: before the picture below 0
+  for( const TemporalFilterSourcePicInfo& src : srcFrameInfo )
+  {
+    const int  offset = fgaPocOf( src, picFifo ) - poc;
+    const Side side   = offset < 0 ? BEFORE : AFTER;
+    if( fgaRepeatsPicture( orig.Y(), src.picBuffer.Y() ) )
+    {
+      repeated[ side ] = true;
+      continue;
+    }
+    replaced[ side ] = true;
+    grainRefs.emplace_back();
+    grainRefs.back().picBuffer.createFromBuf( src.picBuffer );
+    grainRefs.back().mvs = src.mvs;
+    offsets.push_back( offset );
+  }
+  const bool repeatsEnd = ( replaced[ BEFORE ] || !repeated[ BEFORE ] ) && ( replaced[ AFTER ] || !repeated[ AFTER ] );
+  if( grainRefs.size() == srcFrameInfo.size() || !repeatsEnd )
+  {
+    grainRefs.clear();
+    return false;
+  }
+  for( size_t i = 0; i < grainRefs.size(); i++ )
+  {
+    const auto nearerOnItsSide = [ & ]( int offset )
+    {
+      return ( offset < 0 ) == ( offsets[ i ] < 0 ) && std::abs( offset ) < std::abs( offsets[ i ] );
+    };
+    grainRefs[ i ].index = std::min( 5, ( int ) std::count_if( offsets.begin(), offsets.end(), nearerOnItsSide ) );
+  }
+  return true;
+}
+
 void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_MCTF );
@@ -865,16 +965,43 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   double   meanRmsAcrossPic    = 0.0;
   uint64_t sumSRmsAcrossPic    = 0;
   uint16_t nMax = 0, maxRmsCTU = 0;
-  bool  isFilterThisFrame      = mctfIdx >= 0;
+  bool  isFilterThisFrame      = mctfIdx >= 0 && ( pic->useMCTF || pic->gopEntry->m_isStartOfGop );
+  // The film grain analysis looks at the first picture of every GOP, the pictures FgaMaxTempDepth adds
+  // (GOPCfg::xSetFgaLayer) and the first picture of every shot: the sequence's first picture and the scene cuts
+  // PreProcess finds, so that no shot is given the grain of another. PreProcess marks a cut when the picture after it
+  // has passed, which MCTF's future references guarantee here; with the look-ahead, pictures reach the analysis in
+  // coding order, where only GOP starts keep the analyses in POC order (EncGOP::xAnalyzeFilmGrain).
+  const bool fgaShots          = !m_encCfg->m_LookAhead && m_encCfg->m_vvencMCTF.MCTFFutureReference;
+  const bool fgaShotStart      = fgaShots && ( pic->poc == 0 || pic->m_picShared->fgaSceneCut() );
+  // A shot start has no neighbour before it in its shot, so its temporal residual is one-sided and overshoots the
+  // grain (11-28 % in the fine band on a 4K film shot, where two-sided analyses inside the shot land at 0.88-0.95).
+  // So with the improved analysis (--fga 2) the picture after it, whose neighbours are both inside the shot, is analysed
+  // as well and restarts the shot's statistics without the start's analysis (EncGOP::xIssueFgaTask), which then serves
+  // the start picture alone. PreProcess has marked the cut on the picture before it by then (fgaLastSceneCutPoc).
+  const bool fgaShotRestart    = fgaShots && m_encCfg->m_fga >= 2
+                                 && ( pic->poc == 1 || pic->m_picShared->fgaLastSceneCutPoc() == pic->poc - 1 );
+  const bool fgaPicture        = m_encCfg->m_fga && m_isFinalPass
+                                 && ( pic->gopEntry->m_isStartOfGop || pic->gopEntry->m_isFgaPicture || fgaShotStart || fgaShotRestart );
+  if( fgaPicture && fgaShotRestart )
+  {
+    pic->m_picShared->fgaShotRestart() = true;
+  }
+  // A picture the analysis looks at that MCTF does not filter: its motion is estimated for the analysis copies only,
+  // nothing that changes the coding (the filtered picture, the QP offsets).
+  const bool fgaOnly           = fgaPicture && !isFilterThisFrame;
 
   int dropFrames = ( m_encCfg->m_usePerceptQPA ? VVENC_MCTF_RANGE >> 1 : 0 );
-  if( mctfIdx >= 0 )
+  if( isFilterThisFrame || fgaOnly )
   {
-    const int idxTLayer = m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1);
+    // the reference range of the picture's temporal level: for an analysis-only picture that of its analysis layer,
+    // at most 4 (MCTF has a level 5 only for GOP 64 below QP 16); a shot start that FgaMaxTempDepth does not select
+    // gets level 0, the full range of a GOP start
+    const int fgaTLayer = pic->gopEntry->m_isFgaPicture ? std::min( pic->gopEntry->m_fgaLayer, 4 ) : 0;
+    const int idxTLayer = isFilterThisFrame ? m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1) : fgaTLayer;
     const int threshold = (m_MCTFSpeedVal >> (idxTLayer * 3)) & 7;
 
     dropFrames          = std::min(VVENC_MCTF_RANGE, threshold);
-    isFilterThisFrame   = threshold < VVENC_MCTF_RANGE;
+    isFilterThisFrame   = isFilterThisFrame && threshold < VVENC_MCTF_RANGE;
   }
 
   const int filterFrames = VVENC_MCTF_RANGE - 2 - dropFrames;
@@ -882,12 +1009,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames + 2 );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames + 2 );
 
-  if( !pic->useMCTF && !pic->gopEntry->m_isStartOfGop )
-  {
-    isFilterThisFrame = false;
-  }
-
-  if ( isFilterThisFrame )
+  if ( isFilterThisFrame || fgaOnly )
   {
     bool  useMCTFadaptation = true;
     const bool condAddLevel = useMCTFadaptation && m_area.width >= 1920;
@@ -994,38 +1116,45 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     }
 
     // filter
-    if( pic->useMCTF )
+    if( isFilterThisFrame && pic->useMCTF )
     {
       fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
       bilateralFilter( origBuf, srcFrameInfo, fltrBuf, filterStrength );
     }
 
     // The film grain analysis compares the original with a filtered copy of fixed strength, independent of the
-    // filtering for the encoding, as the dedicated temporal filter of the VTM analysis does (strength 1.5). It analyses
-    // the start picture of every GOP, whose motion has just been estimated.
-    if( m_encCfg->m_fga && m_isFinalPass && pic->gopEntry->m_isStartOfGop )
+    // filtering for the encoding, as the dedicated temporal filter of the VTM analysis does (strength 1.5), on the
+    // pictures chosen above (fgaPicture), whose motion has just been estimated.
+    if( fgaPicture )
     {
       static constexpr double FGA_FILTER_STRENGTH = 1.5;
-      if( pic->useMCTF && filterStrength == FGA_FILTER_STRENGTH )
+      // A reference that repeats the picture has the picture's own grain: the filter would keep that grain and the
+      // temporal residual would hold none of it, so the improved analysis (--fga 2) found no grain where the source
+      // repeats pictures. It reads the references without the repeats.
+      std::deque<TemporalFilterSourcePicInfo> grainRefs;
+      const bool repeatsLeftOut = m_encCfg->m_fga >= 2
+                                  && fgaLeaveOutRepeats( origBuf, pic->poc, picFifo, srcFrameInfo, grainRefs );
+      std::deque<TemporalFilterSourcePicInfo>& fgaRefs = repeatsLeftOut ? grainRefs : srcFrameInfo;
+      if( isFilterThisFrame && pic->useMCTF && filterStrength == FGA_FILTER_STRENGTH && !repeatsLeftOut )
       {
         // the picture filtered for the encoding is exactly the one the analysis needs (from QP 20 on with MCTFLevelTilt
-        // off; the tilt raises the key pictures' strength, so the analysis filters its own copy)
+        // off; the tilt raises the upper temporal levels' strength, so for those the analysis filters its own copy)
         pic->m_picShared->fgaUsesFilteredBuf() = true;
       }
       else
       {
         PelStorage& fgaBuf = pic->m_picShared->getFgaFilteredBuf();
         fgaBuf.create( m_encCfg->m_internChromaFormat, m_area );
-        bilateralFilter( origBuf, srcFrameInfo, fgaBuf, FGA_FILTER_STRENGTH );
+        bilateralFilter( origBuf, fgaRefs, fgaBuf, FGA_FILTER_STRENGTH );
       }
 
       // The filtered picture gives the flat areas. With the improvements (--fga 2) the grain itself is measured from the
       // temporal residual of the picture and its neighbours, whose motion has just been estimated.
       pic->m_picShared->fgaResidualWeight() = m_encCfg->m_fga >= 2
-        ? fgaTemporalResidual( origBuf, pic->poc, picFifo, srcFrameInfo, pic->m_picShared->getFgaResidualBuf() ) : 0;
+        ? fgaTemporalResidual( origBuf, pic->poc, picFifo, fgaRefs, pic->m_picShared->getFgaResidualBuf() ) : 0;
     }
 
-    if( m_encCfg->hasBlockQpOffsets() || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop )
+    if( isFilterThisFrame && ( m_encCfg->hasBlockQpOffsets() || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop ) )
     {
       const int ctuSize        = m_encCfg->m_bimCtuSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
@@ -1220,7 +1349,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       }
     }
   }
-  else
+  if( !isFilterThisFrame )
   {
     pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
   }
@@ -1305,32 +1434,52 @@ static MotionVector fgaResidualVector( const MotionVector& mv )
   return mv;
 }
 
-// For grain that is independent from picture to picture, the residual e = 2 O - P - N of a picture O and its motion
-// compensated neighbours P and N has six times the grain variance and the spectrum of the grain, whatever the filter
-// keeps of it (one neighbour: e = O - P, twice the grain variance). The vectors are the filter's own (hierarchical
-// search over a wide range, 1/16 sample), rounded to full samples: interpolating the neighbours would low-pass their
-// grain and bias the measured spectrum.
-int MCTF::fgaTemporalResidual( const PelStorage& orig, int poc, const std::deque<Picture*>& picFifo,
-                               const std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo,
-                               PelStorage& residual ) const
+// The neighbour of the picture with POC poc for the temporal residual: of the references refs, the nearest picture
+// before it (direction -1) or after it (+1), nullptr without one. A neighbour further away than the adjacent picture
+// (the pictures between repeat this one and were left out, fgaLeaveOutRepeats) is taken only from the same shot: not
+// across a scene cut PreProcess marked.
+static const TemporalFilterSourcePicInfo* fgaResidualNeighbour( int poc, int direction, const std::deque<Picture*>& picFifo,
+                                                                const std::deque<TemporalFilterSourcePicInfo>& refs )
 {
-  // the entries of the neighbours: an entry's buffer wraps the original of its picture
-  const TemporalFilterSourcePicInfo* prev = nullptr;
-  const TemporalFilterSourcePicInfo* next = nullptr;
-  for( const Picture* p : picFifo )
+  const TemporalFilterSourcePicInfo* nearest = nullptr;
+  int nearestDistance = std::numeric_limits<int>::max();
+  for( const TemporalFilterSourcePicInfo& ref : refs )
   {
-    if( p->poc != poc - 1 && p->poc != poc + 1 )
+    const int distance = ( fgaPocOf( ref, picFifo ) - poc ) * direction;
+    if( distance > 0 && distance < nearestDistance )
     {
-      continue;
-    }
-    for( const TemporalFilterSourcePicInfo& src : srcFrameInfo )
-    {
-      if( src.picBuffer.Y().buf == p->getOrigBuf( COMP_Y ).buf )
-      {
-        ( p->poc < poc ? prev : next ) = &src;
-      }
+      nearest         = &ref;
+      nearestDistance = distance;
     }
   }
+  if( !nearest || nearestDistance == 1 )
+  {
+    return nearest;
+  }
+  // the pictures from the one after the earlier of the two up to the later one: one that starts a shot parts them
+  const int firstPoc = direction > 0 ? poc + 1 : poc - nearestDistance + 1;
+  for( const Picture* p : picFifo )
+  {
+    if( p->poc >= firstPoc && p->poc < firstPoc + nearestDistance && p->m_picShared->fgaSceneCut() )
+    {
+      return nullptr;
+    }
+  }
+  return nearest;
+}
+
+// For grain that is independent from picture to picture, the residual e = 2 O - P - N of a picture O and its motion
+// compensated neighbours P and N has six times the grain variance and the spectrum of the grain, whatever the filter
+// keeps of it (one neighbour: e = O - P, twice the grain variance). A picture that repeats O has O's grain, not grain
+// of its own: P and N are the nearest pictures of refs, which has none of those (fgaLeaveOutRepeats). The vectors are
+// the filter's own (hierarchical search over a wide range, 1/16 sample), rounded to full samples: interpolating the
+// neighbours would low-pass their grain and bias the measured spectrum.
+int MCTF::fgaTemporalResidual( const PelStorage& orig, int poc, const std::deque<Picture*>& picFifo,
+                               const std::deque<TemporalFilterSourcePicInfo>& refs,
+                               PelStorage& residual ) const
+{
+  const TemporalFilterSourcePicInfo* prev = fgaResidualNeighbour( poc, -1, picFifo, refs );
+  const TemporalFilterSourcePicInfo* next = fgaResidualNeighbour( poc, +1, picFifo, refs );
   if( prev && next )
   {
     const double rmsPrev = fgaMeanMotionRms( prev->mvs );

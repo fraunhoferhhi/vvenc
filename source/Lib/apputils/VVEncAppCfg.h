@@ -596,6 +596,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toForceScc                    ( &c->m_forceScc );
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
   IStreamToInt8                     toPOC0IDR                     ( &c->m_poc0idr );
+  IStreamToInt8                     toFgaMaxTempDepth             ( &c->m_fgaMaxTempDepth );
   IStreamToInt8                     toFga                         ( &c->m_fga );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
@@ -1206,6 +1207,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Film grain analysis");
     opts.addOptions()
+    ("FgaMaxTempDepth",               toFgaMaxTempDepth,         "Experimental: Film grain analysis of the pictures up to this temporal layer (0: key pictures only, the first coded picture of every GOP; a depth above the GOP's highest layer means all pictures; low delay: the layer of the picture's position in the GOP). Each added picture costs a filtered copy and an analysis, plus an MCTF motion search where MCTF does not filter it")
     ("fga",                           toFga,                     "Experimental: Film grain analysis generating the FGC SEI message (0: off, 1: the analysis of VTM, 2: (1) + grain measured from the temporal residual, calibrated scaling factors, 3: (2) + auto-regressive grain model)")
     ("fgastrength",                   toFgaStrength,             "Experimental: Film grain strength as a factor of the analysed strength [0...4.0), 1.0 keeps it, 0 disables the grain")
     ;

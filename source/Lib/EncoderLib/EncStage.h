@@ -81,6 +81,7 @@ private:
   int              m_fgaResidualWeight = 0;        // its variance relative to the grain variance, 0 without residual
   bool             m_fgaSceneCut = false;          // the picture starts a new scene (film grain analysis)
   int              m_fgaLastSceneCutPoc = std::numeric_limits<int>::min();   // the latest scene cut before it
+  bool             m_fgaShotRestart = false;       // the picture after a shot start: its analysis restarts the shot's statistics
   uint64_t         m_cts;
   int              m_maxFrames;
   int              m_poc;
@@ -132,6 +133,7 @@ public:
   int&         fgaResidualWeight()     { return m_fgaResidualWeight; }
   bool&        fgaSceneCut()           { return m_fgaSceneCut; }
   int&         fgaLastSceneCutPoc()    { return m_fgaLastSceneCutPoc; }
+  bool&        fgaShotRestart()        { return m_fgaShotRestart; }
   Size         getLumaSize()     const { return m_lumaSize; }
 
   // withSource false: the source buffer comes later, from createSource() or takeSourceFrom()
@@ -185,6 +187,7 @@ public:
     m_fgaResidualWeight = 0;
     m_fgaSceneCut        = false;
     m_fgaLastSceneCutPoc = std::numeric_limits<int>::min();
+    m_fgaShotRestart     = false;
 
     m_picVA.reset();
     m_isSccWeak    = false;

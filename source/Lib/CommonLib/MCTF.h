@@ -232,12 +232,13 @@ private:
   void subsampleLuma    (const PelStorage &input, PelStorage &output, const int factor = 2) const;
 
   // The temporal residual of the film grain for the improved analysis (--fga 2) of the picture orig with POC poc, from
-  // its neighbours POC - 1 and POC + 1 in picFifo, motion compensated with the vectors estimated for the filter (their
-  // entries in srcFrameInfo).
+  // its neighbours in picFifo: the nearest picture before and after it with an entry in refs (POC - 1 and POC + 1 unless
+  // those repeat the picture and were left out of refs), motion compensated with the vectors estimated for the filter
+  // (those entries').
   // Returns the variance of the residual relative to the grain variance: 6 with both neighbours, 2 with one, and 0,
   // with no residual made, with none.
   int  fgaTemporalResidual( const PelStorage& orig, int poc, const std::deque<Picture*>& picFifo,
-                            const std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo,
+                            const std::deque<TemporalFilterSourcePicInfo>& refs,
                             PelStorage& residual ) const;
 
   // refMargin is the width of the replicated border around the reference frame buffer.

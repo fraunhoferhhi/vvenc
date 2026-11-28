@@ -55,11 +55,12 @@ namespace vvenc {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int minIntraDist )
+void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int minIntraDist, int fgaMaxTempDepth )
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
   m_mctfCfg            = &mctfCfg;
+  m_fgaMaxTempDepth    = fgaMaxTempDepth;
   m_refreshType        = refreshType;
   m_picReordering      = bPicReordering;
   m_poc0idr            = poc0idr;
@@ -330,6 +331,20 @@ bool GOPCfg::isChromaDeltaQPEnabled() const
   return false;
 }
 
+// The pictures of a full GOP the film grain analysis looks at: its key picture and those FgaMaxTempDepth adds.
+int GOPCfg::getNumFgaPicsPerGop() const
+{
+  int numPics = 0;
+  for( const auto& gopEntry : m_defaultGopLists.back() )
+  {
+    if( gopEntry.m_isStartOfGop || gopEntry.m_isFgaPicture )
+    {
+      numPics++;
+    }
+  }
+  return numPics;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int GOPCfg::xGetMinPoc( int maxGopSize, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ] ) const
@@ -588,11 +603,12 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   // mark first gop entry
   gopList[ pocToGopIdx[ 0 ] ].m_isStartOfGop = true;
 
-  // STSA, forward B flags, MCTF index, virtual TLayer
+  // STSA, forward B flags, MCTF index, virtual TLayer, film grain analysis layer
   xSetSTSA     ( gopList, pocToGopIdx );
   xSetBckwdOnly( gopList );
   xSetMctfIndex( maxGopSize, gopList );
   xSetVTL      ( gopList );
+  xSetFgaLayer ( maxGopSize, gopList );
   if( m_firstPassMode == 2 || m_firstPassMode == 4 )
   {
     xSetSkipFirstPass( gopList );
@@ -754,6 +770,42 @@ void GOPCfg::xSetMctfIndex( int maxGopSize, GOPEntryList& gopList ) const
         break;
       }
     }
+  }
+}
+
+// The film grain analysis looks at the key picture of every GOP (its first coded picture, see MCTF::filter) and, with
+// FgaMaxTempDepth above 0, at the other pictures whose layer (m_fgaLayer) is at most that depth; MCTF prepares them
+// for the analysis also where it does not filter them for the coding. With picture reordering the layer is the
+// temporal id. Without it (low delay) all temporal ids are 0, so it is the hierarchical prediction layer of the
+// picture's position in the GOP (as VTM's m_hierPredLayerIdx): the smallest layer whose distance, the GOP size >> layer,
+// divides the position, 0 for the key picture. The position is the POC inside the GOP list (with POC0IDR 0 the
+// picture's POC differs from it by one).
+void GOPCfg::xSetFgaLayer( int maxGopSize, GOPEntryList& gopList ) const
+{
+  for( auto& gopEntry : gopList )
+  {
+    if( m_picReordering )
+    {
+      gopEntry.m_fgaLayer = gopEntry.m_temporalId;
+    }
+    else
+    {
+      int pos = gopEntry.m_POC;
+      // as in xSetMctfIndex: the last picture of a pruned GOP stands for the end of the full GOP
+      if( (int)gopList.size() < maxGopSize && pos == (int)gopList.size() )
+      {
+        pos = maxGopSize;
+      }
+      // stops at the latest where the distance is 1 (also for GOP sizes that are no power of 2), so it never divides by 0
+      int hierPredLayerIdx = 0;
+      while( ( maxGopSize >> hierPredLayerIdx ) > 1 && pos % ( maxGopSize >> hierPredLayerIdx ) != 0 )
+      {
+        hierPredLayerIdx++;
+      }
+      gopEntry.m_fgaLayer = hierPredLayerIdx;
+    }
+    // depth 0 is the key picture alone, whatever temporal ids a given GOP configuration has
+    gopEntry.m_isFgaPicture = !gopEntry.m_isStartOfGop && m_fgaMaxTempDepth > 0 && gopEntry.m_fgaLayer <= m_fgaMaxTempDepth;
   }
 }
 

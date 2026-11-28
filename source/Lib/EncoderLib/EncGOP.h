@@ -206,13 +206,13 @@ private:
 
   FGAnalyzer              m_fgAnalyzer;                 ///< film grain analysis (--fga)
 
-  // An analysis, run as a thread pool task. The tasks run one after the other in coding order (each waits
-  // for the previous one), because every analysis adds to the statistics of the previous ones.
+  // An analysis, run as a thread pool task. The tasks run one after the other in POC order (each waits for the
+  // previous one), because every analysis adds to the statistics of the previous ones.
   struct FgaTask
   {
     EncGOP*        gop       = nullptr;
     Picture*       pic       = nullptr;
-    int            codingNum = 0;
+    int            codingNum = 0;   ///< the picture with whose access unit the result is taken
     int            startPoc  = std::numeric_limits<int>::min();   ///< the first picture in output order its result is for; written pictures keep theirs
     bool           sceneCut  = false;   ///< a scene cut lies between the previously analysed picture and this one
     FilmGrainParam result;
@@ -225,7 +225,7 @@ private:
   // The film grain parameter sets by the POC from which they apply in output order: an analysis applies from the
   // picture after the previously analysed one, or from a scene cut between them, but never before the picture after
   // the last written one. The latest few are kept.
-  static constexpr size_t   FGC_PARAM_SETS  = 8;
+  size_t                    m_fgcParamSets  = 8;   ///< the most kept: two GOPs of analyses and two more, at least 8
   std::map<int, FilmGrainParam> m_fgcByStartPoc;
   bool                      m_fgcCompSignalled[ MAX_NUM_COMP ] = { false, false, false };   ///< components present in a parameter set so far
   // The POCs of the latest access units written in the current coded layer video sequence (more than two GOPs), and
@@ -233,31 +233,81 @@ private:
   static constexpr size_t   FGC_SEI_HISTORY = 160;
   std::set<int>             m_fgcWrittenPocs;
   bool                      m_fgcRaslSeiPending = false;
-  // The film grain SEI fitted to the grain the coding lost (xScaleToLostGrain): per component, intensity interval and
-  // temporal layer, the interval's summed spectra of the latest LOST_GRAIN_POOL pictures of that layer and the last
-  // cut-offs and scaling factor written; per component and temporal layer, the last cut-off shift. Cleared at every
-  // random access point (--fga 2 and 3).
-  struct LostGrainSums
+  // The film grain SEI fitted to the grain the coding lost (xScaleToLostGrain): the lost-grain spectra of the latest
+  // coded pictures (LostGrainPicture); per component, intensity interval and temporal layer, the last cut-offs and
+  // scaling factor written; per component, the cut-offs (LostGrainCutoffs).
+  // Started over at every random access point, except the costs the cut-offs are chosen by (LostGrainStates; --fga 2
+  // and 3).
+  struct LostGrainPicture
   {
-    double orig[ 256 ] = {};
-    double reco[ 256 ] = {};
-    int    blocks      = 0;
-    int    poc         = 0;
+    int      poc   = 0;
+    int      scene = 0;   ///< POC of the scene cut its scene starts with (PreProcess::xDetectSceneCut)
+    unsigned layer = 0;   ///< temporal layer
+    std::vector<LostGrainSpectrum> spectra[ MAX_NUM_COMP ];   ///< per 8-bit tile mean (FGAnalyzer::lostGrainSpectra)
   };
-  // Only the layer's pictures at most this many pictures before the current one are pooled: the lower temporal layers'
-  // pictures are 4, 8 or more apart, so their pools reached 12, 24 or more pictures back, into different content, while
-  // the highest layer's reached 6. On gangster_chase the pictures of layers 3 and 4 then got 1.6-2.2 times the scaling
-  // factor of the layer-5 pictures between them (--fga 3: 112 / 84 / 82 against 49-53).
+  // An intensity interval is fitted to the lost grain of the LOST_GRAIN_POOL coded pictures of the picture's scene that
+  // are nearest to it in output order, itself among them, whatever their temporal layers (xLostGrainPool). What a single
+  // picture lost is not what its neighbours lost: Top Gun (4K HDR, a real encode at QP 31) comes from an HEVC encode
+  // with two B pictures between P pictures, and every third picture has more fine grain; at periods of 6.25-3.125
+  // samples the coding took 2.6-2.9 (squared 10-bit sample values) from those and 2.2-2.3 from the others, in every
+  // temporal layer alike (the layers' means: 2.32-2.41), while periods of 12.5-6.25 samples differ by 4 % from picture
+  // to picture. With a pool per temporal layer (the layer's last 4 pictures at most 6 back: one picture in layers 0 to
+  // 3, two in layer 4) the pools held between none and only such pictures, and where that band's allowance ends the fit
+  // (cut-offs 5 / 5 under a tolerance of 1.05) the scaling factor went 56-64 from one picture to the next, and all the
+  // grain with it: the decoded grain's standard deviation changed by 3.3 % between neighbouring pictures in the median
+  // and by more than 8.6 % between one pair in 20. The intervals of a new analysis are summed from the kept spectra,
+  // so a pool does not start over with them.
+  // The frequency model's scaling factor (--fga 2) is the lowest of the fits to single pictures of the pool
+  // (lowestPictureFit; which ones: LOST_GRAIN_POOL_SPAN): the picture is one of them, so it never gets more than the
+  // tolerance above what it lost itself, and the pictures around it, whose pools hold mostly the same pictures, get
+  // the same. Fitted to the pool's sum alone, the two of three Top Gun pictures that lost less had 1.10-1.13 of their
+  // lost amplitude at periods of 6.25-3.125 samples, and a picture of the lowest temporal layers, whose nearest coded
+  // pictures are those of the group of pictures before it, 30 and more pictures away, got what those had lost: on
+  // motion96 (Top Gun, high motion; replayed on a real encode's spectra) a group's first picture had lost 2.4 at
+  // periods of 50-25 samples and its pool 5.7, and it got a scaling factor of 119 between neighbours at 75-84.
+  // A single picture's fit is to the most its tiles say it lost, their mean plus two standard errors
+  // (FGAnalyzer::lostGrainPowerAtMost): it lowers the fit only by what the error of its own measurement does not
+  // explain. Fitted to the tiles' means, the lowest of 8 fits was also the lowest of 8 errors. In real encodes at
+  // QP 31 (pictures 120 to 239 of four 10 s cuts: gangster_chase, 1080p; game_of_death, 3840x1632; motion96 and
+  // hangar, Top Gun) the single fits of a pool differ by 9.4 / 8.6 / 5.1 / 3.6 % (standard deviation, in amplitude)
+  // and one standard error is 4.9 / 2.9 / 2.1 / 0.9 % of a fit, so most of the difference is what the pictures lost.
+  // The lowest fit was 0.83 / 0.87 / 0.90 / 0.96 of the fit to the pool's sum and is 0.91 / 0.92 / 0.93 / 0.98 of
+  // it; the decoded grain's standard deviation changed by more than 21.6 / 31.4 / 11.4 / 1.9 % between one pair of
+  // neighbouring pictures in 20 and does by 17.5 / 30.0 / 10.1 / 2.1 %.
+  static constexpr size_t LOST_GRAIN_POOL = 8;
+  // The pool's near pictures are those at most this many pictures away (the picture itself is one).
+  // --fga 2 fits only the near pictures alone (xLostGrainFittedAlone): those are the pictures whose pools hold this
+  // picture too. A far one counts in the pool's sum only: fitted alone, it lowered pictures far from it and not the
+  // ones between. On gangster_chase a layer-1 picture 16 pictures after a scene cut had lost less than the pictures
+  // before it (fitted alone: 114, the others 154-204) and took the scene's pictures 1 to 4, 6 and 8 to a scaling
+  // factor of 57 between pictures at 65-74.
+  // A picture without a near one (the first pictures coded of a group of pictures, of the lowest temporal layers) is
+  // coded before all the pictures around it, which are of higher layers than its own; what such pictures lose, only
+  // the far pictures of higher layers than its own tell, so those are fitted alone for it. With none fitted alone
+  // such a picture stood out above its neighbours where every third picture loses less (hangar, replayed: the
+  // scaling factor times the pattern's standard deviation changed by more than 3.5 % between one pair of
+  // neighbouring pictures in 20, against 2.1 %). A far picture of its own layer or of a lower one is coded with
+  // another quantizer and says nothing of them: on game_of_death the layer-0 picture of the group before (QP 20,
+  // fitted alone: 74, the pictures before it 88-118) took the next group's layer-0 and layer-1 pictures, which
+  // fitted alone had 112 and 96, to 74, and their decoded grain had a standard deviation of 2.18 and 2.09 between
+  // neighbours at 3.44-3.50 and 2.74-2.75 (now 2.93 and 2.78 between 3.63-3.68 and 2.89). With both rules the
+  // decoded grain's standard deviation changes by more than 15.8 / 17.4 / 10.3 / 2.1 % between one pair of
+  // neighbouring pictures in 20 on the four cuts above.
+  // The auto-regressive model's scaling factor (--fga 3) is the fit to the pool's sum, never above the fit to the sum
+  // of the pool's near pictures (that keeps the far pool of a picture of the lowest layers from giving it more than
+  // the near pictures lost). Not the lowest fit of single pictures: this model's scaling factors are small (21-26 on
+  // Top Gun at QP 31, --fga 2's are 57-63 there), so one step is 4 % of the grain, and the lowest fit moved by a step
+  // or two whenever a picture with a low fit entered or left the pool (the random access point that starts a scene
+  // had 22 where the pictures after it had 24, and its six nearest pictures and the next three of the lowest layers
+  // got 22 between neighbours at 23-24): the decoded grain's standard deviation changed by more than 9.1 % between
+  // one pair of neighbouring pictures in 20, against 3.8 % with the fit to the sums, whose grain was within 1.04 of
+  // the lost grain's amplitude at periods of 25 to 3.125 samples in the two pictures measured.
   static constexpr int LOST_GRAIN_POOL_SPAN = 6;
   struct LostGrainFitted
   {
     int h, w, scale;
   };
   using LostGrainKey = std::tuple<int, int, int, unsigned>;   ///< component, interval lower and upper bound, temporal layer
-  static constexpr size_t LOST_GRAIN_POOL = 4;
-  std::map<LostGrainKey, std::deque<LostGrainSums>>        m_lostGrainHistory;
-  std::map<LostGrainKey, LostGrainFitted>                  m_lostGrainFitted;
-  std::map<std::pair<int, unsigned>, std::pair<int, int>> m_lostGrainShift;   ///< (component, layer) -> (dh, dw)
   // With the auto-regressive model (--fga 3): per component, the grain of the filter last signalled (FGAnalyzer::arGrain
   // is computed once per filter, the fit runs for every picture).
   struct ArGrainOfFilter
@@ -265,7 +315,50 @@ private:
     std::vector<int>    filter;   ///< log2 scale factor, then the model values after the scaling factor
     FGAnalyzer::ArGrain grain;
   };
-  ArGrainOfFilter           m_arGrain[ MAX_NUM_COMP ];
+  // What a component's cut-offs are chosen by (xFitLostGrain): per pair of cut-offs the two costs of its fits
+  // (FGAnalyzer::LostGrainFit), and the two costs of no grain, each summed over the intervals' tiles.
+  struct LostGrainCosts
+  {
+    std::vector<double> seen, allBands;   ///< per pair of cut-offs, in xFitLostGrain's order
+    double              seenOfNone = 0.0, allBandsOfNone = 0.0;
+    explicit LostGrainCosts( size_t pairs = 0 ) : seen( pairs, 0.0 ), allBands( pairs, 0.0 ) {}
+    // counts the sums so far memory times, then adds a picture's costs
+    void fadeAndAdd( const LostGrainCosts& picture, double memory )
+    {
+      seen.resize( picture.seen.size(), 0.0 );
+      allBands.resize( picture.allBands.size(), 0.0 );
+      for( size_t k = 0; k < seen.size(); k++ )
+      {
+        seen    [ k ] = memory * seen    [ k ] + picture.seen    [ k ];
+        allBands[ k ] = memory * allBands[ k ] + picture.allBands[ k ];
+      }
+      seenOfNone     = memory * seenOfNone     + picture.seenOfNone;
+      allBandsOfNone = memory * allBandsOfNone + picture.allBandsOfNone;
+    }
+  };
+  // The cut-offs of a component's grain.
+  struct LostGrainCutoffs
+  {
+    int h = 0, w = 0;
+  };
+  struct LostGrainState
+  {
+    std::deque<LostGrainPicture>            pictures;   ///< the latest coded ones, in coding order
+    std::map<LostGrainKey, LostGrainFitted> fitted;
+    std::map<int, LostGrainCutoffs>         cutoffs;    ///< per component
+    ArGrainOfFilter                         arGrain[ MAX_NUM_COMP ];
+  };
+  // A random access point starts the fit over, but the pictures before it in output order that are coded after it
+  // (its leading pictures) go on with the state from before it (xLostGrainStateOf). The costs the cut-offs are chosen
+  // by are not started over: every picture adds its own in coding order, the older ones fading (xFitLostGrain).
+  struct LostGrainStates
+  {
+    LostGrainState current;
+    LostGrainState leading;                                  ///< of the pictures before the last random access point
+    int            irapPoc = std::numeric_limits<int>::min();   ///< POC of the last random access point coded
+    std::map<int, LostGrainCosts> cutoffCosts;               ///< per component
+  };
+  LostGrainStates           m_lostGrain;   ///< the fit of the film grain SEIs to the grain the coding lost (xScaleToLostGrain)
 
 public:
   EncGOP( MsgLog& msglog );
@@ -308,7 +401,8 @@ private:
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, const PicList& picList ) const;
 
   void xSetupPicAps                   ( Picture* pic );
-  void xAnalyzeFilmGrain              ( Picture& pic );
+  void xAnalyzeFilmGrain              ( const Picture& current, const PicList& picList );
+  void xIssueFgaTask                  ( Picture& pic, int codingNum );
   void xRunFgaTask                  ( FgaTask& task );
   void xWaitFgaTasks                ();
   void xInitPicsInCodingOrder         ( const PicList& picList );
@@ -332,11 +426,19 @@ private:
   bool xFilmGrainSeiNeeded           ( const Slice& slice, const SeiFgc& sei, ChromaFormat chromaFormat );
   bool xFitsLostGrain                ( ) const;
   void xStoreLostGrainSpectra        ( Picture& pic ) const;
+  LostGrainState& xLostGrainStateOf  ( const Picture& pic, const Slice& slice );
+  static std::vector<const LostGrainPicture*> xLostGrainPool( const std::deque<LostGrainPicture>& pictures );
+  static std::vector<char> xLostGrainFittedAlone   ( const std::vector<const LostGrainPicture*>& pool );
   void xScaleToLostGrain             ( Picture& pic, const Slice& slice, SeiFgc& sei );
-  void xFitLostGrainAr               ( int c, unsigned layer, int bitDepth, int log2ScaleFactor,
-                                       const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm );
-  void xFitLostGrain                 ( int c, unsigned layer, int bitDepth, bool chroma420, int log2ScaleFactor,
-                                       const std::vector<FGAnalyzer::LostGrainPower>& power, SeiFgc::CompModel& cm );
+  void xFitLostGrainAr               ( LostGrainState& state, int c, unsigned layer, int bitDepth, int log2ScaleFactor,
+                                       const std::vector<FGAnalyzer::LostGrainPower>& power,
+                                       const std::vector<FGAnalyzer::LostGrainPower>& nearPower,
+                                       const std::vector<FGAnalyzer::LostGrainBands>& bands, SeiFgc::CompModel& cm ) const;
+  static int xBestLostGrainCutoffs   ( const LostGrainCosts& sums, int current );
+  void xFitLostGrain                 ( LostGrainState& state, LostGrainCosts& costs, int c, unsigned layer, int bitDepth, bool chroma420,
+                                       int log2ScaleFactor, const std::vector<FGAnalyzer::LostGrainPower>& power,
+                                       const std::vector<std::vector<FGAnalyzer::LostGrainPower>>& picturePower,
+                                       const std::vector<FGAnalyzer::LostGrainBands>& bands, SeiFgc::CompModel& cm ) const;
   void xWriteLeadingSEIs              ( Picture& pic, AccessUnitList& accessUnit );
   void xWriteTrailingSEIs             ( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr );
   int  xWriteVPS                      ( AccessUnitList &accessUnit, const VPS *vps, HLSWriter& hlsWriter );
