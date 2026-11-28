@@ -186,6 +186,7 @@ Picture::Picture()
     , picInitialQP        ( -1 )
     , picInitialLambda    ( -1.0 )
     , picQPFraction       ( 0.0 )
+    , cuTreePicQpOffset   ( 0 )
     , picMemorySTA        ( -1 )
     , picVA               ()
     , isSccWeak           ( false )
@@ -242,6 +243,7 @@ void Picture::reset()
   poc                  = -1;
   TLayer               = std::numeric_limits<uint32_t>::max();
   gopAdaptedQP         = 0;
+  cuTreePicQpOffset    = 0;
   force2ndOrder        = false;
   isSceneCutGOP        = false;
   isSceneCutCheckAdjQP = false;

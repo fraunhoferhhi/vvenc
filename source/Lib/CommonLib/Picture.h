@@ -280,6 +280,7 @@ public:
   int                           picInitialQP;
   double                        picInitialLambda;
   double                        picQPFraction; // fractional part of the picture QP with a fractional --qp, applied by QPA
+  int                           cuTreePicQpOffset; // QP that CuTreePicStrength added to the picture (picture offset, intra cap, noise floor), 0 without it
   int16_t                       picMemorySTA;
   PicVisAct                     picVA;
   std::vector<LostGrainSpectrum> lostGrainSpectra[ MAX_NUM_COMP ];   // ascending mean8; from the picture's end to its SEI
