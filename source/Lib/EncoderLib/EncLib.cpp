@@ -221,7 +221,12 @@ void EncLib::initPass( int pass, const char* statsFName )
       // restore encoder config for final 2nd RC pass
       const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
       m_rateCtrl->init( m_encCfg );
-      const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
+      // rate control's base QP is a configured QP: CuTreePicStrength codes at the coding QP for it, as at constant QP
+      // (VVEncCfg::xInitCfgMembers); the same QP without CuTreePicStrength
+      VVEncCfg& finalPassCfg      = const_cast<VVEncCfg&>(m_encCfg);
+      finalPassCfg.m_QP           = m_rateCtrl->getBaseQP();
+      finalPassCfg.m_configuredQP = finalPassCfg.m_QP;
+      finalPassCfg.m_QP           = getCodingQp( finalPassCfg );
     }
     if( m_encCfg.m_RCTargetBitrate > 0 && !m_encCfg.m_LookAhead )
     {
@@ -264,7 +269,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_cuTree = new CuTree();
     m_cuTree->initStage( m_encCfg, 1, 0, false, true, false );
-    m_cuTree->init( m_encCfg, m_threadPool );
+    m_cuTree->init( m_encCfg, m_rateCtrl, m_threadPool );
     m_encStages.push_back( m_cuTree );
     // a GOP and its look-ahead wait here, while the GOP encoder holds the previous GOP
     m_maxNumPicShared += m_encCfg.m_GOPSize + CuTree::getNumLookAheadPics( m_encCfg );

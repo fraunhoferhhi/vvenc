@@ -113,6 +113,57 @@ static void tplPredBlock16x16_neon( const Pel* src, ptrdiff_t srcStride, int fx,
   }
 }
 
+// Adds ( org - pred )^2 of 8 samples to sumLo (lanes 0-3) and sumHi (4-7): |org - pred| <= 1023, so the squares fit
+// 20 bits and the sums of a 16x16 block 28 bits.
+static inline void tplAddSquaredError_neon( int16x8_t org, int16x8_t pred, uint32x4_t& sumLo, uint32x4_t& sumHi )
+{
+  const uint16x8_t absDiff = vreinterpretq_u16_s16( vabdq_s16( org, pred ) );
+  sumLo = vmlal_u16( sumLo, vget_low_u16( absDiff ), vget_low_u16( absDiff ) );
+  sumHi = vmlal_u16( sumHi, vget_high_u16( absDiff ), vget_high_u16( absDiff ) );
+}
+
+// Neon version of tplPredError8x8_SIMD (AVX2): the squared error of an 8x8 block against its bilinear prediction, the
+// prediction computed as in tplPredBlock8x8_neon and kept in registers.
+static int tplPredError8x8_neon( const Pel* src, ptrdiff_t srcStride, int fx, int fy, const Pel* org, ptrdiff_t orgStride )
+{
+  const int16_t wx0 = 16 - fx, wx1 = fx, wy0 = 16 - fy, wy1 = fy;
+  uint32x4_t sumLo = vdupq_n_u32( 0 ), sumHi = vdupq_n_u32( 0 );
+  int16x8_t  top   = tplPredRow_neon( src, wx0, wx1 );
+  for( int j = 0; j < 8; j++ )
+  {
+    const int16x8_t bot = tplPredRow_neon( src + ( j + 1 ) * srcStride, wx0, wx1 );
+    const int16x8_t o   = vld1q_s16( org + j * orgStride );
+    tplAddSquaredError_neon( o, tplPredCol_neon( top, bot, wy0, wy1 ), sumLo, sumHi );
+    top = bot;
+  }
+  return ( int ) horizontal_add_u32x4( vaddq_u32( sumLo, sumHi ) );
+}
+
+// Neon version of tplPredError16x16_SIMD (AVX2), as tplPredError8x8_neon with two vectors per row.
+static int tplPredError16x16_neon( const Pel* src, ptrdiff_t srcStride, int fx, int fy, const Pel* org, ptrdiff_t orgStride )
+{
+  const int16_t wx0 = 16 - fx, wx1 = fx, wy0 = 16 - fy, wy1 = fy;
+  uint32x4_t sumLo0 = vdupq_n_u32( 0 ), sumHi0 = vdupq_n_u32( 0 );
+  uint32x4_t sumLo1 = vdupq_n_u32( 0 ), sumHi1 = vdupq_n_u32( 0 );
+  int16x8_t  top0   = tplPredRow_neon( src, wx0, wx1 );
+  int16x8_t  top1   = tplPredRow_neon( src + 8, wx0, wx1 );
+  for( int j = 0; j < 16; j++ )
+  {
+    const Pel* srcRow = src + ( j + 1 ) * srcStride;
+    const Pel* orgRow = org + j * orgStride;
+    const int16x8_t bot0 = tplPredRow_neon( srcRow, wx0, wx1 );
+    const int16x8_t bot1 = tplPredRow_neon( srcRow + 8, wx0, wx1 );
+    const int16x8_t o0   = vld1q_s16( orgRow );
+    const int16x8_t o1   = vld1q_s16( orgRow + 8 );
+    tplAddSquaredError_neon( o0, tplPredCol_neon( top0, bot0, wy0, wy1 ), sumLo0, sumHi0 );
+    tplAddSquaredError_neon( o1, tplPredCol_neon( top1, bot1, wy0, wy1 ), sumLo1, sumHi1 );
+    top0 = bot0;
+    top1 = bot1;
+  }
+  const uint32x4_t sum = vaddq_u32( vaddq_u32( sumLo0, sumHi0 ), vaddq_u32( sumLo1, sumHi1 ) );
+  return ( int ) horizontal_add_u32x4( sum );
+}
+
 // Neon version of tplDownsampleRowCore, identical results: 8 output samples per step, the rest by the C function.
 static void tplDownsampleRow_neon( const Pel* src, ptrdiff_t srcStride, Pel* dst, int dstWidth )
 {
@@ -406,6 +457,8 @@ void CuTree::_initCuTreeARM<NEON>()
   m_codeBlock[TPL_BLK_16] = tplCodeBlock16x16_neon;
   m_predBlock[TPL_BLK_8]  = tplPredBlock8x8_neon;
   m_predBlock[TPL_BLK_16] = tplPredBlock16x16_neon;
+  m_predError[TPL_BLK_8]  = tplPredError8x8_neon;
+  m_predError[TPL_BLK_16] = tplPredError16x16_neon;
   m_downsampleRow         = tplDownsampleRow_neon;
 }
 
