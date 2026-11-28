@@ -2185,8 +2185,6 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_cuTreeBlockSize != 16 && c->m_cuTreeBlockSize != 32,                            "CuTreeBlockSize must be 16, 32 or -1 (automatic)" );
   vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && c->m_blockImportanceMapping != 1,                      "CuTreePicStrength needs the CU tree (BIM 1)" );
   vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && ( c->m_IntraPeriod == 1 || ! c->m_picReordering ),   "CuTreePicStrength needs random access (picture reordering, not all intra)" );
-  vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && ( c->m_RCTargetBitrate > 0 || ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX ) ),
-                                                                                                                  "CuTreePicStrength supports constant QP only, without rate control or a maximum rate" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
@@ -3428,7 +3426,9 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     if( c->m_blockImportanceMapping == 1 )
     {
       css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize;
-      if( c->m_cuTreePicStrength > 0 ) css << ", picture strength " << c->m_cuTreePicStrength / 32.0 << ", coded at QP " << vvenc::getCodingQp( *c );
+      if( c->m_cuTreePicStrength > 0 ) css << ", picture strength " << c->m_cuTreePicStrength / 32.0;
+      // with a target bitrate the rate control sets the QP
+      if( c->m_cuTreePicStrength > 0 && c->m_RCTargetBitrate == 0 ) css << ", coded at QP " << vvenc::getCodingQp( *c );
       css << ") ";
     }
 

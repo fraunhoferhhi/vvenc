@@ -333,8 +333,8 @@ int testLibParameterRanges()
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { -1,16,32 } );
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { 0,8,64 }, true );
 
-  // CU-tree picture QPs: only with the CU tree, random access and constant QP; each refused case is checked to be valid
-  // with the option off
+  // CU-tree picture QPs: only with the CU tree and random access; each refused case is checked to be valid with the
+  // option off. Valid with a target bitrate and with a maximum rate.
   const vvenc_config savedParams = vvencParams;
   const auto picStrength = VVENC_SET_CUTREE_PIC_STRENGTH( 2.0 );
   vvencParams.m_blockImportanceMapping = 1;
@@ -357,13 +357,11 @@ int testLibParameterRanges()
   vvencParams = savedParams;
   vvencParams.m_blockImportanceMapping = 1;
   vvencParams.m_RCTargetBitrate        = 1000000;
-  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
-  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0, picStrength } );
   vvencParams = savedParams;
   vvencParams.m_blockImportanceMapping = 1;
   vvencParams.m_RCMaxBitrate           = 2000000;
-  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
-  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0, picStrength } );
   vvencParams = savedParams;
 
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
