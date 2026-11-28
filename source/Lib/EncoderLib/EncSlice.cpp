@@ -359,11 +359,38 @@ void EncSlice::initPic( Picture* pic )
 }
 
 
+// The slice chroma QP offset with which a chroma component of a slice at sliceQP is coded as in a slice at
+// sliceQP + lumaQpShift, the difference of the two mapped chroma QPs, where that makes chroma finer; else 0.
+static int getFinerChromaQpOffset( const Slice* slice, const ComponentID compID, const int sliceQP, const int lumaQpShift )
+{
+  const ChromaQpMappingTable& table = slice->sps->chromaQpMappingTable;
+  const int minQP                   = -slice->sps->qpBDOffset[CH_C];
+  const int mappedQP                = table.getMappedChromaQpValue( compID, Clip3( minQP, MAX_QP, sliceQP ) );
+  const int mappedShiftedQP         = table.getMappedChromaQpValue( compID, Clip3( minQP, MAX_QP, sliceQP + lumaQpShift ) );
+
+  return std::min( 0, mappedShiftedQP - mappedQP );
+}
 
 void EncSlice::xInitSliceLambdaQP( Slice* slice )
 {
   // pre-compute lambda and QP
   const bool rcp = (m_pcEncCfg->m_RCTargetBitrate > 0 && slice->pic->picInitialQP >= 0); // 2nd pass
+
+  // CuTreePicStrength: the rate control's QP is the picture's level, the QP before the CU tree's picture offset, and
+  // takes the place of the coding QP: the offset is added to it as at constant QP, and the lambda moves with it. The
+  // rate control gets the level back (EncGOP's first-pass statistics, RateCtrl::updateAfterPicEncRC), so its model
+  // pairs levels with the bits coded at them, as x264's does with MB-tree.
+  const int baseQP = (rcp ? slice->pic->picInitialQP - slice->pic->gopAdaptedQP : m_pcEncCfg->m_QP);
+  slice->pic->cuTreePicQpOffset = xGetCuTreePicQpOffset (slice, baseQP);
+  if (rcp && slice->pic->cuTreePicQpOffset != 0)
+  {
+    const int levelQP = slice->pic->picInitialQP;
+
+    slice->pic->picInitialQP      = Clip3 (0, MAX_QP, levelQP + slice->pic->cuTreePicQpOffset); // not below 0: still the RC's QP
+    slice->pic->cuTreePicQpOffset = slice->pic->picInitialQP - levelQP;                         // what the clipping left of it
+    slice->pic->picInitialLambda *= pow (2.0, double (slice->pic->cuTreePicQpOffset) / 3.0);
+  }
+
   int  iQP = Clip3 (-slice->sps->qpBDOffset[CH_L], MAX_QP, slice->pic->picInitialQP); // RC start QP
   double dQP     = (rcp ? (double) slice->pic->picInitialQP : xGetQPForPicture (slice));
 
@@ -382,6 +409,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
     if (slice->pic->picQPFraction > ditherPos - floor (ditherPos)) dQP += 1.0;
     slice->pic->picQPFraction = 0.0;
   }
+  const int picQP = (int) dQP; // the picture QP, before QPA and the noise floor move the slice QP
 
   double dLambda = (rcp ? slice->pic->picInitialLambda : xCalculateLambda (slice, slice->TLayer, dQP, dQP, iQP));
   int sliceChromaQpOffsetIntraOrPeriodic[2] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[0], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[1] };
@@ -408,6 +436,30 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
     slice->pic->picInitialQP = -1; // no QPA - unused now
   }
 
+  // CuTreePicStrength: a picture MCTF does not filter whose QP the dependency model lowered is coded no finer than its
+  // noise floor (CuTree::xSetQpOffsets); the slice QP and lambda and QPA's CTU QPs and lambdas move together, as for
+  // capped CQF in BitAllocation::applyQPAdaptationSlice (QPA's slice chroma QP offsets stay as QPA derived them)
+  const PicShared* picShared = slice->pic->m_picShared;
+  const int qpBelowNoiseFloor = iQP; // the slice QP before the noise floor raises it
+  if (picShared->m_noiseFloorQp >= 0 && iQP < picShared->m_noiseFloorQp)
+  {
+    const int    qpRaise     = std::min (picShared->m_noiseFloorQp - iQP, picShared->m_noiseFloorRaise);
+    const double lambdaScale = pow (2.0, double (qpRaise) / 3.0);
+
+    iQP     += qpRaise;
+    dLambda *= lambdaScale;
+    slice->pic->cuTreePicQpOffset += qpRaise; // not part of the rate control's level
+    if (m_pcEncCfg->m_usePerceptQPA)
+    {
+      for (uint32_t ctuRsAddr = slice->sliceMap.ctuAddrInSlice[0]; ctuRsAddr < slice->pic->cs->pcv->sizeInCtus; ctuRsAddr++)
+      {
+        slice->pic->ctuQpaLambda[ctuRsAddr] *= lambdaScale;
+        slice->pic->ctuAdaptedQP[ctuRsAddr] = std::min (MAX_QP, slice->pic->ctuAdaptedQP[ctuRsAddr] + qpRaise);
+      }
+      slice->pic->picInitialQP = Clip3 (0, MAX_QP, slice->pic->picInitialQP + qpRaise); // used in applyQPAdaptationSubCtu
+    }
+  }
+
   if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
   {
     cbQP = m_pcEncCfg->m_chromaCbQpOffsetDualTree + lookAheadRCCQpOffset; // QP offset for dual-tree
@@ -426,6 +478,35 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
     cbQP = Clip3 (-12, 12, cbQP + slice->pps->chromaQpOffset[COMP_Cb]) - slice->pps->chromaQpOffset[COMP_Cb];
     crQP = Clip3 (-12, 12, crQP + slice->pps->chromaQpOffset[COMP_Cr]) - slice->pps->chromaQpOffset[COMP_Cr];
     cbCrQP = Clip3 (-12, 12, cbCrQP + slice->pps->chromaQpOffset[COMP_JOINT_CbCr]) - slice->pps->chromaQpOffset[COMP_JOINT_CbCr];
+  }
+
+  // CuTreePicStrength: the dependency model sets the picture QP from luma alone (CuTree::xSetQpOffsets), and chroma
+  // would follow it: coarser in the pictures of the lowest temporal layer, and with them, as the other layers predict
+  // their chroma from those, in every layer. So chroma is never coarser than at the QP the picture would get without
+  // CuTreePicStrength, the QP cascade's QP for the configured QP plus MCTF's picture offset and the CU tree's mean
+  // (PicShared::m_picQpOffsetNoPicStrength): where the picture QP is above it, the slice chroma QP offsets take the
+  // difference of the mapped chroma QPs. Where it is below, chroma keeps the finer QP: the pictures of the higher
+  // layers then gain in chroma as in luma, which holding them at the cascade's chroma QP gave back (measured).
+  // The offsets add to those above, which that picture carries as well. QPA's change of the slice QP is kept, the
+  // picture QP's dithered raise for a fractional QP goes into the QP cascade's QP, and the noise floor's raise counts
+  // as picture QP. Under rate control its level takes the place of the coding QP, as for the picture QP above.
+  if (m_pcEncCfg->m_cuTreePicScale > 0.0 && slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400
+      && m_pcEncCfg->m_costMode != VVENC_COST_LOSSLESS_CODING)
+  {
+    const int lumaQpBDOffset = slice->sps->qpBDOffset[CH_L];
+    const int codingQpOffset = m_pcEncCfg->m_QP - m_pcEncCfg->m_configuredQP;
+    const int ditherRaise    = picQP - xGetQPForPicture (slice, baseQP);
+    const int cascadeQP      = getCascadeQP (*m_pcEncCfg, *slice->pic->gopEntry, slice->isIntra(), baseQP - codingQpOffset + slice->pic->gopAdaptedQP + ditherRaise, lumaQpBDOffset);
+    const int targetQP       = Clip3 (-lumaQpBDOffset, MAX_QP, cascadeQP + slice->pic->m_picShared->m_picQpOffsetNoPicStrength);
+    const int lumaQpShift    = targetQP - (picQP + iQP - qpBelowNoiseFloor);
+
+    // the sum of the PPS and the slice chroma QP offset has to stay in the range of -12 to 12 as well
+    cbQP = Clip3 (-12, 12, cbQP + getFinerChromaQpOffset (slice, COMP_Cb, iQP, lumaQpShift) + slice->pps->chromaQpOffset[COMP_Cb]) - slice->pps->chromaQpOffset[COMP_Cb];
+    crQP = Clip3 (-12, 12, crQP + getFinerChromaQpOffset (slice, COMP_Cr, iQP, lumaQpShift) + slice->pps->chromaQpOffset[COMP_Cr]) - slice->pps->chromaQpOffset[COMP_Cr];
+    if (slice->sps->jointCbCr) // otherwise there may be no joint CbCr mapping table
+    {
+      cbCrQP = Clip3 (-12, 12, cbCrQP + getFinerChromaQpOffset (slice, COMP_JOINT_CbCr, iQP, lumaQpShift) + slice->pps->chromaQpOffset[COMP_JOINT_CbCr]) - slice->pps->chromaQpOffset[COMP_JOINT_CbCr];
+    }
   }
 
   slice->sliceChromaQpDelta[COMP_Cb] = Clip3 (-12, 12, cbQP);
@@ -504,15 +585,42 @@ int EncSlice::xGetQPForPicture( const Slice* slice, const int baseQP )
   }
   else
   {
-    qp = getCascadeQP( *m_pcEncCfg, *slice->pic->gopEntry, slice->isIntra(), baseQP + slice->pic->gopAdaptedQP, lumaQpBDOffset );
+    const bool hasBlockOffsets = m_pcEncCfg->hasBlockQpOffsets() && !slice->pic->m_picShared->m_ctuBimQpOffset.empty();
+    // with CuTreePicStrength the CU tree's picture offset (m_picAuxQpOffset) takes the place of the QP cascade
+    qp = m_pcEncCfg->m_cuTreePicScale > 0.0 && hasBlockOffsets
+           ? baseQP + slice->pic->gopAdaptedQP
+           : getCascadeQP( *m_pcEncCfg, *slice->pic->gopEntry, slice->isIntra(), baseQP + slice->pic->gopAdaptedQP, lumaQpBDOffset );
 
-    if( m_pcEncCfg->hasBlockQpOffsets() && !slice->pic->m_picShared->m_ctuBimQpOffset.empty() )
+    if( hasBlockOffsets )
     {
       qp += slice->pic->m_picShared->m_picAuxQpOffset;
+    }
+
+    // An intra picture at a change of content (film credits: a new card) comes out of the dependency model little
+    // reused, and would be coded coarser than the pictures that predict from it: never above the configured QP plus one.
+    if( m_pcEncCfg->m_cuTreePicScale > 0.0 && hasBlockOffsets && slice->isIntra() && slice->pic->m_picShared->m_capIntraQp )
+    {
+      const int configuredQp = baseQP - ( m_pcEncCfg->m_QP - m_pcEncCfg->m_configuredQP ) + slice->pic->gopAdaptedQP;
+      qp = std::min( qp, configuredQp + 1 );
     }
   }
   qp = Clip3( -lumaQpBDOffset, MAX_QP, qp );
   return qp;
+}
+
+// The QP that CuTreePicStrength adds to a picture coded from baseQP: the dependency model's picture offset, which
+// takes the place of the QP cascade, with the cap of an I picture at a change of content. 0 without CuTreePicStrength.
+int EncSlice::xGetCuTreePicQpOffset( const Slice* slice, const int baseQP )
+{
+  const bool hasBlockOffsets = m_pcEncCfg->hasBlockQpOffsets() && !slice->pic->m_picShared->m_ctuBimQpOffset.empty();
+
+  if( m_pcEncCfg->m_cuTreePicScale <= 0.0 || !hasBlockOffsets || m_pcEncCfg->m_costMode == VVENC_COST_LOSSLESS_CODING )
+  {
+    return 0;
+  }
+  const int qpWithoutOffset = Clip3( -slice->sps->qpBDOffset[ CH_L ], MAX_QP, baseQP + slice->pic->gopAdaptedQP );
+
+  return xGetQPForPicture( slice, baseQP ) - qpWithoutOffset;
 }
 
 

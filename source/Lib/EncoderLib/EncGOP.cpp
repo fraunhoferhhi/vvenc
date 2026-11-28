@@ -1332,7 +1332,8 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bUseDQP = m_pcEncCfg->m_cuQpDeltaSubdiv > 0;
   bUseDQP |= m_pcEncCfg->m_lumaLevelToDeltaQPEnabled == 1;
   bUseDQP |= m_pcEncCfg->m_usePerceptQPA;
-  bUseDQP |= m_pcEncCfg->hasBlockQpOffsets();
+  // CU-tree at strength 0 (with CuTreePicStrength: picture QPs only) leaves every block offset 0: nothing to signal
+  bUseDQP |= m_pcEncCfg->hasBlockQpOffsets() && ! ( m_pcEncCfg->useCuTree() && m_pcEncCfg->m_cuTreeStrength == 0 );
 
   if (m_pcEncCfg->m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_pcEncCfg->m_costMode==VVENC_COST_LOSSLESS_CODING)
   {
@@ -1391,6 +1392,8 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
     {
       bChromaDeltaQPEnabled = m_gopCfg->isChromaDeltaQPEnabled();
     }
+    // CuTreePicStrength keeps chroma from getting coarser by slice chroma QP offsets, see EncSlice::xInitSliceLambdaQP
+    bChromaDeltaQPEnabled |= m_pcEncCfg->m_cuTreePicScale > 0.0 && ( m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400 );
   }
   pps.sliceChromaQpFlag                 = bChromaDeltaQPEnabled;
   pps.outputFlagPresent                 = false;
@@ -1802,9 +1805,11 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     // GOP QP adjustments
     if( (m_pcEncCfg->m_rateCap || m_pcEncCfg->m_GOPQPA || m_pcEncCfg->m_usePerceptQPA) && pic->gopEntry->m_isStartOfGop )
     {
-      // note: in case of rate cap, wait until the complete GOP is in the list and update-list is empty
+      // note: in case of rate cap, wait until the complete GOP is in the list and the pictures initialized before
+      // have all been counted (none waiting for encoding or in the update-list), as the cap's QP for this GOP
+      // comes from their bits
       if( !m_pcEncCfg->m_rateCap ||
-        ((pic->gopEntry->m_gopNum != picList.back()->gopEntry->m_gopNum || picList.back()->isFlush) && m_rcUpdateList.empty()) )
+        ((pic->gopEntry->m_gopNum != picList.back()->gopEntry->m_gopNum || picList.back()->isFlush) && m_rcUpdateList.empty() && m_gopEncListInput.empty()) )
       {
         xInitGopQpCascade( *pic, it, picList );
       }
@@ -2182,8 +2187,13 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
     const int intraP = Clip3(m_pcEncCfg->m_GOPSize, 4 * VVENC_MAX_GOP, m_pcEncCfg->m_IntraPeriod);
     const int visAct = std::max(uint16_t(spVisActTL0[CH_L] >> (12 - bDepth)), keyPic.picVA.visAct); // when vaY=0
     const double apa = sqrt((m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice ? 32.0 : 16.0) * double(1 << (2 * bDepth - 10)) / sqrt(resRatio4K)); // average picture activity
-    const int auxOff = (m_pcEncCfg->hasBlockQpOffsets() && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPic.m_picShared->m_picAuxQpOffset : 0) + dQP;
-    const int iFrmQP = std::min(MAX_QP, m_pcEncCfg->m_QP + m_pcEncCfg->m_intraQPOffset + auxOff + int(floor(m_pcEncCfg->m_QPFraction + 3.0 * log(visAct / apa) / log(2.0) + 0.5)));
+    // CuTreePicStrength: the model below is of an encode with the QP cascade at the configured QP, whose rate the
+    // coding QP is calibrated to match, so it takes that QP and the key picture's offset without the picture strength
+    // (the same two values without CuTreePicStrength)
+    const bool cuTreePicQPs = m_pcEncCfg->m_cuTreePicScale > 0.0;
+    const int keyPicOff = (cuTreePicQPs ? keyPic.m_picShared->m_picQpOffsetNoPicStrength : keyPic.m_picShared->m_picAuxQpOffset);
+    const int auxOff = (m_pcEncCfg->hasBlockQpOffsets() && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPicOff : 0) + dQP;
+    const int iFrmQP = std::min(MAX_QP, m_pcEncCfg->m_configuredQP + m_pcEncCfg->m_intraQPOffset + auxOff + int(floor(m_pcEncCfg->m_QPFraction + 3.0 * log(visAct / apa) / log(2.0) + 0.5)));
     const int qp32BC = int(16384.0 + 7.21875 * pow((double)spVisActTL0[CH_L], 4.0 / 3.0) + 1.46875 * pow((double)spVisActTL0[CH_C], 4.0 / 3.0)) * (isHighRes ? 96 : 24); // TODO hlm
     const int iFrmBC = int(0.5 + qp32BC * pow(2.0, (32.0 - iFrmQP) * 11.0 / 64.0) * pow(resRatio4K, 2.0 / 3.0)); // * HD tuning
     const int  shift = (gopMotEstError < 32 ? 5 - (gopMotEstError >> 4) : 3);
@@ -3623,9 +3633,13 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
 
   if (m_isPreAnalysis || !m_pcRateCtrl->rcIsFinalPass)
   {
+    // CuTreePicStrength: the rate model pairs the bits with the picture's level, the QP and lambda before the CU
+    // tree's picture offset (EncSlice::xInitSliceLambdaQP); the offset is 0 without CuTreePicStrength
+    const int cuTreeQpOffset = pic->cuTreePicQpOffset;
+
     m_pcRateCtrl->addRCPassStats( slice->poc,
-                                  slice->sliceQp,
-                                  slice->getLambdas()[0],
+                                  slice->sliceQp - cuTreeQpOffset,
+                                  slice->getLambdas()[0] * pow( 2.0, -cuTreeQpOffset / 3.0 ),
                                   pic->picVA.visAct,
                                   uibits,
                                   dPSNR[COMP_Y],

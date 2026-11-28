@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CuTree.h"
 #include "EncSlice.h"
+#include "RateCtrl.h"
 #include "CommonLib/Picture.h"
 #include "Utilities/NoMallocThreadPool.h"
 
@@ -73,6 +74,20 @@ static constexpr int NUM_LEVELS   = 3;                     // half, quarter and 
 static constexpr int NO_REF       = MAX_INT;
 // Border of the half-resolution pictures. Motion search and prediction clamp reads that go beyond it.
 static constexpr int LOWRES_PAD   = 32;
+// Cap of log2( 1 + alpha ) for CuTreePicStrength's picture offsets, i.e. at most -8 * strength QP. The key pictures
+// that most of the look-ahead copies from reach about 7.
+static constexpr double MAX_LOG2_PIC_DEP = 8.0;
+// CuTreePicStrength's noise floor: a picture MCTF does not filter is coded no finer than where the quantiser step is
+// this many sigmas of the noise MCTF removes from the temporal-layer-2 pictures (the RMS of the filter's change, not the
+// true noise; it grows with the filter strength). Below it the bits of grainy pictures explode for little gain: the
+// knee was measured at 7.0-8.9 steps per sigma on film grain and sensor noise (old_town, meridian), while textured,
+// clean or animated content lies above 10 at the same QPs (crowd, csgo, pedestrian, sintel) and is not touched.
+static constexpr double NOISE_FLOOR_STEPS = 9.0;
+// A change of content: the difference to the previous picture is this many times the difference before it. On the full
+// size luma of the test clips: 4.4 to 36 at I pictures on a cut, at most 2.9 at the others. Below the floor (in 8-bit
+// sample units) the previous difference counts as the floor: a static picture has next to none.
+static constexpr double CONTENT_CHANGE_RATIO = 3.0;
+static constexpr double CONTENT_CHANGE_FLOOR = 0.25;
 
 enum CuTreePred : uint8_t
 {
@@ -95,6 +110,8 @@ struct CuTree::Frame
   bool                  hasImages = true;    // lowRes and recon are kept while other pictures can reference them
   int                   refPoc[2] = { NO_REF, NO_REF };
   int                   picQpOffset = 0;     // BIM 2's picture-level QP offset, see xSetPicQpOffsets
+  double                diffToPrev = 0.0;    // mean absolute difference to the previous picture, in 8-bit sample units
+  bool                  contentChange = false; // see CONTENT_CHANGE_RATIO
   PelStorage            lowRes[NUM_LEVELS];
   PelStorage            recon;               // half-resolution reconstruction at the picture's QP
   Array2D<MotionVector> mvs[2];              // half-resolution motion towards refPoc[0] and refPoc[1]
@@ -153,6 +170,13 @@ void tplDownsampleRowCore( const Pel* src, ptrdiff_t srcStride, Pel* dst, int ds
   }
 }
 
+// Whether the ( n + 1 )^2 reference samples of an n x n block at integer position ( x0, y0 ) lie inside the padded
+// reference.
+static bool insidePadded( const CPelBuf& ref, int x0, int y0, int n )
+{
+  return x0 >= -LOWRES_PAD && x0 + n <= ( int ) ref.width + LOWRES_PAD - 1 && y0 >= -LOWRES_PAD && y0 + n <= ( int ) ref.height + LOWRES_PAD - 1;
+}
+
 // Bilinear prediction of the n x n block at (x, y) displaced by mv (1/16 sample). Positions outside the padded
 // reference repeat its edge, as the motion search does.
 static void predictBlock( TplPredBlockFn predBlock, int n, const CPelBuf& ref, int x, int y, const MotionVector& mv, Pel* dst )
@@ -164,7 +188,7 @@ static void predictBlock( TplPredBlockFn predBlock, int n, const CPelBuf& ref, i
   const int minX = -LOWRES_PAD, maxX = ( int ) ref.width  + LOWRES_PAD - 1;
   const int minY = -LOWRES_PAD, maxY = ( int ) ref.height + LOWRES_PAD - 1;
 
-  if( x0 >= minX && x0 + n <= maxX && y0 >= minY && y0 + n <= maxY )
+  if( insidePadded( ref, x0, y0, n ) )
   {
     predBlock( ref.buf + y0 * ref.stride + x0, ref.stride, fx, fy, dst );
     return;
@@ -396,8 +420,10 @@ static double propagatedRate( double propRate, double growth, double srcRatio )
 CuTree::CuTree()
   : m_codeBlock    { tplCodeBlockCore<8>, tplCodeBlockCore<16> }
   , m_predBlock    { tplPredBlockCore<8>, tplPredBlockCore<16> }
+  , m_predError    { nullptr, nullptr }
   , m_downsampleRow( tplDownsampleRowCore )
   , m_encCfg       ( nullptr )
+  , m_rateCtrl     ( nullptr )
   , m_threadPool   ( nullptr )
   , m_motionSearch ( true )
   , m_hadFunc      ( nullptr )
@@ -407,7 +433,9 @@ CuTree::CuTree()
   , m_blkWidth     ( 0 )
   , m_blkHeight    ( 0 )
   , m_qpBDOffset   ( 0 )
+  , m_analysisQP   ( 0 )
   , m_lambdaLeaf   ( 0.0 )
+  , m_noiseVar     ( -1.0 )
 {
 }
 
@@ -421,9 +449,10 @@ int CuTree::getNumLookAheadPics( const VVEncCfg& encCfg )
   return encCfg.m_GOPSize;
 }
 
-void CuTree::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
+void CuTree::init( const VVEncCfg& encCfg, const RateCtrl* rateCtrl, NoMallocThreadPool* threadPool )
 {
   m_encCfg        = &encCfg;
+  m_rateCtrl      = rateCtrl;
   m_threadPool    = threadPool;
   m_lookAheadPics = getNumLookAheadPics( encCfg );
   // the configured size is that of the full-resolution block, 16 or 32
@@ -444,7 +473,18 @@ void CuTree::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   const CPelBuf blk( nullptr, m_blkSize, m_blkSize );
   m_hadFunc       = m_rdCost.setDistParam( blk, blk, encCfg.m_internalBitDepth[CH_L], DF_HAD ).distFunc;
 
-  // TPL weighs rate with the Lagrange multiplier of the unreferenced pictures, the top temporal layer.
+  xSetAnalysisQP( encCfg.m_QP );
+}
+
+// Sets the QP the analysis codes at: each picture at the QP the QP cascade gives it for this QP (xAnalyse).
+void CuTree::xSetAnalysisQP( int qp )
+{
+  const VVEncCfg& encCfg = *m_encCfg;
+  m_analysisQP = qp;
+
+  // TPL weighs rate with the Lagrange multiplier of the unreferenced pictures in the QP cascade, the top temporal layer.
+  // The analysis keeps the cascade's QPs (of the coding QP) also with CuTreePicStrength, which codes these pictures at
+  // the coding QP; its strength is tuned for this operating point.
   GOPEntry topEntry;
   topEntry.setDefaultGOPEntry();
   topEntry.copyFromGopCfg( encCfg.m_GOPList[0] );
@@ -453,7 +493,7 @@ void CuTree::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
     if( encCfg.m_GOPList[i].m_temporalId > topEntry.m_temporalId ) topEntry.copyFromGopCfg( encCfg.m_GOPList[i] );
   }
   topEntry.m_vtl = std::min( 5, encCfg.m_maxTLayer );
-  const int leafQp = Clip3( -m_qpBDOffset, MAX_QP, EncSlice::getCascadeQP( encCfg, topEntry, false, encCfg.m_QP, m_qpBDOffset ) );
+  const int leafQp = Clip3( -m_qpBDOffset, MAX_QP, EncSlice::getCascadeQP( encCfg, topEntry, false, m_analysisQP, m_qpBDOffset ) );
   m_lambdaLeaf    = qpToLambda( leafQp, encCfg.m_internalBitDepth[CH_L] );
 }
 
@@ -539,13 +579,41 @@ void CuTree::initPicture( Picture* pic )
   frame->poc       = pic->poc;
   frame->codingNum = pic->gopEntry->m_codingNum;
 
-  xDownsample( pic->getOrigBuffer(), frame->lowRes[0] );
+  // With CuTreePicStrength the analysis reads what the encoder codes: MCTF's filtered picture where MCTF filtered it.
+  // On grain and sensor noise the originals make later pictures look poorly predicted from the key pictures, so the
+  // dependency of the keys, and with it their boost, came out too small.
+  const bool filtered = m_encCfg->m_cuTreePicScale > 0.0 && pic->getFilteredOrigBuffer().valid();
+  xDownsample( filtered ? pic->getFilteredOrigBuffer() : pic->getOrigBuffer(), frame->lowRes[0] );
   for( int level = 1; level < NUM_LEVELS; level++ )
   {
     xDownsample( frame->lowRes[level - 1], frame->lowRes[level] );
   }
 
+  if( m_encCfg->m_cuTreePicScale > 0.0 && ! m_frames.empty() && m_frames.rbegin()->first == pic->poc - 1 && m_frames.rbegin()->second->hasImages )
+  {
+    const Frame& prev = *m_frames.rbegin()->second;
+    frame->diffToPrev    = xMeanAbsDiff( frame->lowRes[1], prev.lowRes[1] );
+    frame->contentChange = frame->diffToPrev > CONTENT_CHANGE_RATIO * std::max( prev.diffToPrev, CONTENT_CHANGE_FLOOR );
+  }
   m_frames[pic->poc] = std::move( frame );
+}
+
+double CuTree::xMeanAbsDiff( const PelStorage& a, const PelStorage& b ) const
+{
+  const CPelBuf picA = a.Y();
+  const CPelBuf picB = b.Y();
+  int64_t sum = 0;
+  for( int y = 0; y < int( picA.height ); y++ )
+  {
+    const Pel* rowA = picA.bufAt( 0, y );
+    const Pel* rowB = picB.bufAt( 0, y );
+    for( int x = 0; x < int( picA.width ); x++ )
+    {
+      sum += std::abs( rowA[x] - rowB[x] );
+    }
+  }
+  const double scaleTo8Bit = 1.0 / double( 1 << ( m_encCfg->m_internalBitDepth[CH_L] - 8 ) );
+  return scaleTo8Bit * double( sum ) / double( picA.width * picA.height );
 }
 
 void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
@@ -560,6 +628,23 @@ void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, Pi
 
   // Every picture is coded from reconstructed references, so the references go first: analyse in coding order.
   const bool flush = picList.back()->isFlush;
+
+  // CuTreePicStrength with look-ahead rate control: the coding QP is a guess made before the first picture (on static
+  // content 10 QP above the QPs then coded), and the picture offsets depend on the analysis QP, so the analysis follows
+  // the rate control's base QP. That comes from the pre-analysis encoder's statistics, and this stage runs before
+  // that encoder: it asks for the pictures up to two GOPs before the batch, which that encoder has coded whenever a
+  // batch is ready (it lags by less than two GOPs: it starts a picture per call while it holds more than a GOP, and
+  // a batch needs as many calls as it has pictures), so the result does not depend on timing. Not at flush, where
+  // the batches follow without it coding. Pictures analysed with an earlier batch's look-ahead keep its QP.
+  if( m_encCfg->m_cuTreePicScale > 0.0 && m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate > 0 && ! flush )
+  {
+    const int baseQP = m_rateCtrl->getLookAheadBaseQP( picList.front()->poc - 2 * m_encCfg->m_GOPSize );
+    if( baseQP >= 0 )
+    {
+      // the base QP is a configured QP, the analysis runs at the coding QP for it
+      xSetAnalysisQP( Clip3( 0, MAX_QP, baseQP + m_encCfg->m_QP - m_encCfg->m_configuredQP ) );
+    }
+  }
   std::vector<Picture*> codingOrder( picList.begin(), picList.end() );
   std::sort( codingOrder.begin(), codingOrder.end(), []( const Picture* a, const Picture* b ) { return a->gopEntry->m_codingNum < b->gopEntry->m_codingNum; } );
   for( auto pic : codingOrder )
@@ -583,6 +668,23 @@ void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, Pi
 
   xPropagate( picList.front()->poc );
   xSetPicQpOffsets( codingOrder, batchEndPoc );
+
+  // the noise estimate of the batch's MCTF-filtered temporal-layer-2 pictures for the noise floor (the previous
+  // batch's if it has none); the batch is processed sequentially, so the value does not depend on the threads
+  double noiseSum = 0.0;
+  int    noiseNum = 0;
+  for( auto pic : picList )
+  {
+    if( pic->poc <= batchEndPoc && pic->m_picShared->m_mctfNoiseVar >= 0.0 )
+    {
+      noiseSum += pic->m_picShared->m_mctfNoiseVar;
+      noiseNum += 1;
+    }
+  }
+  if( noiseNum > 0 )
+  {
+    m_noiseVar = noiseSum / noiseNum;
+  }
 
   for( auto pic : picList )
   {
@@ -801,7 +903,7 @@ void CuTree::xAnalyse( Frame& frame, Picture* pic, bool flush )
   const int numBlocks      = m_blkWidth * m_blkHeight;
 
   frame.isIntra   = gopEntry.m_sliceType == 'I';
-  frame.qp        = Clip3( -m_qpBDOffset, MAX_QP, EncSlice::getCascadeQP( *m_encCfg, gopEntry, frame.isIntra, m_encCfg->m_QP, m_qpBDOffset ) );
+  frame.qp        = Clip3( -m_qpBDOffset, MAX_QP, EncSlice::getCascadeQP( *m_encCfg, gopEntry, frame.isIntra, m_analysisQP, m_qpBDOffset ) );
 
   // the first reference picture of each list as the encoder will use it, which must be reconstructed already
   Frame* refs[2] = { nullptr, nullptr };
@@ -1093,6 +1195,7 @@ void CuTree::xSearchFractional( const Frame& cur, const Frame& ref, const Array2
   const CPelBuf refBuf = ref.lowRes[0].Y();
   const int            n         = m_blkSize;
   const TplPredBlockFn predBlock = m_predBlock[m_blkSizeIdx];
+  const TplPredErrorFn predError = m_predError[m_blkSizeIdx];
   const int            rows      = org.height / n;
   const int            cols      = org.width  / n;
 
@@ -1111,10 +1214,21 @@ void CuTree::xSearchFractional( const Frame& cur, const Frame& ref, const Array2
         {
           return;
         }
-        MotionVector mv;
-        mv.set( mvx, mvy, 0 );
-        predictBlock( predBlock, n, refBuf, x, y, mv, pred );
-        const int error = m_motionSearch.m_motionErrorLumaInt8( orgBlk, org.stride, pred, n, n, n, best.error );
+        // the fused kernel's full error and the motion search's error (which may stop early above the best) lead to
+        // the same decision
+        const int x0 = x + ( mvx >> 4 ), y0 = y + ( mvy >> 4 );
+        int       error;
+        if( predError && insidePadded( refBuf, x0, y0, n ) )
+        {
+          error = predError( refBuf.buf + y0 * refBuf.stride + x0, refBuf.stride, mvx & ( MV_PREC - 1 ), mvy & ( MV_PREC - 1 ), orgBlk, org.stride );
+        }
+        else
+        {
+          MotionVector mv;
+          mv.set( mvx, mvy, 0 );
+          predictBlock( predBlock, n, refBuf, x, y, mv, pred );
+          error = m_motionSearch.m_motionErrorLumaInt8( orgBlk, org.stride, pred, n, n, n, best.error );
+        }
         if( error < best.error )
         {
           best.set( mvx, mvy, error );
@@ -1256,8 +1370,14 @@ void CuTree::xDistribute( Frame& ref, int bx, int by, const MotionVector& mv, do
 // of whole pictures in static content, which CU-tree's CTU offsets, relative to the picture's own mean dependency,
 // cannot do. Runs in coding order, so the references come first; MCTF has to have run, its offsets are read before
 // xSetQpOffsets replaces them.
+// With CuTreePicStrength the CU tree derives the picture offsets itself, see xSetQpOffsets.
 void CuTree::xSetPicQpOffsets( const std::vector<Picture*>& codingOrder, int batchEndPoc )
 {
+  if( m_encCfg->m_cuTreePicScale > 0.0 )
+  {
+    return;
+  }
+
   for( auto pic : codingOrder )
   {
     Frame* frame = xFindFrame( pic->poc );
@@ -1289,6 +1409,11 @@ void CuTree::xSetPicQpOffsets( const std::vector<Picture*>& codingOrder, int bat
 // and the non-QPA path pick up the BIM offsets. The picture QP gets BIM 2's picture offset (xSetPicQpOffsets) and,
 // rounded, the mean of the CTU offsets, which the CTUs lose again: as with BIM 2, the CTU offsets average 0, so rate
 // control, which sets the picture QP itself, still gets the QP it chose.
+// With CuTreePicStrength the picture offset comes from the dependency model instead, as libaom derives its frame QP
+// from the TPL r0: -strength * log2( 1 + alpha_pic ). Unreferenced pictures (alpha 0) keep the coding QP (getCodingQp:
+// the configured QP plus the compensation for the missing QP cascade), and the offsets replace the temporal
+// layers' QP cascade (EncSlice::xGetQPForPicture), so every picture is placed by its own dependency.
+// log2( 1 + alpha_pic ) is capped at MAX_LOG2_PIC_DEP.
 void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
 {
   const int ctuSize      = m_encCfg->m_bimCtuSize;
@@ -1299,9 +1424,20 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
   PicShared* picShared = pic->m_picShared;
   picShared->m_ctuBimQpOffset.assign( widthInCtus * heightInCtus, 0 );
   picShared->m_picAuxQpOffset = frame.picQpOffset;
+  picShared->m_picQpOffsetNoPicStrength = frame.picQpOffset;
+  picShared->m_noiseFloorQp    = -1;
+  picShared->m_noiseFloorRaise = 0;
   if( m_blkWidth == 0 || m_blkHeight == 0 || ! frame.analysed )
   {
-    return; // picture smaller than one analysis block, or not analysed
+    // picture smaller than one analysis block, or not analysed: with CuTreePicStrength, which codes from the coding QP
+    // (EncSlice::xGetQPForPicture), code it at the QP cascade's QP for the configured QP (without MCTF's picture
+    // offset)
+    if( m_encCfg->m_cuTreePicScale > 0.0 )
+    {
+      const GOPEntry& gopEntry = *pic->gopEntry;
+      picShared->m_picAuxQpOffset = EncSlice::getCascadeQP( *m_encCfg, gopEntry, gopEntry.m_sliceType == 'I', m_encCfg->m_configuredQP, m_qpBDOffset ) - m_encCfg->m_QP;
+    }
+    return;
   }
 
   auto blockDep = [&]( int idx ) { return frame.propDist[idx] + m_lambdaLeaf * frame.propRate[idx]; };
@@ -1313,6 +1449,24 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
     picDist += frame.distRec[idx];
   }
   const double alphaPic = picDep / std::max( picDist, 1.0 );
+  if( m_encCfg->m_cuTreePicScale > 0.0 )
+  {
+    const int tplOffset = int( std::lround( -m_encCfg->m_cuTreePicScale * std::min( MAX_LOG2_PIC_DEP, std::log2( 1.0 + alphaPic ) ) ) );
+    picShared->m_picAuxQpOffset = tplOffset;
+    // only at a change of content: elsewhere the model's coarser I picture is right, as little of it carries over; and
+    // not on the sequence's last picture, as nothing predicts from it later
+    picShared->m_capIntraQp = frame.isIntra && frame.contentChange && m_frames.rbegin()->first > frame.poc;
+
+    // noise floor for the pictures of the layers MCTF does not filter, where the dependency model lowered the QP:
+    // the QP whose quantiser step, 2^(bitDepth - 8) * 2^((QP - 4) / 6), is NOISE_FLOOR_STEPS noise sigmas; applied after
+    // QPA (EncSlice::xInitSliceLambdaQP), never above the QP without the dependency model's decrease
+    if( tplOffset < 0 && pic->gopEntry->m_mctfIndex < 0 && m_noiseVar > 0.0 )
+    {
+      const double sigma = std::sqrt( m_noiseVar );
+      picShared->m_noiseFloorQp    = int( std::ceil( 4.0 + 6.0 * std::log2( NOISE_FLOOR_STEPS * sigma / double( 1 << ( m_encCfg->m_internalBitDepth[CH_L] - 8 ) ) ) ) );
+      picShared->m_noiseFloorRaise = -tplOffset;
+    }
+  }
 
   for( int cy = 0; cy < heightInCtus; cy++ )
   {
@@ -1347,6 +1501,7 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
   const int mean = ( sum + ( sum < 0 ? -( numCtu >> 1 ) : numCtu >> 1 ) ) / numCtu;
   for( int& offset : picShared->m_ctuBimQpOffset ) offset -= mean;
   picShared->m_picAuxQpOffset += mean;
+  picShared->m_picQpOffsetNoPicStrength += mean;
 }
 
 } // namespace vvenc
