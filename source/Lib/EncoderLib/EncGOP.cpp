@@ -1802,9 +1802,11 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     // GOP QP adjustments
     if( (m_pcEncCfg->m_rateCap || m_pcEncCfg->m_GOPQPA || m_pcEncCfg->m_usePerceptQPA) && pic->gopEntry->m_isStartOfGop )
     {
-      // note: in case of rate cap, wait until the complete GOP is in the list and update-list is empty
+      // note: in case of rate cap, wait until the complete GOP is in the list and the pictures initialized before
+      // have all been counted (none waiting for encoding or in the update-list), as the cap's QP for this GOP
+      // comes from their bits
       if( !m_pcEncCfg->m_rateCap ||
-        ((pic->gopEntry->m_gopNum != picList.back()->gopEntry->m_gopNum || picList.back()->isFlush) && m_rcUpdateList.empty()) )
+        ((pic->gopEntry->m_gopNum != picList.back()->gopEntry->m_gopNum || picList.back()->isFlush) && m_rcUpdateList.empty() && m_gopEncListInput.empty()) )
       {
         xInitGopQpCascade( *pic, it, picList );
       }
