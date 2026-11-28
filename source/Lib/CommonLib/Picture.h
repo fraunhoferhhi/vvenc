@@ -312,6 +312,7 @@ public:
   int                           picInitialQP;
   double                        picInitialLambda;
   double                        picQPFraction; // fractional part of the picture QP with a fractional --qp, applied by QPA
+  int                           cuTreePicQpOffset; // QP that CuTreePicStrength added to the picture (picture offset, intra cap, noise floor), 0 without it
   double                        lambdaQP;      // the QP the slice lambda belongs to (fractional with a fractional --qp, QPA off)
   int16_t                       picMemorySTA;
   PicVisAct                     picVA;

@@ -333,8 +333,8 @@ int testLibParameterRanges()
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { -1,16,32 } );
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { 0,8,64 }, true );
 
-  // CU-tree picture QPs: only with the CU tree, random access and constant QP; each refused case is checked to be valid
-  // with the option off
+  // CU-tree picture QPs: only with the CU tree and random access; each refused case is checked to be valid with the
+  // option off. Valid with a target bitrate and with a maximum rate.
   const vvenc_config savedParams = vvencParams;
   const auto picStrength = VVENC_SET_CUTREE_PIC_STRENGTH( 2.0 );
   vvencParams.m_blockImportanceMapping = 1;
@@ -361,8 +361,7 @@ int testLibParameterRanges()
   vvencParams = savedParams;
   vvencParams.m_blockImportanceMapping = 1;
   vvencParams.m_RCMaxBitrate           = 2000000;
-  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0 } );
-  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { picStrength }, true );
+  testParamList( "CuTreePicStrength",                      vvencParams.m_cuTreePicStrength,          vvencParams, { 0, picStrength } );
   vvencParams = savedParams;
 
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
@@ -962,7 +961,7 @@ int checkSDKStringApiDefault()
   settings.push_back(std::make_tuple( VVENC_OPT_FRAMERATE,    "60") );
   settings.push_back(std::make_tuple( VVENC_OPT_FRAMESCALE,   "1") );
   settings.push_back(std::make_tuple( VVENC_OPT_FPS,          "60/1") );
-  settings.push_back(std::make_tuple( VVENC_OPT_TICKSPERSEC,  "900000") );
+  settings.push_back(std::make_tuple( VVENC_OPT_TICKSPERSEC,  "900000 ") ); // trailing whitespace is fine
   settings.push_back(std::make_tuple( VVENC_OPT_INPUTBITDEPTH,"10") );
   settings.push_back(std::make_tuple( VVENC_OPT_FRAMES,       "2") );
   settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "medium") );
@@ -1043,6 +1042,32 @@ int checkSDKStringApiFractionalQP()
   return 0;
 }
 
+int checkSDKStringApiPreset()
+{
+  // the preset key gives the same configuration as passing that preset to vvenc_init_default
+  vvenc_config c, ref;
+  vvenc_init_default( &c,   176,144,60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &ref, 176,144,60, 0, 32, vvencPresetMode::VVENC_SLOWER );
+
+  if( vvenc_set_param( &c, VVENC_OPT_PRESET, "slower" ) != 0 )
+  {
+    return -1;
+  }
+  if( vvenc_set_param( &c, VVENC_OPT_PRESET, "nopreset" ) != VVENC_PARAM_BAD_VALUE )
+  {
+    return -1;
+  }
+  if( vvenc_init_config_parameter( &c ) || vvenc_init_config_parameter( &ref ) )
+  {
+    return -1;
+  }
+
+  // vvenc_get_config_as_string returns a shared buffer: copy each result before the next call
+  const std::string cfgString    = vvenc_get_config_as_string( &c,   VVENC_DETAILS );
+  const std::string refCfgString = vvenc_get_config_as_string( &ref, VVENC_DETAILS );
+  return cfgString == refCfgString ? 0 : -1;
+}
+
 int checkSDKStringApiInvalid()
 {
   vvenc_config c;
@@ -1055,6 +1080,12 @@ int checkSDKStringApiInvalid()
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1;5M") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1m") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1K") );
+  // characters after a valid value: an error, not the leading value
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1M5") );
+  settings.push_back(std::make_tuple( VVENC_OPT_INTRAPERIOD,  "32x") );
+  settings.push_back(std::make_tuple( VVENC_OPT_SIZE,         "176x144y") );
+  settings.push_back(std::make_tuple( VVENC_OPT_FPS,          "23.976") );
+  settings.push_back(std::make_tuple( "BIM",                  "1,CuTreePicStrength 2") ); // what --additional BIM=1,CuTreePicStrength=2 passes
 
   int ret=0;
 
@@ -1382,6 +1413,7 @@ int testStringApiInterface()
 {
   testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
   testfunc( "checkSDKStringApiFractionalQP", &checkSDKStringApiFractionalQP, false );
+  testfunc( "checkSDKStringApiPreset", &checkSDKStringApiPreset, false );
   testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
   testfunc( "checkSDKStringApiNoValue", &checkSDKStringApiNoValue, false );
 

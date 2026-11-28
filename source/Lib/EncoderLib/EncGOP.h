@@ -280,6 +280,7 @@ public:
 protected:
   virtual void initPicture    ( Picture* pic );
   virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList );
+  virtual bool hasEnoughPictures( const PicList& picList ) const;
   virtual bool waitForFreeEncoders();
   virtual void startReadyPictures();
 
@@ -292,6 +293,7 @@ private:
   void xEncodePicture                 ( Picture* pic, EncPicture* picEncoder );
   void xOutputRecYuv                  ( const PicList& picList );
   void xReleasePictures               ( const PicList& picList, PicList& freeList );
+  bool xFgaReadsSource                ( const Picture& pic ) const;
 
   void xInitVPS                       ( VPS &vps ) const;
   void xInitDCI                       ( DCI &dci, const SPS &sps, const int dciId ) const;

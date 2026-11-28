@@ -1077,7 +1077,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
             xCheckRDCostInter(tempCS, bestCS, partitioner, encTestMode);
           }
 
-          if (m_pcEncCfg->m_AMVRspeed)
+          if (m_pcEncCfg->m_AMVRspeed && !m_modeCtrl.skipsAmvrSearch( *bestCS ))
           {
             double bestIntPelCost = MAX_DOUBLE;
 
@@ -3475,6 +3475,10 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
     }
 
     CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
+    if( !testBcw )
+    {
+      m_modeCtrl.noteMotionSearchMvd( cu );   // FastAMVR: the MVDs found with equal weights
+    }
         
     xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
     
@@ -3598,6 +3602,10 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
             costCurStart = bestCS->cost;
           }
           if (nextimv)
+          {
+            continue;
+          }
+          if( i == IMV_4PEL && m_modeCtrl.skips4PelAmvr() )   // FastAMVR: MVDs too small for 4-sample precision
           {
             continue;
           }

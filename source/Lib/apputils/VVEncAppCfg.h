@@ -619,6 +619,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toFga                         ( &c->m_fga );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
+  IStreamToInt8                     toFastAMVR                    ( &c->m_fastAMVR );
   IStreamToInt8                     toKeepHighBand                ( &c->m_keepHighBand );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
   IStreamToFixedPointU8             toPsyRD                       ( &c->m_psyRdStrengthVal, 6 );
@@ -1181,11 +1182,13 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("LevelLambda",                                     toLevelLambda,                                       "(experimental) scale of the lambda in dependent quantization's luma level decisions (0...3.98], default 1.0; below 1.0 small\n"
                                                                                                              "coefficients survive more often; no effect where DepQuant is off and on transform-skip blocks)")
     ("CuTreeBlockSize",                                 toCuTreeBlockSize,                                   "CU-tree (BIM 1): side of its analysis blocks in luma samples (16, 32, or -1: automatic, 32 from 720 lines on, else 16)")
-    ("CuTreePicStrength",                               toCuTreePicStrength,                                 "CU-tree (BIM 1), random access, not with a maximum rate without a target rate: picture QPs from how much later pictures depend on each picture, in place of the temporal layers' fixed QP offsets; scale of these offsets [0...8.0) (0: off). At constant QP it codes at QP + round( 3 + 2 * strength ) to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32). With FlatInterQP: lowers the flat QPs by strength * ( log2( 1 + dependency ) - 4 ), only where that is positive")
+    ("CuTreePicStrength",                               toCuTreePicStrength,                                 "CU-tree (BIM 1), random access: picture QPs from how much later pictures depend on each picture, in place of the temporal layers' fixed QP offsets; scale of these offsets [0...8.0) (0: off). At constant QP it codes at QP + round( 3 + 2 * strength ) to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32). With FlatInterQP: lowers the flat QPs by strength * ( log2( 1 + dependency ) - 4 ), only where that is positive")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
     ("FastTTSplit",                                     c->m_fastTTSplit,                                    "Fast method for TT split" )
+    ("FastAMVR",                                        toFastAMVR,                                          "No AMVR search where the best mode is skip, where the motion search with quarter-sample MVDs costs more than 1.1 times "
+                                                                                                             "the best mode or its largest MVD is below half a sample; no 4-sample MVDs where that MVD is below 4 samples (0: off, 1: on)" )
     ;
 
     opts.setSubSection("Threading, performance");

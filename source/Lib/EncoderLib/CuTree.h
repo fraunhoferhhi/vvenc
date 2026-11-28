@@ -120,13 +120,15 @@ void tplDownsampleRowCore( const Pel* src, ptrdiff_t srcStride, Pel* dst, int ds
 // block importance mapping (BIM) offsets, which CU-tree replaces.
 // ====================================================================================================================
 
+class RateCtrl;
+
 class CuTree : public EncStage
 {
 public:
   CuTree();
   virtual ~CuTree();
 
-  void init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool );
+  void init( const VVEncCfg& encCfg, const RateCtrl* rateCtrl, NoMallocThreadPool* threadPool );
 
   // number of pictures the stage holds in addition to the encoder's own GOP queue
   static int getNumLookAheadPics( const VVEncCfg& encCfg );
@@ -162,6 +164,11 @@ public:
   template <X86_VEXT vext>
   void _initCuTree_X86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT
+  void initCuTreeARM();
+  template <ARM_VEXT vext>
+  void _initCuTreeARM();
+#endif
 
 protected:
   virtual void initPicture    ( Picture* pic );
@@ -171,6 +178,7 @@ private:
   struct Frame;
 
   const VVEncCfg*                       m_encCfg;
+  const RateCtrl*                       m_rateCtrl;      // gives the analysis QP with look-ahead rate control (CuTreePicStrength)
   NoMallocThreadPool*                   m_threadPool;
   MCTF                                  m_motionSearch;  // provides the integer motion search of the coarsest level
   RdCost                                m_rdCost;        // provides the SIMD Hadamard SATD
@@ -181,6 +189,7 @@ private:
   int                                   m_blkWidth;      // width and height of the picture in analysis blocks
   int                                   m_blkHeight;
   int                                   m_qpBDOffset;
+  int                                   m_analysisQP;    // the QP whose QP cascade the analysis codes the pictures at
   double                                m_lambdaLeaf;    // Lagrange multiplier at the QP of unreferenced pictures
   double                                m_noiseVar;      // CuTreePicStrength: mean MCTF noise estimate of the latest batch's T2 pictures
   std::map<int, std::unique_ptr<Frame>> m_frames;        // analysis data by POC, kept while it can still be referenced
@@ -189,6 +198,7 @@ private:
   PocCodingNum                          m_lastErasedIdr;
 
   void   xForEachRow         ( int numRows, const std::function<void( int )>& fn ) const;
+  void   xSetAnalysisQP      ( int qp );
   void   xDownsample         ( const PelStorage& src, PelStorage& dst ) const;
   double xMeanAbsDiff        ( const PelStorage& a, const PelStorage& b ) const;
   bool   xIsBatchReady       ( const PicList& picList, int& batchEndPoc ) const;

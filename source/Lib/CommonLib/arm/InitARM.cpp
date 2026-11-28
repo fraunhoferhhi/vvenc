@@ -60,8 +60,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "EncoderLib/BvSearchOps.h"
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
 #include "EncoderLib/SEIFilmGrainAnalyzer.h"
+#include "EncoderLib/CuTree.h"
 
 namespace vvenc
 {
@@ -101,6 +103,17 @@ void AffineGradientSearch::initAffineGradientSearchARM()
   if( vext >= NEON )
   {
     _initAffineGradientSearchARM<NEON>();
+  }
+}
+#endif
+
+#if ENABLE_SIMD_OPT
+void BvSearchOps::initBvSearchOpsARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initBvSearchOpsARM<NEON>();
   }
 }
 #endif
@@ -150,6 +163,12 @@ void PelBufferOps::initPelBufOpsARM()
   {
     _initPelBufOpsARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE
+  if( vext >= SVE )
+  {
+    _initPelBufOpsARM<SVE>();
+  }
+#endif // TARGET_SIMD_ARM_SVE
 }
 #endif
 
@@ -238,6 +257,12 @@ void TrQuant::initTrQuantARM()
   {
     _initTrQuantARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE
+  if( vext >= SVE )
+  {
+    _initTrQuantARM<SVE>();
+  }
+#endif  // TARGET_SIMD_ARM_SVE
 }
 #endif  // ENABLE_SIMD_TRAFO
 
@@ -279,6 +304,17 @@ void LoopFilter::initLoopFilterARM()
   }
 }
 #endif  // ENABLE_SIMD_DBLF
+
+#if ENABLE_SIMD_OPT
+void CuTree::initCuTreeARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initCuTreeARM<NEON>();
+  }
+}
+#endif
 
 #endif  // TARGET_SIMD_ARM
 

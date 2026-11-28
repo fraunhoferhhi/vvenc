@@ -201,6 +201,8 @@ struct ComprCUCtx
     , isIntra               (false)
     , nonSkipWasTested      (false)
     , bestNsPredMode        (EncTestMode())
+    , meCost                (MAX_DOUBLE)
+    , meLargestMvd          (-1)
   {
   }
 
@@ -237,6 +239,9 @@ struct ComprCUCtx
   bool              isIntra;
   bool              nonSkipWasTested;
   EncTestMode       bestNsPredMode;
+  // FastAMVR: the motion search with quarter-sample MVDs and equal bi-prediction weights
+  double            meCost;            // its best RD cost, MAX_DOUBLE where it has none
+  int               meLargestMvd;      // the largest MVD component of its result in quarter samples, -1 where it has none
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -380,6 +385,8 @@ protected:
   static_vector<ComprCUCtx, ( MAX_CU_DEPTH << 2 )> m_ComprCUCtxList;
   unsigned              m_skipThresholdE0023FastEnc;
 
+  void     xNoteMotionSearchCost  ( const EncTestMode& encTestmode, const CodingStructure& tempCS );
+
 public:
   ComprCUCtx*           comprCUCtx;
 
@@ -397,6 +404,12 @@ public:
   bool useModeResult      ( const EncTestMode& encTestmode, CodingStructure*& tempCS,  Partitioner& partitioner, const bool useEDO );
 
   void beforeSplit        ( Partitioner& partitioner );
+
+  // FastAMVR: noteMotionSearchMvd keeps the largest MVD of the current node's motion search with equal bi-prediction weights;
+  // skipsAmvrSearch and skips4PelAmvr say where the AMVR search, or its 4-sample MVDs, cannot pay
+  void     noteMotionSearchMvd  ( const CodingUnit& cu );
+  bool     skipsAmvrSearch      ( const CodingStructure& bestCS ) const;
+  bool     skips4PelAmvr        () const;
 };
 
 } // namespace vvenc

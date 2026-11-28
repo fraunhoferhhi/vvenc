@@ -804,12 +804,16 @@ typedef struct vvenc_config
   int8_t              m_keepHighBand;                                                    // experimental: 1: keep more fine detail at high rates (with DepQuant, on slices up to QP 27): a QT split of square CUs over 32 whose
                                                                                          // finest detail a 64-point transform would zero, and a trellis that keeps more of a luma transform's upper frequencies (default 0: off)
 #define VVENC_SET_CUTREE_PIC_STRENGTH(s) ((uint8_t)((s)*32+0.5))
-  uint8_t             m_cuTreePicStrength;                                               // CU-tree (BIM 1), random access, constant QP: picture QPs from the CU tree's dependency estimate
+  uint8_t             m_cuTreePicStrength;                                               // CU-tree (BIM 1), random access: picture QPs from the CU tree's dependency estimate
                                                                                          // in place of the temporal layers' QP offsets, scaled by this 5-bit fixed point value (default 0: off),
-                                                                                         // e.g. VVENC_SET_CUTREE_PIC_STRENGTH(2.0); the encoder then codes at QP + round( 3 + 2 * strength ),
+                                                                                         // e.g. VVENC_SET_CUTREE_PIC_STRENGTH(2.0); at constant QP the encoder codes at QP + round( 3 + 2 * strength ),
                                                                                          // to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32)
   int32_t             m_reservedInt32;
-  double              m_reservedDouble[6];
+  int8_t              m_fastAMVR;                                                        // 1: no AMVR search where the best mode is skip, where the motion search with quarter-sample MVDs costs more than
+                                                                                         // 1.1 times the best mode or its largest MVD is below half a sample, and no 4-sample MVDs where that MVD
+                                                                                         // is below 4 samples (default 0: off)
+  int8_t              m_reservedInt8_7[7];                                               // with the field above in place of the first of seven reserved doubles: the same layout on every ABI
+  double              m_reservedDouble[5];
   int8_t              m_veryLowQPSpeedUp;                                                // experimental: turn off tools that save no bytes at very low QPs; 0: off (default), 1: on, 2: below QP 16
                                                                                          // (with two rate-control passes the second pass decides; off with one)
   int8_t              m_mctfKeepDetail;                                                  // experimental: MCTF keeps the fine band of noisy sources; 0: off (default), 1: on, 2: below QP 16

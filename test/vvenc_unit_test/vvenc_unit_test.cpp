@@ -1309,6 +1309,53 @@ static void fillIntraSamples( Pel* buf, size_t n, int bd, int kind )
   }
 }
 
+// IntraPredAngleChroma for every chroma block size and fractional angle (positive and negative, so deltaPos goes
+// negative), 10-bit borders (the SSE kernel computes in 16 bits), padded on both sides; every fourth case alternates 0
+// and 1023 (the largest neighbour difference); the whole destination is compared.
+static bool check_IntraPredAngleChroma( IntraPrediction* ref, IntraPrediction* opt, unsigned num_cases )
+{
+  printf( "Testing IntraPrediction::IntraPredAngleChroma\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 10, /*is_signed=*/false };
+  const int           pad = 16;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width  = rng.getOneOf<int>( { 2, 4, 8, 16, 32, 64 } );
+    const int height = rng.getOneOf<int>( { 2, 4, 8, 16, 32 } );
+    int       angle  = 0;
+    while( angle % 32 == 0 )
+    {
+      angle = INTRA_ANG_TABLE[rng.get( 1, 31 )];
+    }
+    angle *= rng.get( 0, 1 ) ? -1 : 1;
+    const int lowInt  = std::min( angle, angle * height ) >> 5;
+    const int highInt = std::max( angle, angle * height ) >> 5;
+    std::vector<Pel> border( ( highInt - lowInt ) + width + 2 + 2 * pad );
+    std::generate( border.begin(), border.end(), pixels );
+    if( i % 4 == 0 )
+    {
+      for( size_t k = 0; k < border.size(); k++ )
+      {
+        border[k] = ( k & 1 ) ? 1023 : 0;
+      }
+    }
+    Pel* const       pBorder = border.data() + pad - lowInt;
+    const int        stride  = width + rng.get( 0, 8 );
+    std::vector<Pel> dstRef( stride * height, 0x5a5a ), dstOpt( stride * height, 0x5a5a );
+    ref->IntraPredAngleChroma( dstRef.data(), stride, pBorder, width, height, angle, angle );
+    opt->IntraPredAngleChroma( dstOpt.data(), stride, pBorder, width, height, angle, angle );
+
+    std::ostringstream sstm;
+    sstm << "IntraPredAngleChroma " << width << "x" << height << " angle=" << angle;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // IntraAnglePDPC for every luma block size and mode 2 .. 66 that applies it, with the parameters of initPredIntraParams
 // and xPredIntraAng: wide-angle mapping, positive angles only, scale from the side (height, or width for horizontal
 // modes) and the block passed transposed for horizontal modes. The reference samples after the last one the scalar code
@@ -1632,6 +1679,7 @@ static bool test_IntraPred()
   passed = check_IntraPredAngleLuma( &ref, &opt, num_cases ) && passed;
   passed = check_LMLumaDownsample420( &ref, &opt, num_cases ) && passed;
   passed = check_IntraFilterRefSamples( &ref, &opt, num_cases ) && passed;
+  passed = check_IntraPredAngleChroma( &ref, &opt, num_cases ) && passed;
   passed = check_IntraAnglePDPC( &ref, &opt ) && passed;
   passed = check_IntraHorVerPDPC( &ref, &opt ) && passed;
   passed = check_IntraPlanarAndSampleFilter( &ref, &opt ) && passed;
@@ -4933,6 +4981,88 @@ static bool check_recoCopyClip4And8( PelBufferOps* ref, PelBufferOps* opt, unsig
   return true;
 }
 
+// weightCiip, roundGeo and roundIntVector at the sizes the callers pass, on inputs inside every SIMD kernel's domain:
+// Pel values of the bit depth for weightCiip (SSE averages unsigned), src + offset within int16 for roundGeo (SSE adds
+// with saturation). roundIntVector has no C pointer: it is checked against roundAffineMv and Clip3, the path
+// InterPrediction takes without it.
+static bool check_ciipGeoDmv( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::weightCiip, roundGeo, roundIntVector\n" );
+  DimensionGenerator rng;
+  auto anyPel = []()
+  {
+    const int r = rand() & 15;   // the extremes one time in eight
+    return r == 0 ? -32768 : r == 1 ? 32767 : int( Pel( ( unsigned( rand() ) << 8 ) ^ unsigned( rand() ) ) );
+  };
+  auto predPel = []( int bd )
+  {
+    const int r = rand() & 15;
+    return Pel( r == 0 ? 0 : r == 1 ? ( 1 << bd ) - 1 : rand() & ( ( 1 << bd ) - 1 ) );
+  };
+  alignas( 32 ) Pel src[4096];
+  alignas( 32 ) Pel dstRef[4096];
+  alignas( 32 ) Pel dstOpt[4096];
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const ClpRng clpRng{ int( rng.getOneOf<unsigned>( { 8, 10, 12 } ) ) };
+    const int    numSamples = 16 * rng.get( 1, 256 );
+    const int    numIntra   = rng.get( 0, 2 );
+    std::ostringstream sstm;
+    sstm << " numSamples=" << numSamples << " bd=" << clpRng.bd << " numIntra=" << numIntra;
+
+    for( int n = 0; n < numSamples; n++ )
+    {
+      src[n]    = predPel( clpRng.bd );
+      dstRef[n] = predPel( clpRng.bd );
+      dstOpt[n] = dstRef[n];
+    }
+    ref->weightCiip( dstRef, src, numSamples, numIntra );
+    opt->weightCiip( dstOpt, src, numSamples, numIntra );
+    bool ok = compare_values_1d( "weightCiip" + sstm.str(), dstRef, dstOpt, numSamples );
+
+    // the encoder's rshift and offset (EncCu)
+    const unsigned rshift = std::max( 2, IF_INTERNAL_PREC - clpRng.bd );
+    const int      offset = ( 1 << ( rshift - 1 ) ) + IF_INTERNAL_OFFS;
+    for( int n = 0; n < numSamples; n++ )
+    {
+      src[n] = Pel( std::min( anyPel(), 32767 - offset ) );
+    }
+    ref->roundGeo( src, dstRef, numSamples, rshift, offset, clpRng );
+    opt->roundGeo( src, dstOpt, numSamples, rshift, offset, clpRng );
+    ok = ok && compare_values_1d( "roundGeo" + sstm.str(), dstRef, dstOpt, numSamples );
+
+    if( opt->roundIntVector )
+    {
+      const int size     = 16 * rng.get( 1, 2 );
+      const int nShift   = rng.get( 1, 12 );
+      const int dmvLimit = rng.get( 1, 1000 );
+      int vRef[32], vOpt[32];
+      for( int k = 0; k < size; k++ )
+      {
+        // |v| < 2^28 (C's rounding offset must not overflow): the extremes one time in eight, exact halves (rounded
+        // toward 0, so the direction depends on the sign) one time in four
+        const int r    = rand() & 15;
+        const int half = ( 2 * ( rand() & 63 ) + 1 ) << ( nShift - 1 );
+        vRef[k] = r == 0 ? -( 1 << 28 ) : r == 1 ? ( 1 << 28 ) - 1 : r < 4 ? half : r < 6 ? -half
+                : int( ( ( unsigned( rand() ) << 15 ) ^ unsigned( rand() ) ) & ( ( 1u << 29 ) - 1 ) ) - ( 1 << 28 );
+        vOpt[k] = vRef[k];
+        int unused = 0;
+        roundAffineMv( vRef[k], unused, nShift );
+        vRef[k] = Clip3( -dmvLimit, dmvLimit, vRef[k] );
+      }
+      opt->roundIntVector( vOpt, size, nShift, dmvLimit );
+      ok = ok && compare_values_1d( "roundIntVector size=" + std::to_string( size ) + " nShift=" + std::to_string( nShift )
+                                      + " limit=" + std::to_string( dmvLimit ), vRef, vOpt, size );
+    }
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // The plane checksum of the decoded picture hash SEI: widths and heights beyond 256, where the high bytes of the
 // positions enter the mask, any Pel values (the arithmetic shift of negative values) and both sample sizes.
 static bool check_pictureChecksum( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -5301,6 +5431,17 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
     const SizeType predSize   = rng.getOneOf<SizeType>( { 4, 8 } );
     const unsigned log2Factor = rng.get( 1, 3 );
     const SizeType factor     = 1 << log2Factor;
+    // every fourth case alternates 0 and 4095: the steepest ramps, both signs
+    auto extremes = [i]( std::vector<Pel>& v )
+    {
+      if( i % 4 == 0 )
+      {
+        for( size_t k = 0; k < v.size(); k++ )
+        {
+          v[k] = ( k & 1 ) ? 4095 : 0;
+        }
+      }
+    };
 
     // horizontal
     {
@@ -5309,6 +5450,8 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
       std::vector<Pel> src( predSize * predSize ), bndry( bndryStep * predSize );
       std::generate( src.begin(), src.end(), samples );
       std::generate( bndry.begin(), bndry.end(), samples );
+      extremes( src );
+      extremes( bndry );
       std::vector<Pel> dstRef( dstStride * predSize, 0x5a5a ), dstOpt( dstStride * predSize, 0x5a5a );
       ref->mipUpsampleHor( dstRef.data(), src.data(), bndry.data(), dstStride, bndryStep, predSize, log2Factor );
       opt->mipUpsampleHor( dstOpt.data(), src.data(), bndry.data(), dstStride, bndryStep, predSize, log2Factor );
@@ -5331,6 +5474,9 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
       std::generate( src.begin(), src.end(), samples );
       std::vector<Pel> dstRef( outWidth * outHeight ), dstOpt( outWidth * outHeight );
       std::generate( dstRef.begin(), dstRef.end(), samples );
+      extremes( bndry );
+      extremes( src );
+      extremes( dstRef );
       dstOpt = dstRef;
 
       // in place: the source rows are the output rows k * factor + factor - 1
@@ -5748,6 +5894,7 @@ static bool test_PelBufferOps()
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
   passed = check_recoCopyClip4And8( &ref, &opt, num_cases ) && passed;
+  passed = check_ciipGeoDmv( &ref, &opt, num_cases ) && passed;
   passed = check_geoSads( &ref, &opt, num_cases ) && passed;
   passed = check_copyClip( &ref, &opt, num_cases ) && passed;
   passed = check_copyClipScalarTail( &ref, num_cases ) && passed;
@@ -5822,8 +5969,17 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
 
   bool passed = true;
 
+  // One random phase, then fixed ones, as some kernels depend on the taps: the symmetric (half-sample) phases (6-tap: 8
+  // of the 4x4 table and 17, the alternative filter; 4-tap: 8, chroma entry 16) and a phase next to them.
+  std::vector<int> fracs{ -1 };
+  if( N == 8 || N == 4 )
+    fracs.insert( fracs.end(), { 8, 7 } );
+  else if( N == 6 )
+    fracs.insert( fracs.end(), { 8, 17, 9 } );
+
   // The x86 kernels take their shifts as immediates per bit depth: test both of VVenC's internal bit depths.
   // A first pass reads samples: random ones, then 0 or the maximum. A second pass reads what a first pass outputs.
+  for( int fixedFrac : fracs )
   for( unsigned bd : { 8, 10 } )
   for( bool extremes : { false, true } )
   {
@@ -5851,20 +6007,20 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
     if( N == 8 )
     {
       tapIdx = 0;
-      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+      frac = fixedFrac >= 0 ? unsigned( fixedFrac ) : dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
       pCoeff = InterpolationFilter::m_lumaFilter[frac];
     }
     else if( N == 6 )
     {
       tapIdx = 3;
-      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
+      frac = fixedFrac >= 0 ? unsigned( fixedFrac ) : dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
       pCoeff = frac == 17 ? InterpolationFilter::m_lumaAltHpelIFilter : InterpolationFilter::m_lumaFilter4x4[frac];
       src_offset += cStride; // some of the 6-tap filter impementations use 8-tap
     }
     else if( N == 4 )
     {
       tapIdx = 1;
-      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+      frac = fixedFrac >= 0 ? unsigned( fixedFrac ) : dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
       pCoeff = InterpolationFilter::m_chromaFilter[frac << 1];
     }
     else // N == 2
@@ -6724,12 +6880,14 @@ static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* op
 
   const Area blk{ 0, 0, w, h };
   const Area blkDst{ dstX, dstY, w, h };
+  sstm << " dstX=" << dstX << " dstY=" << dstY;
 
-  // Padding to src memory so that filterBlk can safely index [-3,+3] rows.
+  // Padding to src memory so that filterBlk can safely index [-3,+3] rows. dst ends after the block: a store past it is
+  // caught by the sanitizers, one into the stride by the compare of the whole buffer.
   constexpr int pad = 3;
   std::vector<Pel> src( ( blk.y + h + 2 * pad ) * srcStride + blk.x + 2 * pad );
-  std::vector<Pel> dst_ref( ( blkDst.y + h ) * dstStride + blkDst.x );
-  std::vector<Pel> dst_opt( ( blkDst.y + h ) * dstStride + blkDst.x );
+  std::vector<Pel> dst_ref( ( blkDst.y + h - 1 ) * dstStride + blkDst.x + w );
+  std::vector<Pel> dst_opt( ( blkDst.y + h - 1 ) * dstStride + blkDst.x + w );
   std::generate( src.begin(), src.end(), input_generator );
 
   Size sz{ w, h };
@@ -6798,7 +6956,10 @@ static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* op
   opt->m_filter7x7Blk[linearIndex]( classifier.data(), dstUnitBuf_opt, srcUnitBuf, blkDst, blk, compId,
                                     coeffLuma.data(), clipLuma.data(), clpRng, cs, vbCTUHeight, vbPos );
 
-  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h + blkDst.y, w, dstStride );
+  const ptrdiff_t blkOffset = ptrdiff_t( blkDst.y ) * dstStride + blkDst.x;
+  return compare_values_2d( sstm.str(), dst_ref.data() + blkOffset, dst_opt.data() + blkOffset, h, w, dstStride ) &&
+         compare_values_1d( sstm.str() + " (whole buffer)", dst_ref.data(), dst_opt.data(),
+                            unsigned( dst_ref.size() ) );
 }
 
 template<typename G>
@@ -7180,6 +7341,108 @@ static bool test_AdaptiveLoopFilter()
 #endif // ENABLE_SIMD_OPT_ALF
 
 #if ENABLE_SIMD_OPT_SAO
+
+// SampleAdaptiveOffset::offsetBlock is protected: a subclass to reach it
+struct SaoOffsetBlockAccess : public SampleAdaptiveOffset
+{
+  explicit SaoOffsetBlockAccess( bool enableOpt ) : SampleAdaptiveOffset( enableOpt ) {}
+  using SampleAdaptiveOffset::offsetBlock;
+};
+
+// offsetBlock for every SAO type, availability mask and block width offsetCTU can pass (multiples of 4, picture-edge
+// CTUs included), samples with a one-sample border of valid values (the edge classes
+// read it), offsets as the encoder's (edge class 0 offset 0; band offset nonzero only in the four bands from startIdx);
+// the whole block compared, positions the C code leaves alone included (they must keep their samples), not the rest of
+// the rows (the SSE kernel stores whole vectors past a block width that is not a multiple of 8: the picture margin at
+// picture-edge CTUs).
+static bool check_SAOoffsetBlock( SaoOffsetBlockAccess* ref, SaoOffsetBlockAccess* opt, int bd )
+{
+  printf( "Testing SampleAdaptiveOffset::offsetBlock %d-bit\n", bd );
+  DimensionGenerator  rng;
+  InputGenerator<Pel> samples{ unsigned( bd ), /*is_signed=*/false };
+  const ClpRng        clpRng{ bd };
+  const int           maxOffset = SampleAdaptiveOffset::getMaxOffsetQVal( bd ) << std::max( bd - 10, 0 );
+
+  for( int typeIdx = 0; typeIdx < 5; typeIdx++ )
+  {
+    for( int availMask = 0; availMask < 256; availMask++ )
+    {
+#if !defined( TARGET_SIMD_ARM )
+      // the SSE kernel's diagonal classes assume the masks deriveLoopFilterBoundaryAvailibility can give (raster
+      // slices, tiles: the CTUs between the current one and a neighbour of its slice / tile in raster order, or inside
+      // the tile rectangle, are there too); the NEON kernel matches the C code on every mask
+      auto has = [availMask]( int bits ) { return ( availMask & bits ) == bits; };
+      if( ( has( AboveLeftAvail ) && !has( AboveAvail | LeftAvail ) )
+          || ( has( BelowRightAvail ) && !has( BelowAvail | RightAvail ) )
+          || ( has( AboveAvail | RightAvail ) && !has( AboveRightAvail ) )
+          || ( has( BelowAvail | LeftAvail ) && !has( BelowLeftAvail ) ) )
+      {
+        continue;
+      }
+#endif
+      for( int width : { 4, 8, 12, 16, 20, 24, 36, 64, 128 } )
+      {
+        const int height = rng.getOneOf<int>( { 4, 8, 12, 16, 32, 64 } );
+        // strides past the width rounded up to 16, in steps of 8 samples (16 bytes: the SSE kernel's stores are
+        // aligned), as a picture's; the source padded by 16 samples (the SSE kernel reads whole vectors past the block)
+        const ptrdiff_t srcStride = ( ( width + 2 + 15 ) & ~15 ) + 8 * rng.get( 0, 2 );
+        const ptrdiff_t resStride = ( ( width + 15 ) & ~15 ) + 8 * rng.get( 0, 2 );
+        std::vector<Pel> src( srcStride * ( height + 2 ) + 16 );
+        std::generate( src.begin(), src.end(), samples );
+        if( availMask & 1 )
+        {
+          // runs of one value (edge class 0, band offset in one band)
+          const Pel value = Pel( rng.get( 0, ( 1 << bd ) - 1 ) );
+          std::fill( src.begin() + srcStride, src.begin() + srcStride + width / 2, value );
+        }
+        // the destination holds the block's own samples before SAO, as in offsetCTU (the SSE kernel stores them back,
+        // unchanged, at positions the C code skips)
+        std::vector<Pel> resRef( resStride * height, 0x5a5a );
+        for( int y = 0; y < height; y++ )
+        {
+          std::copy_n( src.data() + ( y + 1 ) * srcStride + 1, width, resRef.data() + y * resStride );
+        }
+        std::vector<Pel> resOpt = resRef;
+
+        int offset[MAX_NUM_SAO_CLASSES] = { 0 };
+        const int startIdx = rng.get( 0, MAX_NUM_SAO_CLASSES - 1 );
+        for( int k = 0; k < 4; k++ )
+        {
+          const int value = int( rng.get( 0, 2 * maxOffset ) ) - maxOffset;
+          if( typeIdx == SAO_TYPE_BO )
+          {
+            offset[( startIdx + k ) % MAX_NUM_SAO_CLASSES] = value;
+          }
+          else
+          {
+            offset[k < 2 ? k : k + 1] = value;   // edge classes -2, -1, 1, 2; class 0 keeps 0
+          }
+        }
+        // the sign lines as SampleAdaptiveOffset::init sizes them (the CTU width + 1; the SSE kernel reads and writes
+        // whole vectors of them)
+        std::vector<int8_t> signRef1( 256 ), signRef2( 256 ), signOpt1( 256 ), signOpt2( 256 );
+        const Pel* srcBlk = src.data() + srcStride + 1;
+        ref->offsetBlock( bd, clpRng, typeIdx, offset, startIdx, srcBlk, resRef.data(), srcStride, resStride, width,
+                          height, uint8_t( availMask ), signRef1, signRef2 );
+        opt->offsetBlock( bd, clpRng, typeIdx, offset, startIdx, srcBlk, resOpt.data(), srcStride, resStride, width,
+                          height, uint8_t( availMask ), signOpt1, signOpt2 );
+
+        std::ostringstream sstm;
+        sstm << "offsetBlock type=" << typeIdx << " availMask=" << availMask << " " << width << "x" << height
+             << " startIdx=" << startIdx;
+        for( int y = 0; y < height; y++ )
+        {
+          if( !compare_values_1d( sstm.str(), resRef.data() + y * resStride, resOpt.data() + y * resStride, width ) )
+          {
+            return false;
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
 
 template<typename G>
 static bool check_SAOcalcSaoStatisticsBo( SampleAdaptiveOffset* ref, SampleAdaptiveOffset* opt, int bd, G src_generator,
@@ -7570,6 +7833,13 @@ static bool test_SampleAdaptiveOffset()
     passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, max_gen, min_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, min_gen, max_gen ) && passed;
     passed = check_SAOcalcSaoStatisticsEo45( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+  }
+
+  SaoOffsetBlockAccess refApply{ false };
+  SaoOffsetBlockAccess optApply{ true };
+  for( int bd : { 8, 10, 12 } )
+  {
+    passed = check_SAOoffsetBlock( &refApply, &optApply, bd ) && passed;
   }
 
   return passed;
@@ -8920,6 +9190,9 @@ static bool test_CuTree()
   CuTree cuTree;
 #if defined( TARGET_SIMD_X86 )
   cuTree.initCuTree_X86();
+#endif
+#if defined( TARGET_SIMD_ARM )
+  cuTree.initCuTreeARM();
 #endif
   unsigned num_cases = NUM_CASES;
   bool passed = true;

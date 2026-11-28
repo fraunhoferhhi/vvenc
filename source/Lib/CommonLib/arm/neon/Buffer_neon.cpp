@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Unit.h"
 #include "CommonLib/Buffer.h"
+#include "../Buffer_neon.h"
 #include "sum_neon.h"
 #include "transpose_neon.h"
 
@@ -1312,6 +1313,329 @@ static void reco4_neon( const Pel* src0, int src0Stride, const Pel* src1, int sr
   }
 }
 
+// CIIP blend, as weightCiipCore. numIntra 1: the rounded average of res and src. Otherwise
+// res = ( unscale + 3 * scale + 2 ) >> 2, where numIntra picks the side weighted 3; that equals
+// vrhadd( vhadd( unscale, scale ), scale ): with unscale + scale = 2k + r (r = 0 or 1) both are
+// floor( ( k + scale + 1 + r / 2 ) / 2 ) = floor( ( k + scale + 1 ) / 2 ), exact for any Pel values.
+static void weightCiip_neon( Pel* res, const Pel* src, const int numSamples, int numIntra )
+{
+  CHECKD( ( numSamples & 15 ) != 0, "numSamples must be a multiple of 16" );
+  if( numIntra == 1 )
+  {
+    for( int n = 0; n < numSamples; n += 16 )
+    {
+      const int16x8_t r0 = vld1q_s16( res + n );
+      const int16x8_t r1 = vld1q_s16( res + n + 8 );
+      const int16x8_t s0 = vld1q_s16( src + n );
+      const int16x8_t s1 = vld1q_s16( src + n + 8 );
+      vst1q_s16( res + n,     vrhaddq_s16( r0, s0 ) );
+      vst1q_s16( res + n + 8, vrhaddq_s16( r1, s1 ) );
+    }
+  }
+  else
+  {
+    const Pel* scale   = numIntra ? src : res;
+    const Pel* unscale = numIntra ? res : src;
+    for( int n = 0; n < numSamples; n += 16 )
+    {
+      const int16x8_t s0 = vld1q_s16( scale + n );
+      const int16x8_t s1 = vld1q_s16( scale + n + 8 );
+      const int16x8_t u0 = vld1q_s16( unscale + n );
+      const int16x8_t u1 = vld1q_s16( unscale + n + 8 );
+      vst1q_s16( res + n,     vrhaddq_s16( vhaddq_s16( u0, s0 ), s0 ) );
+      vst1q_s16( res + n + 8, vrhaddq_s16( vhaddq_s16( u1, s1 ), s1 ) );
+    }
+  }
+}
+
+// GPM rounding, as roundGeoCore: dst = ClipPel( ( src + offset ) >> rshift ). The encoder's offset is the rounding half
+// plus IF_INTERNAL_OFFS, a multiple of 2^rshift, so this is a rounding shift of src (no int16 overflow) plus
+// offset >> rshift. The add saturates only where the clip cuts anyway; ClpRng::min() is 0, so vqshlu by 0 clips at 0.
+static void roundGeo_neon( const Pel* src, Pel* dst, const int numSamples, unsigned rshift, int offset,
+                           const ClpRng& clpRng )
+{
+  CHECKD( ( numSamples & 15 ) != 0, "numSamples must be a multiple of 16" );
+  CHECKD( ( offset & ( ( 1 << rshift ) - 1 ) ) != ( 1 << ( rshift - 1 ) ),
+          "offset must be the rounding half plus a multiple of 2^rshift" );
+  const int16x8_t  vshift  = vdupq_n_s16( -( int ) rshift );
+  const int16x8_t  voffset = vdupq_n_s16( offset >> rshift );
+  const uint16x8_t vmax    = vdupq_n_u16( clpRng.max() );
+  for( int n = 0; n < numSamples; n += 16 )
+  {
+    const int16x8_t a0 = vld1q_s16( src + n );
+    const int16x8_t a1 = vld1q_s16( src + n + 8 );
+    const int16x8_t r0 = vqaddq_s16( vrshlq_s16( a0, vshift ), voffset );
+    const int16x8_t r1 = vqaddq_s16( vrshlq_s16( a1, vshift ), voffset );
+    vst1q_s16( dst + n,     vreinterpretq_s16_u16( vminq_u16( vqshluq_n_s16( r0, 0 ), vmax ) ) );
+    vst1q_s16( dst + n + 8, vreinterpretq_s16_u16( vminq_u16( vqshluq_n_s16( r1, 0 ), vmax ) ) );
+  }
+}
+
+// Affine PROF dMv rounding, as roundAffineMv and Clip3: v = clip( ( v + 2^(nShift-1) - ( v >= 0 ) ) >> nShift ). Adding
+// the v > 0 mask (-1) before a rounding shift gives the same; at v == 0 both give 0.
+static void roundIntVector_neon( int* v, int size, unsigned int nShift, const int dmvLimit )
+{
+  CHECKD( ( size & 15 ) != 0, "size must be a multiple of 16" );
+  const int32x4_t vshift = vdupq_n_s32( -( int ) nShift );
+  const int32x4_t vmin   = vdupq_n_s32( -dmvLimit );
+  const int32x4_t vmax   = vdupq_n_s32( dmvLimit );
+  const int32x4_t vzero  = vdupq_n_s32( 0 );
+  for( int i = 0; i < size; i += 16 )
+  {
+    const int32x4_t a0 = vld1q_s32( v + i );
+    const int32x4_t a1 = vld1q_s32( v + i + 4 );
+    const int32x4_t a2 = vld1q_s32( v + i + 8 );
+    const int32x4_t a3 = vld1q_s32( v + i + 12 );
+    // the v > 0 masks are -1
+    const int32x4_t r0 = vrshlq_s32( vaddq_s32( a0, vreinterpretq_s32_u32( vcgtq_s32( a0, vzero ) ) ), vshift );
+    const int32x4_t r1 = vrshlq_s32( vaddq_s32( a1, vreinterpretq_s32_u32( vcgtq_s32( a1, vzero ) ) ), vshift );
+    const int32x4_t r2 = vrshlq_s32( vaddq_s32( a2, vreinterpretq_s32_u32( vcgtq_s32( a2, vzero ) ) ), vshift );
+    const int32x4_t r3 = vrshlq_s32( vaddq_s32( a3, vreinterpretq_s32_u32( vcgtq_s32( a3, vzero ) ) ), vshift );
+    vst1q_s32( v + i,      vminq_s32( vmaxq_s32( r0, vmin ), vmax ) );
+    vst1q_s32( v + i + 4,  vminq_s32( vmaxq_s32( r1, vmin ), vmax ) );
+    vst1q_s32( v + i + 8,  vminq_s32( vmaxq_s32( r2, vmin ), vmax ) );
+    vst1q_s32( v + i + 12, vminq_s32( vmaxq_s32( r3, vmin ), vmax ) );
+  }
+}
+
+// dst[0 .. n-1] = value. A run of 4 and more not covered by whole stores ends with one that overlaps the one before
+// (same value).
+static inline void fillRun_neon( Pel* dst, const int n, const Pel value )
+{
+  const int16x8_t v = vdupq_n_s16( value );
+  if( n >= 8 )
+  {
+    int x = 0;
+    for( ; x + 16 <= n; x += 16 )
+    {
+      vst1q_s16( dst + x,     v );
+      vst1q_s16( dst + x + 8, v );
+    }
+    if( x + 8 < n )
+    {
+      vst1q_s16( dst + x, v );
+    }
+    if( x < n )
+    {
+      vst1q_s16( dst + n - 8, v );
+    }
+  }
+  else if( n >= 4 )
+  {
+    vst1_s16( dst,         vget_low_s16( v ) );
+    vst1_s16( dst + n - 4, vget_low_s16( v ) );
+  }
+  else
+  {
+    for( int x = 0; x < n; x++ )
+    {
+      dst[x] = value;
+    }
+  }
+}
+
+// padHorizontalCore: each row's first and last sample repeated over the left and right margins
+static void padHorizontal_neon( Pel* src, const ptrdiff_t stride, const int width, const int height, const int marginLeft,
+                                const int marginRight )
+{
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    // both edge samples read before the left fill (its stores may alias src[width - 1] for the compiler)
+    const Pel lftPel = src[0];
+    const Pel rgtPel = src[width - 1];
+    fillRun_neon( src - marginLeft, marginLeft, lftPel );
+    fillRun_neon( src + width, marginRight, rgtPel );
+  }
+}
+
+// MIP upsampling (MatrixIntraPrediction::predBlock): with diff = behind - before, phase p = 0 .. 2^L - 1 is
+// ( ( before << L ) + 2^(L-1) + ( p + 1 ) * diff ) >> L = before + ( ( ( p + 1 ) * diff + 2^(L-1) ) >> L )
+// (before << L is a multiple of 2^L), i.e. vrsra( before, ( p + 1 ) * diff, L ); the last phase is behind itself. For
+// samples of up to 12 bits (the range of the SIMD versions) ( p + 1 ) * diff fits int16, and vrsra rounds in wider
+// precision.
+template<unsigned L>
+static inline void mipInterpolate_neon( const int16x8_t before, const int16x8_t behind, int16x8_t* out )
+{
+  const int16x8_t diff = vsubq_s16( behind, before );
+  int16x8_t       acc  = diff;
+  for( int p = 0; p < ( 1 << L ) - 1; p++, acc = vaddq_s16( acc, diff ) )
+  {
+    out[p] = vrsraq_n_s16( before, acc, L );
+  }
+  out[( 1 << L ) - 1] = behind;
+}
+
+template<unsigned L>
+static inline void mipInterpolate_neon( const int16x4_t before, const int16x4_t behind, int16x4_t* out )
+{
+  const int16x4_t diff = vsub_s16( behind, before );
+  int16x4_t       acc  = diff;
+  for( int p = 0; p < ( 1 << L ) - 1; p++, acc = vadd_s16( acc, diff ) )
+  {
+    out[p] = vrsra_n_s16( before, acc, L );
+  }
+  out[( 1 << L ) - 1] = behind;
+}
+
+// one row of the horizontal pass: out[i * 2^L + p] = v[p][i], one overload per factor (tag MipLog2Factor<L>).
+// Factors 2 and 4 with interleaving stores; factor 8 zips the phases in pairs, so that each 32-bit lane i of the four
+// zipped vectors holds phases 2j, 2j + 1 of sample i, and a 4-way interleaving store of 32-bit lanes writes them in
+// order (dst is only 2-byte aligned: fine for ST4).
+template<unsigned L> struct MipLog2Factor {};
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x8_t* v, MipLog2Factor<1> )
+{
+  int16x8x2_t w;
+  w.val[0] = v[0];
+  w.val[1] = v[1];
+  vst2q_s16( dst, w );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x8_t* v, MipLog2Factor<2> )
+{
+  int16x8x4_t w;
+  for( int p = 0; p < 4; p++ )
+  {
+    w.val[p] = v[p];
+  }
+  vst4q_s16( dst, w );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x8_t* v, MipLog2Factor<3> )
+{
+  int32x4x4_t lo, hi;
+  for( int j = 0; j < 4; j++ )
+  {
+    const int16x8x2_t z = vzipq_s16( v[2 * j], v[2 * j + 1] );
+    lo.val[j] = vreinterpretq_s32_s16( z.val[0] );
+    hi.val[j] = vreinterpretq_s32_s16( z.val[1] );
+  }
+  vst4q_s32( ( int32_t* ) dst, lo );
+  vst4q_s32( ( int32_t* ) dst + 16, hi );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x4_t* v, MipLog2Factor<1> )
+{
+  int16x4x2_t w;
+  w.val[0] = v[0];
+  w.val[1] = v[1];
+  vst2_s16( dst, w );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x4_t* v, MipLog2Factor<2> )
+{
+  int16x4x4_t w;
+  for( int p = 0; p < 4; p++ )
+  {
+    w.val[p] = v[p];
+  }
+  vst4_s16( dst, w );
+}
+
+static inline void mipStoreRow_neon( Pel* dst, const int16x4_t* v, MipLog2Factor<3> )
+{
+  int32x2x4_t lo, hi;
+  for( int j = 0; j < 4; j++ )
+  {
+    const int16x4x2_t z = vzip_s16( v[2 * j], v[2 * j + 1] );
+    lo.val[j] = vreinterpret_s32_s16( z.val[0] );
+    hi.val[j] = vreinterpret_s32_s16( z.val[1] );
+  }
+  vst4_s32( ( int32_t* ) dst, lo );
+  vst4_s32( ( int32_t* ) dst + 8, hi );
+}
+
+// horizontal pass over the predSize (4 or 8) rows of the reduced prediction; "before" of a row's first sample is the
+// row's boundary sample
+template<unsigned L>
+static void mipUpsampleHorFactor_neon( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride,
+                                       const SizeType bndryStep, const SizeType predSize )
+{
+  const Pel* bndryLine = bndry + bndryStep - 1;
+  if( predSize == 8 )
+  {
+    for( int row = 0; row < 8; row++, src += 8, dst += dstStride, bndryLine += bndryStep )
+    {
+      const int16x8_t behind = vld1q_s16( src );
+      int16x8_t       v[1 << L];
+      mipInterpolate_neon<L>( vextq_s16( vld1q_dup_s16( bndryLine ), behind, 7 ), behind, v );
+      mipStoreRow_neon( dst, v, MipLog2Factor<L>() );
+    }
+  }
+  else
+  {
+    for( int row = 0; row < 4; row++, src += 4, dst += dstStride, bndryLine += bndryStep )
+    {
+      const int16x4_t behind = vld1_s16( src );
+      int16x4_t       v[1 << L];
+      mipInterpolate_neon<L>( vext_s16( vld1_dup_s16( bndryLine ), behind, 3 ), behind, v );
+      mipStoreRow_neon( dst, v, MipLog2Factor<L>() );
+    }
+  }
+}
+
+// vertical pass: input row k gives the output rows k * 2^L .. k * 2^L + 2^L - 1, the lanes run over the columns (8 per
+// step, a block 4 wide in 64-bit vectors). The source rows can be the output rows k * 2^L + 2^L - 1 (in place): each is
+// loaded before the stores of its phases, the last of which writes it back unchanged.
+template<unsigned L>
+static void mipUpsampleVerFactor_neon( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth,
+                                       const SizeType srcStep, const SizeType inHeight )
+{
+  if( outWidth == 4 )
+  {
+    int16x4_t before = vld1_s16( bndry );
+    for( SizeType k = 0; k < inHeight; k++ )
+    {
+      const int16x4_t behind = vld1_s16( src + k * srcStep );
+      int16x4_t       v[1 << L];
+      mipInterpolate_neon<L>( before, behind, v );
+      for( int p = 0; p < ( 1 << L ); p++ )
+      {
+        vst1_s16( dst + ( ( k << L ) + p ) * 4, v[p] );
+      }
+      before = behind;
+    }
+    return;
+  }
+  for( SizeType x = 0; x < outWidth; x += 8 )
+  {
+    int16x8_t before = vld1q_s16( bndry + x );
+    for( SizeType k = 0; k < inHeight; k++ )
+    {
+      const int16x8_t behind = vld1q_s16( src + k * srcStep + x );
+      int16x8_t       v[1 << L];
+      mipInterpolate_neon<L>( before, behind, v );
+      for( int p = 0; p < ( 1 << L ); p++ )
+      {
+        vst1q_s16( dst + ( ( k << L ) + p ) * outWidth + x, v[p] );
+      }
+      before = behind;
+    }
+  }
+}
+
+static void mipUpsampleHor_neon( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride,
+                                 const SizeType bndryStep, const SizeType predSize, const unsigned log2Factor )
+{
+  switch( log2Factor )
+  {
+  case 1:  mipUpsampleHorFactor_neon<1>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  case 2:  mipUpsampleHorFactor_neon<2>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  default: mipUpsampleHorFactor_neon<3>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  }
+}
+
+static void mipUpsampleVer_neon( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth,
+                                 const SizeType srcStep, const SizeType inHeight, const unsigned log2Factor )
+{
+  switch( log2Factor )
+  {
+  case 1:  mipUpsampleVerFactor_neon<1>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  case 2:  mipUpsampleVerFactor_neon<2>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  default: mipUpsampleVerFactor_neon<3>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  }
+}
+
 template<>
 void addAvg_strided_neon<8>( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest,
                              int destStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
@@ -1718,6 +2042,116 @@ static uint64_t AvgHighPassWithDownsamplingDiff2nd_neon( const int width, const 
   return horizontal_add_u64x2( sum );
 }
 
+// sum( | p - value | ) over a block (the CTU pumping reduction of the perceptual QP adaptation). For samples and value
+// in 0 ... 2^15 - 1 each absolute difference is below 2^15, so the sum of a pair fits 16 bits unsigned; the pair sums
+// are added pairwise into 32-bit lanes.
+static uint32_t sumAbsDeviation_neon( const Pel* src, const ptrdiff_t stride, const int width, const int height,
+                                      const int value )
+{
+  CHECKD( value < 0 || value > 0x7fff, "value has to be in 0 ... 2^15 - 1" );
+
+  const uint16_t* const s16  = reinterpret_cast<const uint16_t*>( src );
+  const uint16x8_t      v    = vdupq_n_u16( value );
+  uint32x4_t            acc0 = vdupq_n_u32( 0 );
+  uint32x4_t            acc1 = vdupq_n_u32( 0 );
+  uint32_t              tail = 0;
+
+  for( int y = 0; y < height; y++ )
+  {
+    const uint16_t* const row = s16 + y * stride;
+    int x = 0;
+    for( ; x + 32 <= width; x += 32 )
+    {
+      const uint16x8_t p0 = vld1q_u16( row + x );
+      const uint16x8_t p1 = vld1q_u16( row + x + 8 );
+      const uint16x8_t p2 = vld1q_u16( row + x + 16 );
+      const uint16x8_t p3 = vld1q_u16( row + x + 24 );
+      acc0 = vpadalq_u16( acc0, vabaq_u16( vabdq_u16( p0, v ), p1, v ) );
+      acc1 = vpadalq_u16( acc1, vabaq_u16( vabdq_u16( p2, v ), p3, v ) );
+    }
+    if( x + 16 <= width )
+    {
+      const uint16x8_t p0 = vld1q_u16( row + x );
+      const uint16x8_t p1 = vld1q_u16( row + x + 8 );
+      acc0 = vpadalq_u16( acc0, vabaq_u16( vabdq_u16( p0, v ), p1, v ) );
+      x += 16;
+    }
+    if( x + 8 <= width )
+    {
+      const uint16x8_t p0 = vld1q_u16( row + x );
+      acc1 = vpadalq_u16( acc1, vabdq_u16( p0, v ) );
+      x += 8;
+    }
+    for( ; x < width; x++ )
+    {
+      tail += uint32_t( abs( row[x] - value ) );
+    }
+  }
+  return tail + horizontal_add_u32x4( vaddq_u32( acc0, acc1 ) );
+}
+
+// The plane checksum of the decoded picture hash SEI (PelBufferOps::pictureChecksum). Per sample, the terms
+// ( p & 0xff ) ^ m and ( p >> 8 ) ^ m (arithmetic shift) are in 0 ... 255 and -256 ... 255, so the sum of both terms of
+// two samples fits 16 bits; the 32-bit lane sums wrap around modulo 2^32 like the C sum. The positions x and y are
+// below 2^16, so each term of m = ( x & 0xff ) ^ ( x >> 8 ) ^ ( y & 0xff ) ^ ( y >> 8 ) is below 2^8 and m needs no
+// truncation to 8 bits. For x a multiple of 8 and i < 8, x + i only sets the low 3 bits, so m(x + i) = m(x) ^ i; for x
+// a multiple of 16, m(x + 8) = m(x) ^ 8.
+static uint32_t pictureChecksum_neon( const Pel* plane, const ptrdiff_t stride, const int width, const int height,
+                                      const bool twoBytes )
+{
+  CHECKD( width > 0xffff || height > 0xffff, "the positions of the mask have to fit 16 bits" );
+
+  const int16x8_t lanes = vreinterpretq_s16_u16( vld1q_u16( qpaLaneIndex16 ) );
+  const int16x8_t low   = vdupq_n_s16( 0xff );
+  const int16x8_t eight = vdupq_n_s16( 8 );
+  int32x4_t       acc   = vdupq_n_s32( 0 );
+  uint32_t        tail  = 0;
+
+  for( int y = 0; y < height; y++, plane += stride )
+  {
+    const int       yMask   = ( y & 0xff ) ^ ( y >> 8 );
+    const int16x8_t rowMask = veorq_s16( lanes, vdupq_n_s16( yMask ) );
+    int x = 0;
+    for( ; x + 16 <= width; x += 16 )
+    {
+      const int16x8_t mask0  = veorq_s16( rowMask, vdupq_n_s16( ( x & 0xff ) ^ ( x >> 8 ) ) );
+      const int16x8_t mask1  = veorq_s16( mask0, eight );
+      const int16x8_t p0     = vld1q_s16( plane + x );
+      const int16x8_t p1     = vld1q_s16( plane + x + 8 );
+      int16x8_t       terms0 = veorq_s16( vandq_s16( p0, low ), mask0 );
+      int16x8_t       terms1 = veorq_s16( vandq_s16( p1, low ), mask1 );
+      if( twoBytes )
+      {
+        terms0 = vaddq_s16( terms0, veorq_s16( vshrq_n_s16( p0, 8 ), mask0 ) );
+        terms1 = vaddq_s16( terms1, veorq_s16( vshrq_n_s16( p1, 8 ), mask1 ) );
+      }
+      acc = vpadalq_s16( acc, vaddq_s16( terms0, terms1 ) );
+    }
+    if( x + 8 <= width )
+    {
+      const int16x8_t mask0  = veorq_s16( rowMask, vdupq_n_s16( ( x & 0xff ) ^ ( x >> 8 ) ) );
+      const int16x8_t p0     = vld1q_s16( plane + x );
+      int16x8_t       terms0 = veorq_s16( vandq_s16( p0, low ), mask0 );
+      if( twoBytes )
+      {
+        terms0 = vaddq_s16( terms0, veorq_s16( vshrq_n_s16( p0, 8 ), mask0 ) );
+      }
+      acc = vpadalq_s16( acc, terms0 );
+      x += 8;
+    }
+    for( ; x < width; x++ )
+    {
+      const uint8_t xorMask = ( x & 0xff ) ^ yMask ^ ( x >> 8 );
+      tail += ( plane[x] & 0xff ) ^ xorMask;
+      if( twoBytes )
+      {
+        tail += ( plane[x] >> 8 ) ^ xorMask;
+      }
+    }
+  }
+  return tail + uint32_t( horizontal_add_s32x4( acc ) );
+}
+
 template<>
 void addAvg_strided_neon<4>( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest,
                              int destStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
@@ -1806,192 +2240,31 @@ static void geoRunSads_neon( const uint32_t* prefix, const uint8_t* runStart, co
   vst1q_u32( sad + 4, sumHigh );
 }
 
-// sumSquaredError with the arithmetic of sumSquaredError_SIMD at SSE4.1: the differences in 16 bits (they wrap like
-// _mm_sub_epi16), their squares (at most 2^30) widened to 64 bits, unsigned. Integer addition does not depend on the
-// order, so the sum is the same as x86's and the C code's whenever the differences lie in [-2^15, 2^15], as for any
-// samples of up to 15 bits.
-
-// adds the squares of the four differences a - b to acc
-static inline uint64x2_t addSquares_neon( const uint64x2_t acc, const int16x4_t a, const int16x4_t b )
+// the squares of the differences in 64-bit lanes: per vector of eight, two squares share a 32-bit lane first (at most
+// 2^31, exact as an unsigned value), then vpadalq_u32 widens the pairs
+struct SquareSumNeon
 {
-  const int16x4_t diff = vsub_s16( a, b );
-  return vpadalq_u32( acc, vreinterpretq_u32_s32( vmull_s16( diff, diff ) ) );
-}
+  uint64x2_t acc = vdupq_n_u64( 0 );
 
-// adds the squares of the eight differences a - b to acc; two squares share a 32-bit lane first, at most 2^31, so the
-// lane is exact as an unsigned value
-static inline uint64x2_t addSquares_neon( const uint64x2_t acc, const int16x8_t a, const int16x8_t b )
-{
-  const int16x8_t diff    = vsubq_s16( a, b );
-  const int32x4_t squares = vmull_s16( vget_low_s16( diff ), vget_low_s16( diff ) );
-  const int32x4_t sums    = vmlal_s16( squares, vget_high_s16( diff ), vget_high_s16( diff ) );
-  return vpadalq_u32( acc, vreinterpretq_u32_s32( sums ) );
-}
-
-// the two samples of each of up to four rows in one vector, the lanes of missing rows zero (like _vv_loadWidth2Rows)
-static inline int16x8_t loadWidth2Rows_neon( const Pel* p, const ptrdiff_t stride, const int numRows )
-{
-  uint32_t   row;
-  uint32x4_t v = vdupq_n_u32( 0 );
-  memcpy( &row, p, sizeof( row ) );
-  v = vsetq_lane_u32( row, v, 0 );
-  if( numRows > 1 )
+  void add( const int16x4_t a, const int16x4_t b )
   {
-    memcpy( &row, &p[stride], sizeof( row ) );
-    v = vsetq_lane_u32( row, v, 1 );
+    const int16x4_t diff = vsub_s16( a, b );
+    acc = vpadalq_u32( acc, vreinterpretq_u32_s32( vmull_s16( diff, diff ) ) );
   }
-  if( numRows > 2 )
+  void add( const int16x8_t a, const int16x8_t b )
   {
-    memcpy( &row, &p[2 * stride], sizeof( row ) );
-    v = vsetq_lane_u32( row, v, 2 );
+    const int16x8_t diff    = vsubq_s16( a, b );
+    const int32x4_t squares = vmull_s16( vget_low_s16( diff ), vget_low_s16( diff ) );
+    const int32x4_t sums    = vmlal_s16( squares, vget_high_s16( diff ), vget_high_s16( diff ) );
+    acc = vpadalq_u32( acc, vreinterpretq_u32_s32( sums ) );
   }
-  if( numRows > 3 )
-  {
-    memcpy( &row, &p[3 * stride], sizeof( row ) );
-    v = vsetq_lane_u32( row, v, 3 );
-  }
-  return vreinterpretq_s16_u32( v );
-}
+  void add( const SquareSumNeon& other ) { acc = vaddq_u64( acc, other.acc ); }
+  uint64_t sum() const { return horizontal_add_u64x2( acc ); }
+};
 
 static uint64_t sumSquaredError_neon( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
 {
-  // below 16 the encoder passes only the widths 2, 4 and 8 (SBT parts); the others take the C code
-  if( width < 16 && width != 2 && width != 4 && width != 8 )
-  {
-    return sumSquaredErrorCore( src0, stride0, src1, stride1, width, height );
-  }
-
-  uint64x2_t acc0 = vdupq_n_u64( 0 );
-
-  if( width == 2 )
-  {
-    int y = 0;
-    for( ; y + 4 <= height; y += 4, src0 += 4 * stride0, src1 += 4 * stride1 )
-    {
-      const int16x8_t a = loadWidth2Rows_neon( src0, stride0, 4 );
-      const int16x8_t b = loadWidth2Rows_neon( src1, stride1, 4 );
-      acc0 = addSquares_neon( acc0, a, b );
-    }
-    if( y < height )
-    {
-      const int16x8_t a = loadWidth2Rows_neon( src0, stride0, height - y );
-      const int16x8_t b = loadWidth2Rows_neon( src1, stride1, height - y );
-      acc0 = addSquares_neon( acc0, a, b );
-    }
-    return horizontal_add_u64x2( acc0 );
-  }
-
-  if( width == 4 )
-  {
-    int y = 0;
-    for( ; y + 2 <= height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
-    {
-      const int16x4_t a0 = vld1_s16( src0 );
-      const int16x4_t a1 = vld1_s16( src0 + stride0 );
-      const int16x4_t b0 = vld1_s16( src1 );
-      const int16x4_t b1 = vld1_s16( src1 + stride1 );
-      acc0 = addSquares_neon( acc0, vcombine_s16( a0, a1 ), vcombine_s16( b0, b1 ) );
-    }
-    if( y < height )
-    {
-      const int16x4_t a = vld1_s16( src0 );
-      const int16x4_t b = vld1_s16( src1 );
-      acc0 = addSquares_neon( acc0, a, b );
-    }
-    return horizontal_add_u64x2( acc0 );
-  }
-
-  // widths 8 and above: two accumulators (four from width 32), for two rows (width 8) or the two halves of 16 columns
-  uint64x2_t acc1 = vdupq_n_u64( 0 );
-
-  if( width == 8 )
-  {
-    int y = 0;
-    for( ; y + 2 <= height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
-    {
-      const int16x8_t a0 = vld1q_s16( src0 );
-      const int16x8_t b0 = vld1q_s16( src1 );
-      const int16x8_t a1 = vld1q_s16( src0 + stride0 );
-      const int16x8_t b1 = vld1q_s16( src1 + stride1 );
-      acc0 = addSquares_neon( acc0, a0, b0 );
-      acc1 = addSquares_neon( acc1, a1, b1 );
-    }
-    if( y < height )
-    {
-      const int16x8_t a = vld1q_s16( src0 );
-      const int16x8_t b = vld1q_s16( src1 );
-      acc0 = addSquares_neon( acc0, a, b );
-    }
-    return horizontal_add_u64x2( vaddq_u64( acc0, acc1 ) );
-  }
-
-  if( width == 16 )
-  {
-    for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
-    {
-      const int16x8_t a0 = vld1q_s16( src0 );
-      const int16x8_t b0 = vld1q_s16( src1 );
-      const int16x8_t a1 = vld1q_s16( src0 + 8 );
-      const int16x8_t b1 = vld1q_s16( src1 + 8 );
-      acc0 = addSquares_neon( acc0, a0, b0 );
-      acc1 = addSquares_neon( acc1, a1, b1 );
-    }
-    return horizontal_add_u64x2( vaddq_u64( acc0, acc1 ) );
-  }
-
-  // wider: 32 columns per step on four accumulators, then 16 columns if that many are left; the last width % 16
-  // columns as the 16 ending at the row's end, with the lanes of the columns already counted set to zero in both
-  // sources
-  uint64x2_t acc2 = vdupq_n_u64( 0 );
-  uint64x2_t acc3 = vdupq_n_u64( 0 );
-
-  static const int16_t laneIndex[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-  const int       tail     = width % 16;
-  const int       lastX    = width - 16;
-  const int16x8_t firstNew = vdupq_n_s16( 16 - tail );
-  const int16x8_t index0   = vld1q_s16( laneIndex );
-  const int16x8_t index1   = vld1q_s16( laneIndex + 8 );
-  const int16x8_t keep0    = vreinterpretq_s16_u16( vcgeq_s16( index0, firstNew ) );
-  const int16x8_t keep1    = vreinterpretq_s16_u16( vcgeq_s16( index1, firstNew ) );
-
-  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
-  {
-    int x = 0;
-    for( ; x + 32 <= width; x += 32 )
-    {
-      const int16x8_t a0 = vld1q_s16( &src0[x] );
-      const int16x8_t b0 = vld1q_s16( &src1[x] );
-      const int16x8_t a1 = vld1q_s16( &src0[x + 8] );
-      const int16x8_t b1 = vld1q_s16( &src1[x + 8] );
-      const int16x8_t a2 = vld1q_s16( &src0[x + 16] );
-      const int16x8_t b2 = vld1q_s16( &src1[x + 16] );
-      const int16x8_t a3 = vld1q_s16( &src0[x + 24] );
-      const int16x8_t b3 = vld1q_s16( &src1[x + 24] );
-      acc0 = addSquares_neon( acc0, a0, b0 );
-      acc1 = addSquares_neon( acc1, a1, b1 );
-      acc2 = addSquares_neon( acc2, a2, b2 );
-      acc3 = addSquares_neon( acc3, a3, b3 );
-    }
-    if( x + 16 <= width )
-    {
-      const int16x8_t a0 = vld1q_s16( &src0[x] );
-      const int16x8_t b0 = vld1q_s16( &src1[x] );
-      const int16x8_t a1 = vld1q_s16( &src0[x + 8] );
-      const int16x8_t b1 = vld1q_s16( &src1[x + 8] );
-      acc0 = addSquares_neon( acc0, a0, b0 );
-      acc1 = addSquares_neon( acc1, a1, b1 );
-    }
-    if( tail != 0 )
-    {
-      const int16x8_t a0 = vld1q_s16( &src0[lastX] );
-      const int16x8_t b0 = vld1q_s16( &src1[lastX] );
-      const int16x8_t a1 = vld1q_s16( &src0[lastX + 8] );
-      const int16x8_t b1 = vld1q_s16( &src1[lastX + 8] );
-      acc0 = addSquares_neon( acc0, vandq_s16( a0, keep0 ), vandq_s16( b0, keep0 ) );
-      acc1 = addSquares_neon( acc1, vandq_s16( a1, keep1 ), vandq_s16( b1, keep1 ) );
-    }
-  }
-  return horizontal_add_u64x2( vaddq_u64( vaddq_u64( acc0, acc1 ), vaddq_u64( acc2, acc3 ) ) );
+  return sumSquaredError_common<SquareSumNeon>( src0, stride0, src1, stride1, width, height );
 }
 
 template<>
@@ -2008,6 +2281,8 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   AvgHighPassWithDownsampling        = AvgHighPassWithDownsampling_neon;
   AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1st_neon;
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2nd_neon;
+  sumAbsDeviation                    = sumAbsDeviation_neon;
+  pictureChecksum                    = pictureChecksum_neon;
   reco     = recoCore_neon;
   copyBuffer = copyBuffer_neon;
   absGradientSums     = absGradientSums_neon;
@@ -2030,6 +2305,12 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   reco2     = reco2_neon;
   reco4     = reco4_neon;
   reco8     = reco8_neon;
+  weightCiip     = weightCiip_neon;
+  roundGeo       = roundGeo_neon;
+  roundIntVector = roundIntVector_neon;
+  padHorizontal  = padHorizontal_neon;
+  mipUpsampleHor = mipUpsampleHor_neon;
+  mipUpsampleVer = mipUpsampleVer_neon;
   addAvg8  = addAvg_strided_neon<8>;
   sumSquaredErrorParts = sumSquaredErrorParts_neon;
   wghtAvg4 = addWghtAvg4_neon;

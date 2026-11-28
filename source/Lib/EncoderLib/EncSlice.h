@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "InterSearch.h"
 
 #include <atomic>
+#include <functional>
 
 //! \ingroup EncoderLib
 //! \{
@@ -154,6 +155,8 @@ private:
   RdCost                       m_psyRdCost;                          ///< builds each picture's psy-rd source energies
 
 public:
+  std::function<void( Picture& )> m_alfFiltersDerived;               ///< IFP: called when the ALF and CC-ALF filters (the APSs) are final
+
   EncSlice();
   virtual ~EncSlice();
 
@@ -186,6 +189,7 @@ private:
 
   double  xGetQPForPicture    ( const Slice* slice );
   int     xGetQPForPicture    ( const Slice* slice, const int baseQP );
+  int     xGetCuTreePicQpOffset( const Slice* slice, const int baseQP );
 
 public:
   static int getCascadeQP     ( const VVEncCfg& encCfg, const GOPEntry& gopEntry, const bool isIntra, int qp, const int lumaQpBDOffset );

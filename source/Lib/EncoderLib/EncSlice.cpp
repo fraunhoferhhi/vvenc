@@ -401,6 +401,22 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
 {
   // pre-compute lambda and QP
   const bool rcp = (m_pcEncCfg->m_RCTargetBitrate > 0 && slice->pic->picInitialQP >= 0); // 2nd pass
+
+  // CuTreePicStrength: the rate control's QP is the picture's level, the QP before the CU tree's picture offset, and
+  // takes the place of the coding QP: the offset is added to it as at constant QP, and the lambda moves with it. The
+  // rate control gets the level back (EncGOP's first-pass statistics, RateCtrl::updateAfterPicEncRC), so its model
+  // pairs levels with the bits coded at them, as x264's does with MB-tree.
+  const int baseQP = (rcp ? slice->pic->picInitialQP - slice->pic->gopAdaptedQP : m_pcEncCfg->m_QP);
+  slice->pic->cuTreePicQpOffset = xGetCuTreePicQpOffset (slice, baseQP);
+  if (rcp && slice->pic->cuTreePicQpOffset != 0)
+  {
+    const int levelQP = slice->pic->picInitialQP;
+
+    slice->pic->picInitialQP      = Clip3 (0, MAX_QP, levelQP + slice->pic->cuTreePicQpOffset); // not below 0: still the RC's QP
+    slice->pic->cuTreePicQpOffset = slice->pic->picInitialQP - levelQP;                         // what the clipping left of it
+    slice->pic->picInitialLambda *= pow (2.0, double (slice->pic->cuTreePicQpOffset) / 3.0);
+  }
+
   int  iQP = Clip3 (-slice->sps->qpBDOffset[CH_L], MAX_QP, slice->pic->picInitialQP); // RC start QP
   double dQP     = (rcp ? (double) slice->pic->picInitialQP : xGetQPForPicture (slice));
 
@@ -479,6 +495,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
 
     iQP     += qpRaise;
     dLambda *= lambdaScale;
+    slice->pic->cuTreePicQpOffset += qpRaise; // not part of the rate control's level
     if (m_pcEncCfg->m_usePerceptQPA)
     {
       for (uint32_t ctuRsAddr = slice->sliceMap.ctuAddrInSlice[0]; ctuRsAddr < slice->pic->cs->pcv->sizeInCtus; ctuRsAddr++)
@@ -519,13 +536,14 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   // layers then gain in chroma as in luma, which holding them at the cascade's chroma QP gave back (measured).
   // The offsets add to those above, which that picture carries as well. QPA's change of the slice QP is kept, the
   // picture QP's dithered raise for a fractional QP goes into the QP cascade's QP, and the noise floor's raise counts
-  // as picture QP. Rate control sets its own picture QPs and is not combined with CuTreePicStrength (vvencCfg.cpp).
+  // as picture QP. Under rate control its level takes the place of the coding QP, as for the picture QP above.
   if (m_pcEncCfg->m_cuTreePicScale > 0.0 && slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400
       && m_pcEncCfg->m_costMode != VVENC_COST_LOSSLESS_CODING)
   {
     const int lumaQpBDOffset = slice->sps->qpBDOffset[CH_L];
-    const int ditherRaise    = picQP - xGetQPForPicture (slice, m_pcEncCfg->m_QP);
-    const int cascadeQP      = getCascadeQP (*m_pcEncCfg, *slice->pic->gopEntry, slice->isIntra(), m_pcEncCfg->m_configuredQP + slice->pic->gopAdaptedQP + ditherRaise, lumaQpBDOffset);
+    const int codingQpOffset = m_pcEncCfg->m_QP - m_pcEncCfg->m_configuredQP;
+    const int ditherRaise    = picQP - xGetQPForPicture (slice, baseQP);
+    const int cascadeQP      = getCascadeQP (*m_pcEncCfg, *slice->pic->gopEntry, slice->isIntra(), baseQP - codingQpOffset + slice->pic->gopAdaptedQP + ditherRaise, lumaQpBDOffset);
     const int targetQP       = Clip3 (-lumaQpBDOffset, MAX_QP, cascadeQP + slice->pic->m_picShared->m_picQpOffsetNoPicStrength);
     const int lumaQpShift    = targetQP - (picQP + iQP - qpBelowNoiseFloor);
 
@@ -849,6 +867,21 @@ int EncSlice::xGetQPForPicture( const Slice* slice, const int baseQP )
   }
   qp = Clip3( -lumaQpBDOffset, MAX_QP, qp );
   return qp;
+}
+
+// The QP that CuTreePicStrength adds to a picture coded from baseQP: the dependency model's picture offset, which
+// takes the place of the QP cascade, with the cap of an I picture at a change of content. 0 without CuTreePicStrength.
+int EncSlice::xGetCuTreePicQpOffset( const Slice* slice, const int baseQP )
+{
+  const bool hasBlockOffsets = m_pcEncCfg->hasBlockQpOffsets() && !slice->pic->m_picShared->m_ctuBimQpOffset.empty();
+
+  if( m_pcEncCfg->m_cuTreePicScale <= 0.0 || !hasBlockOffsets || m_pcEncCfg->m_costMode == VVENC_COST_LOSSLESS_CODING )
+  {
+    return 0;
+  }
+  const int qpWithoutOffset = Clip3( -slice->sps->qpBDOffset[ CH_L ], MAX_QP, baseQP + slice->pic->gopAdaptedQP );
+
+  return xGetQPForPicture( slice, baseQP ) - qpWithoutOffset;
 }
 
 
@@ -1771,6 +1804,12 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           }
         }
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_derive );
+
+        // IFP: the ALF filters (derived before, at ALF_DERIVE_FILTER) and the CC-ALF filters are final now
+        if( ctuRsAddr == deriveFilterCtu && syncLines && encSlice->m_alfFiltersDerived )
+        {
+          encSlice->m_alfFiltersDerived( *cs.picture );
+        }
 
         processStates[ctuRsAddr] = CCALF_RECONSTRUCT;
       }

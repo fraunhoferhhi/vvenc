@@ -221,7 +221,12 @@ void EncLib::initPass( int pass, const char* statsFName )
       // restore encoder config for final 2nd RC pass
       const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
       m_rateCtrl->init( m_encCfg );
-      const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
+      // rate control's base QP is a configured QP: CuTreePicStrength codes at the coding QP for it, as at constant QP
+      // (VVEncCfg::xInitCfgMembers); the same QP without CuTreePicStrength
+      VVEncCfg& finalPassCfg      = const_cast<VVEncCfg&>(m_encCfg);
+      finalPassCfg.m_QP           = m_rateCtrl->getBaseQP();
+      finalPassCfg.m_configuredQP = finalPassCfg.m_QP;
+      finalPassCfg.m_QP           = getCodingQp( finalPassCfg );
       xDecideVeryLowQP();
     }
     if( m_encCfg.m_RCTargetBitrate > 0 && !m_encCfg.m_LookAhead )
@@ -265,7 +270,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_cuTree = new CuTree();
     m_cuTree->initStage( m_encCfg, 1, 0, false, true, false );
-    m_cuTree->init( m_encCfg, m_threadPool );
+    m_cuTree->init( m_encCfg, m_rateCtrl, m_threadPool );
     m_encStages.push_back( m_cuTree );
     // a GOP and its look-ahead wait here, while the GOP encoder holds the previous GOP
     m_maxNumPicShared += m_encCfg.m_GOPSize + CuTree::getNumLookAheadPics( m_encCfg );
@@ -383,9 +388,9 @@ void EncLib::xDecideVeryLowQP()
 {
   VVEncCfg& cfg = const_cast<VVEncCfg&>(m_encCfg);
   // the options the config left at 2 (below QP 16). getBaseQP() leans towards a QP from the resolution, so at these
-  // targets the pictures run lower than it says: one higher than constant QP's limit. m_QP here is getBaseQP(), the QP
-  // the pictures are coded at, and m_orgCfg.m_QP is already the coding QP (VVEncCfg::xInitCfgMembers): no getCodingQp()
-  // offset on top of either
+  // targets the pictures run lower than it says: one higher than constant QP's limit. m_QP here is the coding QP for
+  // getBaseQP() (getCodingQp, set by the caller), and m_orgCfg.m_QP is already the coding QP (VVEncCfg::xInitCfgMembers):
+  // both are the QP the pictures are coded at, as at constant QP
   const bool veryLowQP = m_encCfg.m_QP <= VVENC_VERY_LOW_QP;
 
   if( cfg.m_MTSImplicit == 2 )
@@ -643,28 +648,61 @@ int EncLib::getCurPass() const
 // Protected member functions
 // ====================================================================================================================
 
+// The stage-parallel limit counts source buffers, not PicShared objects: a picture the GOP encoder has reconstructed
+// lends its source buffer to new input (PicShared::canLendSource), so that the next GOP's pictures can enter MCTF while
+// the current GOP's pictures wait for their output (they keep their metadata, which later pictures and the output read).
+// Each reconstructed picture that cannot lend yet (a later picture's QPA or its film grain analysis still reads the
+// source) raises the limit by one: when no picture can lend, new input gets a new source buffer.
 PicShared* EncLib::xGetFreePicShared()
 {
-  PicShared* picShared = nullptr;
+  PicShared* unusedWithoutSource = nullptr;
+  PicShared* lender              = nullptr;
+  size_t     numSources          = 0;
   for( auto itr : m_picSharedList )
   {
     if( ! itr->isUsed() )
     {
-      picShared = itr;
-      break;
+      if( itr->hasSource() )
+      {
+        return itr;
+      }
+      if( ! unusedWithoutSource )
+      {
+        unusedWithoutSource = itr;
+      }
     }
+    else if( ! lender && itr->canLendSource() )
+    {
+      lender = itr;
+    }
+    numSources += itr->hasSource() ? 1 : 0;
   }
 
+  const bool atLimit = m_encCfg.m_stageParallelProc && numSources >= (size_t)m_maxNumPicShared;
+  const bool lend    = atLimit && lender;
+  const bool noRoom  = atLimit && ! lender
+                       && numSources >= (size_t)m_maxNumPicShared + (size_t)m_gopEncoder->numEncodedWithSource();
+  if( noRoom )
+  {
+    return nullptr;
+  }
+
+  PicShared* picShared = unusedWithoutSource;
   if( ! picShared )
   {
-    if( m_encCfg.m_stageParallelProc && ( m_picSharedList.size() >= m_maxNumPicShared ) )
-      return nullptr;
-
     picShared = new PicShared();
-    picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA );
+    picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA, ! lend );
     m_picSharedList.push_back( picShared );
   }
-  CHECK( picShared == nullptr, "out of memory" );
+  else if( ! lend )
+  {
+    picShared->createSource();
+  }
+  if( lend )
+  {
+    picShared->takeSourceFrom( *lender );
+  }
+  CHECK( ! picShared->hasSource(), "out of memory" );
 
   return picShared;
 }

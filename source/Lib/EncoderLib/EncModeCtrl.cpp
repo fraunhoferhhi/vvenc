@@ -467,6 +467,12 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
 //////////////////////////////////////////////////////////////////////////
 // EncModeCtrl
 //////////////////////////////////////////////////////////////////////////
+
+// FastAMVR: where the motion search with quarter-sample MVDs and equal weights shows that AMVR cannot pay
+static constexpr double   AMVR_ME_BEHIND_RATIO  = 1.1;   // it costs more than this times the best mode: a merge mode or intra is far ahead of any searched motion
+static constexpr int      AMVR_MIN_MVD          = 2;     // its largest MVD component (quarter samples) is below this: every MVD is 0 or 1/4, no MVD bits to save
+static constexpr int      AMVR_4PEL_MIN_MVD     = 16;    // ... below this (4 samples): no 4-sample MVDs, which round every MVD to 4 samples
+
 void EncModeCtrl::init( const VVEncCfg& encCfg, RdCost* pRdCost )
 {
   m_pcEncCfg = &encCfg;
@@ -1110,6 +1116,10 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
 {
   ComprCUCtx& cuECtx = m_ComprCUCtxList.back();
 
+  if( m_pcEncCfg->m_fastAMVR )
+  {
+    xNoteMotionSearchCost( encTestmode, *tempCS );
+  }
 
   if(      encTestmode.type == ETM_SPLIT_BT_H )
   {
@@ -1199,6 +1209,77 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
   {
     return false;
   }
+}
+
+//////////////////////////////////////////////////////////////////////////
+// FastAMVR: AMVR (MVDs in whole, 4 or half samples) pays where coding the MVD coarsely saves bits, or where the
+// half-sample filter predicts better, and only where a searched motion vector is near the node's best mode at all.
+// The motion search with quarter-sample MVDs and equal bi-prediction weights, made before it, shows where it cannot.
+//////////////////////////////////////////////////////////////////////////
+
+// The largest MVD component in quarter samples that a CU found by motion search codes: per list in use and per control
+// point (one unless affine). The MVDs of the second list of an SMVD CU are not coded.
+static int largestMvdInQuarterSamples( const CodingUnit& cu )
+{
+  static constexpr int QUARTER_SHIFT = MV_FRACTIONAL_BITS_INTERNAL - 2;   // MVDs are kept in 1/16 samples
+  const int controlPoints = !cu.affine ? 1 : cu.affineType == AFFINEMODEL_6PARAM ? 3 : 2;
+  int largest = 0;
+  for( int list = 0; list < NUM_REF_PIC_LIST_01; list++ )
+  {
+    if( !( cu.interDir >> list & 1 ) || ( list == REF_PIC_LIST_1 && cu.smvdMode ) )
+    {
+      continue;
+    }
+    for( int point = 0; point < controlPoints; point++ )
+    {
+      largest = std::max( { largest, abs( cu.mvd[list][point].hor ) >> QUARTER_SHIFT, abs( cu.mvd[list][point].ver ) >> QUARTER_SHIFT } );
+    }
+  }
+  return largest;
+}
+
+// Keeps the best RD cost of the motion search with quarter-sample MVDs and equal weights (called by useModeResult);
+// without the deblocking cost offset of EDO, as skipsAmvrSearch compares it with the best mode's RD cost
+void EncModeCtrl::xNoteMotionSearchCost( const EncTestMode& encTestmode, const CodingStructure& tempCS )
+{
+  if( encTestmode.type != ETM_INTER_ME || tempCS.cost == MAX_DOUBLE || tempCS.cus.empty() || !comprCUCtx )
+  {
+    return;
+  }
+  const CodingUnit& cu = *tempCS.cus.front();
+  if( cu.imv == IMV_OFF && cu.BcwIdx == BCW_DEFAULT && tempCS.cost < comprCUCtx->meCost )
+  {
+    comprCUCtx->meCost = tempCS.cost;
+  }
+}
+
+void EncModeCtrl::noteMotionSearchMvd( const CodingUnit& cu )
+{
+  if( m_pcEncCfg->m_fastAMVR && comprCUCtx )
+  {
+    comprCUCtx->meLargestMvd = largestMvdInQuarterSamples( cu );
+  }
+}
+
+// True where the AMVR search of the current node is not made: its best mode bestCS is skip (as AMVR speeds 3 and 4
+// do), or the motion search is far behind it or found MVDs too small to save bits on. The last two need a result of
+// the motion search.
+bool EncModeCtrl::skipsAmvrSearch( const CodingStructure& bestCS ) const
+{
+  if( !m_pcEncCfg->m_fastAMVR || !comprCUCtx || bestCS.cus.empty() )
+  {
+    return false;
+  }
+  const ComprCUCtx& cuECtx      = *comprCUCtx;
+  const bool        hasMeResult = cuECtx.meLargestMvd >= 0 && cuECtx.meCost != MAX_DOUBLE;
+  return bestCS.cus.front()->skip
+      || ( hasMeResult && ( cuECtx.meCost > AMVR_ME_BEHIND_RATIO * bestCS.cost || cuECtx.meLargestMvd < AMVR_MIN_MVD ) );
+}
+
+// True where the AMVR search of the current node leaves out 4-sample MVDs
+bool EncModeCtrl::skips4PelAmvr() const
+{
+  return m_pcEncCfg->m_fastAMVR && comprCUCtx && comprCUCtx->meLargestMvd >= 0 && comprCUCtx->meLargestMvd < AMVR_4PEL_MIN_MVD;
 }
 
 } // namespace vvenc

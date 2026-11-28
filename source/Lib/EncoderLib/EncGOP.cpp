@@ -216,11 +216,20 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   const int numThreadRsrc = ( encCfg.m_numThreads > 0 && threadPool ) ? threadPool->numThreads() : 1;
   m_threadRsrc.init( encCfg, sps0, pps0, &m_globalCtuQpVector, rateCtrl, numThreadRsrc );
 
+  // IFP: a picture's ALF APSs reach the global list at its ALF derivation; from then on the pictures predicting their
+  // APSs from it may start (see the start condition in xProcessPictures)
+  auto apsReady = [this]( Picture& pic )
+  {
+    std::lock_guard<std::mutex> lock( m_gopEncMutex );
+    pic.picApsGlobal->initalized = true;
+    m_gopEncCond.notify_one();
+  };
+
   const int maxPicEncoder = ( encCfg.m_maxParallelFrames ) ? encCfg.m_maxParallelFrames : 1;
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
     EncPicture* picEncoder = new EncPicture;
-    picEncoder->init( encCfg, &m_globalCtuQpVector, sps0, pps0, rateCtrl, threadPool, m_threadRsrc );
+    picEncoder->init( encCfg, &m_globalCtuQpVector, sps0, pps0, rateCtrl, threadPool, m_threadRsrc, apsReady );
     m_freePicEncoderList.push_back( picEncoder );
   }
 
@@ -345,6 +354,27 @@ bool EncGOP::waitForFreeEncoders()
   return true;
 }
 
+bool EncGOP::hasEnoughPictures( const PicList& picList ) const
+{
+  if( EncStage::hasEnoughPictures( picList ) )
+  {
+    return true;
+  }
+
+  // GOPSize + 1 pictures ensure that the GOP of the next picture to initialize is complete (the GOP QP cascade reads all
+  // of it). Pictures arrive in POC order and a GOP covers consecutive POCs, so that GOP is also complete once any picture
+  // of a later GOP has arrived; the list is in coding order, so its last picture has the highest GOP number. A GOP shorter
+  // than GOPSize (the first one, when the intra period is not a multiple of the GOP size) then need not wait for
+  // GOPSize + 1 pictures. With look-ahead, the GOP encoder gets its pictures in coding order from the pre-analysis
+  // encoder, so the size test alone decides.
+  if( m_isPreAnalysis || m_pcEncCfg->m_LookAhead )
+  {
+    return false;
+  }
+  const auto nextPic = std::find_if( picList.begin(), picList.end(), []( const Picture* pic ) { return ! pic->isInitDone; } );
+  return nextPic != picList.end() && picList.back()->gopEntry->m_gopNum > ( *nextPic )->gopEntry->m_gopNum;
+}
+
 void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   CHECK( picList.empty(), "empty input picture list given" );
@@ -444,13 +474,13 @@ bool EncGOP::xIsLockStep() const
 // Whether new pictures join the processing list on every pass and start by temporal layer (findNextPicToStart), so that
 // the long key pictures of the next GOP overlap the current GOP. Otherwise the list is refilled when empty and pictures
 // start in list order: with one picture encoder (its start order is the coding order, which AMaxBT follows), lock-step
-// RC, rate cap, IFP coding one GOP at a time (NumParallelGOPs 0), and the I pictures' temporal pumping reduction, whose
-// CTU QP memory (sized only then) the key pictures fill and the next I picture reads.
+// RC, rate cap, and the I pictures' temporal pumping reduction, whose CTU QP memory (sized only then) the key pictures
+// fill and the next I picture reads. With IFP and NumParallelGOPs 0 the list still takes one GOP at a time
+// (xGetProcessingLists), so the next GOP's key pictures start early only from the pictures already held.
 bool EncGOP::xFetchOnEveryPass( bool lockStepMode ) const
 {
   const bool ctuQpMemory = m_globalCtuQpVector.size() > 1;
-  return m_pcEncCfg->m_maxParallelFrames > 0 && ! lockStepMode && ! m_pcEncCfg->m_rateCap
-         && ! ( m_pcEncCfg->m_ifpLines && ! m_pcEncCfg->m_numParallelGOPs ) && ! ctuQpMemory;
+  return m_pcEncCfg->m_maxParallelFrames > 0 && ! lockStepMode && ! m_pcEncCfg->m_rateCap && ! ctuQpMemory;
 }
 
 // Starts ready pictures of the processing list while picture encoders are free, at most maxStarts of them (0: no limit).
@@ -908,14 +938,34 @@ void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
   // picture that no other picture references and that is not waiting for reconstruction output needs
   // neither its reconstruction nor its motion field once it is reconstructed.
   const bool writeReadsReco = m_pcEncCfg->m_decodedPictureHashSEIType != VVENC_HASHTYPE_NONE;
+  // Once encoded, a picture of the final encoder (the last stage; never the pre-analysis encoder, whose pictures the
+  // final pass reads again) no longer reads its source: finalizePicture computes PSNR before isEncoded is set (while
+  // isReconstructed is set before it, see xEncodePicture). It may then lend the source buffer
+  // to new input (EncLib::xGetFreePicShared). Its temporally filtered copy and its links to the two previous source
+  // pictures (QPA, read only while it is coded) are released here instead of at output, so those pictures can lend their
+  // source buffers sooner. Not with rate control or rate cap, whose updates after reconstruction are kept as they are,
+  // and not before the picture's film grain analysis has read its source.
+  const bool lendSources = ! m_isPreAnalysis && m_pcEncCfg->m_RCTargetBitrate == 0 && ! m_pcEncCfg->m_rateCap;
   for( auto pic : picList )
   {
+    if( lendSources && pic->isEncoded && pic->m_picShared && ! pic->m_picShared->isSourceDone()
+        && ! ( m_pcEncCfg->m_fga && xFgaReadsSource( *pic ) ) )
+    {
+      pic->m_picShared->setSourceDone();
+      pic->getFilteredOrigBuffer().destroy();
+      pic->m_picShared->releasePrevBuffers( pic );
+    }
     const bool isUnused = ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0;
     if( ( pic->isFinished && isUnused ) || allPicsDone )
     {
       // Nothing reads a released picture any more. Its buffers are allocated again when the
       // picture object is reused and its next picture starts encoding.
       pic->releaseEncodingBuffers();
+      if( pic->m_picShared )
+      {
+        // a later picture's QPA reference may still hold the source: it must not be lent any more
+        pic->m_picShared->clearSourceDone();
+      }
       freeList.push_back( pic );
     }
     else if( pic->isEncoded && isUnused && ! writeReadsReco )
@@ -1590,12 +1640,12 @@ void EncGOP::xSetupPicAps( Picture* pic )
   // The list is kept near this size; the +2 covers up to two GOPs of processing delay (Threads=1 mode). The pictures in
   // flight are not bounded by this size (GOP read-ahead, look-ahead stages), so an entry is deleted only after its last
   // use: no picture set up later references it, and its own picture has filled it (initalized: finalizeReference wrote
-  // it before, nothing writes it after). (Pictures skipped in a first pass never finish, but they have no entry: the
-  // first pass runs without ALF.)
+  // it before, or with IFP the copy at the ALF derivation; nothing writes it after). (Pictures skipped in a first pass
+  // never finish, but they have no entry: the first pass runs without ALF.)
   const size_t maxListSize = std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 2 );
   if( m_globalApsList.size() > maxListSize )
   {
-    // the finish task sets initalized under this mutex
+    // the finish task (or, with IFP, the APS copy at the ALF derivation) sets initalized under this mutex
     std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
     if( m_pcEncCfg->m_numThreads > 0 ) lock.lock();
     while( m_globalApsList.size() > maxListSize && m_globalApsList.front()->refCnt == 0 && m_globalApsList.front()->initalized )
@@ -1717,6 +1767,19 @@ void EncGOP::xRunFgaTask( FgaTask& task )
   task.result = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );
 }
 
+// Whether a film grain analysis of the picture may still read its source.
+bool EncGOP::xFgaReadsSource( const Picture& pic ) const
+{
+  for( const auto& task : m_fgaTasks )
+  {
+    if( task->pic == &pic && task->counter.isBlocked() )
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 void EncGOP::xWaitFgaTasks()
 {
   for( auto& task : m_fgaTasks )
@@ -1748,9 +1811,11 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     // GOP QP adjustments
     if( (m_pcEncCfg->m_rateCap || m_pcEncCfg->m_GOPQPA || m_pcEncCfg->m_usePerceptQPA) && pic->gopEntry->m_isStartOfGop )
     {
-      // note: in case of rate cap, wait until the complete GOP is in the list and update-list is empty
+      // note: in case of rate cap, wait until the complete GOP is in the list and the pictures initialized before
+      // have all been counted (none waiting for encoding or in the update-list), as the cap's QP for this GOP
+      // comes from their bits
       if( !m_pcEncCfg->m_rateCap ||
-        ((pic->gopEntry->m_gopNum != picList.back()->gopEntry->m_gopNum || picList.back()->isFlush) && m_rcUpdateList.empty()) )
+        ((pic->gopEntry->m_gopNum != picList.back()->gopEntry->m_gopNum || picList.back()->isFlush) && m_rcUpdateList.empty() && m_gopEncListInput.empty()) )
       {
         xInitGopQpCascade( *pic, it, picList );
       }
@@ -2128,8 +2193,13 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
     const int intraP = Clip3(m_pcEncCfg->m_GOPSize, 4 * VVENC_MAX_GOP, m_pcEncCfg->m_IntraPeriod);
     const int visAct = std::max(uint16_t(spVisActTL0[CH_L] >> (12 - bDepth)), keyPic.picVA.visAct); // when vaY=0
     const double apa = sqrt((m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice ? 32.0 : 16.0) * double(1 << (2 * bDepth - 10)) / sqrt(resRatio4K)); // average picture activity
-    const int auxOff = (m_pcEncCfg->hasBlockQpOffsets() && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPic.m_picShared->m_picAuxQpOffset : 0) + dQP;
-    const int iFrmQP = std::min(MAX_QP, m_pcEncCfg->m_QP + m_pcEncCfg->m_intraQPOffset + auxOff + int(floor(m_pcEncCfg->m_QPFraction + 3.0 * log(visAct / apa) / log(2.0) + 0.5)));
+    // CuTreePicStrength: the model below is of an encode with the QP cascade at the configured QP, whose rate the
+    // coding QP is calibrated to match, so it takes that QP and the key picture's offset without the picture strength
+    // (the same two values without CuTreePicStrength)
+    const bool cuTreePicQPs = m_pcEncCfg->m_cuTreePicScale > 0.0;
+    const int keyPicOff = (cuTreePicQPs ? keyPic.m_picShared->m_picQpOffsetNoPicStrength : keyPic.m_picShared->m_picAuxQpOffset);
+    const int auxOff = (m_pcEncCfg->hasBlockQpOffsets() && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPicOff : 0) + dQP;
+    const int iFrmQP = std::min(MAX_QP, m_pcEncCfg->m_configuredQP + m_pcEncCfg->m_intraQPOffset + auxOff + int(floor(m_pcEncCfg->m_QPFraction + 3.0 * log(visAct / apa) / log(2.0) + 0.5)));
     const int qp32BC = int(16384.0 + 7.21875 * pow((double)spVisActTL0[CH_L], 4.0 / 3.0) + 1.46875 * pow((double)spVisActTL0[CH_C], 4.0 / 3.0)) * (isHighRes ? 96 : 24); // TODO hlm
     const int iFrmBC = int(0.5 + qp32BC * pow(2.0, (32.0 - iFrmQP) * 11.0 / 64.0) * pow(resRatio4K, 2.0 / 3.0)); // * HD tuning
     const int  shift = (gopMotEstError < 32 ? 5 - (gopMotEstError >> 4) : 3);
@@ -3569,9 +3639,13 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
 
   if (m_isPreAnalysis || !m_pcRateCtrl->rcIsFinalPass)
   {
+    // CuTreePicStrength: the rate model pairs the bits with the picture's level, the QP and lambda before the CU
+    // tree's picture offset (EncSlice::xInitSliceLambdaQP); the offset is 0 without CuTreePicStrength
+    const int cuTreeQpOffset = pic->cuTreePicQpOffset;
+
     m_pcRateCtrl->addRCPassStats( slice->poc,
-                                  slice->sliceQp,
-                                  slice->getLambdas()[0],
+                                  slice->sliceQp - cuTreeQpOffset,
+                                  slice->getLambdas()[0] * pow( 2.0, -cuTreeQpOffset / 3.0 ),
                                   pic->picVA.visAct,
                                   uibits,
                                   dPSNR[COMP_Y],

@@ -655,6 +655,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_qtbttSpeedUp                            = 1;
   c->m_qtbttSpeedUpMode                        = 0;
   c->m_fastTTSplit                             = 0;
+  c->m_fastAMVR                                = 0;
 
   c->m_fastLocalDualTreeMode                   = 0;
 
@@ -713,6 +714,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_levelLambdaVal                          = VVENC_SET_LEVEL_LAMBDA(1.0);
 
   c->m_reservedInt32 = 0;
+  memset( c->m_reservedInt8_7, 0, sizeof(c->m_reservedInt8_7) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
   memset( c->m_reservedInt8_3, 0, sizeof(c->m_reservedInt8_3) );
 
@@ -994,7 +996,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ?      1   : 0   ;
   if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ?      0   : 1   ;
   if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ?      0   : 1   ;
-  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = c->m_ifp        ?      0   : 1   ;
+  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = 1;
   if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ?      0.0 : 0.75;
   if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ?      0.0 : 0.5 ;
   if( c->m_maxParallelFrames < 0 )
@@ -2143,6 +2145,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 7,   "QtbttExtraFast out of range [0..7]");
   vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
+  vvenc_confirmParameter( c, c->m_fastAMVR < 0 || c->m_fastAMVR > 1,           "FastAMVR out of range [0..1]");
   vvenc_confirmParameter( c, c->m_MTSIntraMaxCand < 0 || c->m_MTSIntraMaxCand > 4, "MTSIntraMaxCand out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
@@ -2226,8 +2229,6 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_cuTreeBlockSize != 16 && c->m_cuTreeBlockSize != 32,                            "CuTreeBlockSize must be 16, 32 or -1 (automatic)" );
   vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && c->m_blockImportanceMapping != 1,                      "CuTreePicStrength needs the CU tree (BIM 1)" );
   vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && ( c->m_IntraPeriod == 1 || ! c->m_picReordering ),   "CuTreePicStrength needs random access (picture reordering, not all intra)" );
-  vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && c->m_RCTargetBitrate == 0 && c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX,
-                                                                                                                  "CuTreePicStrength is not available with a maximum rate without a target rate (capped CQF)" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
@@ -2292,7 +2293,6 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1 && c->m_numThreads > 1, "Tracing and frame parallel encoding not supported" );
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
-    vvenc_confirmParameter(c, c->m_ifpLines && c->m_alfTempPred != 0, "IFP: ALFTempPred is not supported (must be disabled)" );
     vvenc_confirmParameter(c, c->m_ifpLines && c->m_numTileRows > 1,  "IFP: Only single tile row is supported" );
     vvenc_confirmParameter(c, c->m_ifpLines < 0, "IFPLines must be >= 0" );
     vvenc_confirmParameter(c, c->m_ifp && c->m_ifpLines == 0, "IFP requires IFPLines=[-1 or >0]" );
@@ -3471,7 +3471,9 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     if( c->m_blockImportanceMapping == 1 )
     {
       css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize;
-      if( c->m_cuTreePicStrength > 0 ) css << ", picture strength " << c->m_cuTreePicStrength / 32.0 << ", coded at QP " << vvenc::getCodingQp( *c );
+      if( c->m_cuTreePicStrength > 0 ) css << ", picture strength " << c->m_cuTreePicStrength / 32.0;
+      // with a target bitrate the rate control sets the QP
+      if( c->m_cuTreePicStrength > 0 && c->m_RCTargetBitrate == 0 ) css << ", coded at QP " << vvenc::getCodingQp( *c );
       css << ") ";
     }
     css << "PsyRD:" << c->m_psyRdStrengthVal / 64.0 << " ";
@@ -3512,6 +3514,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "ReduceFilterME:" << c->m_meReduceTap << " ";
     css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
     css << "FastTTSplit:" << c->m_fastTTSplit << " ";
+    if( c->m_AMVRspeed )
+    {
+      css << "FastAMVR:" << (int)c->m_fastAMVR << " ";
+    }
     if( c->m_IBCMode )
     {
       css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
@@ -3605,12 +3611,6 @@ VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *va
   {
     return VVENC_PARAM_BAD_NAME;
   }
-  else
-  {
-    std::string namePrefix="--";  // add long option name prefix
-    n = namePrefix;
-    n.append(name);
-  }
 
   // without a value, v stays empty: the option parser switches boolean options on for an empty value
   // and rejects it for all other options (VVENC_PARAM_BAD_VALUE)
@@ -3651,8 +3651,9 @@ VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *va
     return 0;
   }
 
+  const std::string longName = std::string( "--" ) + name;  // the option parser takes long option names
   char *argv[2];
-  argv[0]=(char*)n.c_str();
+  argv[0]=(char*)longName.c_str();
   argv[1]=(char*)v.c_str();
 
   int ret = vvenc_set_param_list ( c, 2, argv);
