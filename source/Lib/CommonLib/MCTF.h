@@ -133,6 +133,8 @@ struct Picture;
 class MCTF : public EncStage
 {
 public:
+  struct KeepUnitStats { float crossed = 0, source = 0, neighbour = 0; };
+
   MCTF( bool enableOpt = true );
   virtual ~MCTF();
 
@@ -219,6 +221,7 @@ private:
   NoMallocThreadPool*   m_threadPool;
   bool                  m_isFinalPass;
   int                   m_filterPoc;
+  bool                  m_keepDetailActive = false;  // state of the keep-detail gate, advances in POC order
   Area                  m_area;
   int                   m_MCTFSpeedVal;
   Picture*              m_lastPicIn;
@@ -298,9 +301,11 @@ private:
   bool estimateLumaLn   ( std::atomic_int& blockX, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int blockSize,
     const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY, int bitDepth ) const;
 
-  void bilateralFilter  (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
+  void bilateralFilter  (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength, KeepUnitStats* keepStats = nullptr) const;
+  void updateKeepGate   ( const std::vector<KeepUnitStats>& stats );
+  void filterAndKeepDetail( const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength );
 
-  void xFinalizeBlkLine (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrenght) const;
+  void xFinalizeBlkLine (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrenght, KeepUnitStats* keepStats) const;
 
   // One level of the motion search of one reference: the arguments of motionEstimationLuma.
   struct MotionSearchJob

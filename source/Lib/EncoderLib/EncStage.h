@@ -64,6 +64,7 @@ public:
   GOPEntry         m_gopEntry;
   PicVisAct        m_picVA;
   bool             m_isSccWeak;
+  float            m_psyStableShare = 0.f;   // psy-rd: see PreProcess::xGetPsyStableShare
   bool             m_isSccStrong;
   bool             m_forceSCC;
   int              m_picMemorySTA;
@@ -71,6 +72,11 @@ public:
   uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
   std::vector<int> m_ctuBimQpOffset;
   int              m_picAuxQpOffset; // auxiliary QP offset per frame, for combination of RC and BIM (and possibly other tools)
+  double           m_mctfNoiseVar;   // CuTreePicStrength: mean squared luma change by MCTF's filter (temporal layer 2), -1: none
+  int              m_noiseFloorQp;   // CuTreePicStrength: lowest slice QP of a picture MCTF does not filter, -1: none
+  bool             m_capIntraQp;      // CuTreePicStrength: an I picture at a change of content, see CuTree::xSetQpOffsets
+  int              m_noiseFloorRaise; // at most this many QP up: the decrease the dependency model gave the picture
+  int              m_picQpOffsetNoPicStrength; // CuTreePicStrength: m_picAuxQpOffset without it, for the chroma QP (EncSlice::xInitSliceLambdaQP)
 
 private:
   PelStorage       m_origBuf;
@@ -104,6 +110,11 @@ public:
   , m_picMemorySTA   ( 0 )
   , m_picMotEstError ( 0 )
   , m_picAuxQpOffset ( 0 )
+  , m_mctfNoiseVar   ( -1.0 )
+  , m_noiseFloorQp   ( -1 )
+  , m_capIntraQp     ( false )
+  , m_noiseFloorRaise( 0 )
+  , m_picQpOffsetNoPicStrength( 0 )
   , m_cts            ( 0 )
   , m_maxFrames      ( -1 )
   , m_poc            ( -1 )
@@ -191,6 +202,7 @@ public:
     m_isSccStrong  = false;
     m_forceSCC     = false;
     m_picMemorySTA = 0;
+    m_psyStableShare = 0.f;
     m_cts          = yuvInBuf->cts;
     m_poc          = poc;
     m_refCount     = 0;
@@ -200,6 +212,11 @@ public:
     m_ctuBimQpOffset.resize( 0 );
     m_picMotEstError = 0;
     m_picAuxQpOffset = 0;
+    m_mctfNoiseVar   = -1.0;
+    m_noiseFloorQp   = -1;
+    m_capIntraQp     = false;
+    m_noiseFloorRaise = 0;
+    m_picQpOffsetNoPicStrength = 0;
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
     m_gopEntry.setDefaultGOPEntry();
@@ -215,6 +232,7 @@ public:
     pic->linkSharedBuffers( &m_origBuf, &m_filteredBuf, prevOrigBufs, this );
     pic->picVA          = m_picVA;
     pic->isSccWeak      = m_isSccWeak;
+    pic->psyStableShare = m_psyStableShare;
     pic->isSccStrong    = m_isSccStrong;
     pic->picMemorySTA   = m_picMemorySTA;
     pic->poc            = m_poc;

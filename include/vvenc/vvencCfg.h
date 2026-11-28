@@ -587,7 +587,7 @@ typedef struct vvenc_config
   bool                m_bFastUDIUseMPMEnabled;
   bool                m_bFastMEForGenBLowDelayEnabled;
 
-  bool                m_MTSImplicit;
+  int8_t              m_MTSImplicit;                                                     // 0: off, 1: on, 2 (experimental): off below QP 16 (with two rate-control passes the second decides; on with one)
   int                 m_TMVPModeId;
   bool                m_DepQuantEnabled;
   bool                m_SignDataHidingEnabled;
@@ -801,13 +801,41 @@ typedef struct vvenc_config
   uint8_t             m_QPFractionVal;                                                   // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
 #define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
   uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
-  int8_t              m_reservedInt8_2[2];
+  int8_t              m_keepHighBand;                                                    // experimental: 1: keep more fine detail at high rates (with DepQuant, on slices up to QP 27): a QT split of square CUs over 32 whose
+                                                                                         // finest detail a 64-point transform would zero, and a trellis that keeps more of a luma transform's upper frequencies (default 0: off)
+#define VVENC_SET_CUTREE_PIC_STRENGTH(s) ((uint8_t)((s)*32+0.5))
+  uint8_t             m_cuTreePicStrength;                                               // CU-tree (BIM 1), random access: picture QPs from the CU tree's dependency estimate
+                                                                                         // in place of the temporal layers' QP offsets, scaled by this 5-bit fixed point value (default 0: off),
+                                                                                         // e.g. VVENC_SET_CUTREE_PIC_STRENGTH(2.0); at constant QP the encoder codes at QP + round( 3 + 2 * strength ),
+                                                                                         // to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32)
   int32_t             m_reservedInt32;
   int8_t              m_fastAMVR;                                                        // 1: no AMVR search where the best mode is skip, where the motion search with quarter-sample MVDs costs more than
                                                                                          // 1.1 times the best mode or its largest MVD is below half a sample, and no 4-sample MVDs where that MVD
                                                                                          // is below 4 samples (default 0: off)
   int8_t              m_reservedInt8_7[7];                                               // with the field above in place of the first of seven reserved doubles: the same layout on every ABI
-  double              m_reservedDouble[6];
+  double              m_reservedDouble[5];
+  int8_t              m_veryLowQPSpeedUp;                                                // experimental: turn off tools that save no bytes at very low QPs; 0: off (default), 1: on, 2: below QP 16
+                                                                                         // (with two rate-control passes the second pass decides; off with one)
+  int8_t              m_mctfKeepDetail;                                                  // experimental: MCTF keeps the fine band of noisy sources; 0: off (default), 1: on, 2: below QP 16
+                                                                                         // (with two rate-control passes the second pass decides; off with one)
+#define VVENC_SET_PSYRD_STRENGTH(s) ((uint8_t)((s)*64+0.5))
+  uint8_t             m_psyRdStrengthVal;                                                // psy-rd: keeps film grain and fine texture by weighing the fine luma texture energy a block's reconstruction loses
+                                                                                         // or adds against the source in the mode and residual decisions, as a multiplier with 6 fractional bits
+                                                                                         // (0 ... 255, i.e. 0 ... 3.98; default 0: off; 1.0 is the grain tune's strength)
+                                                                                         // for convenience use VVENC_SET_PSYRD_STRENGTH, e.g. VVENC_SET_PSYRD_STRENGTH(1.0)
+  int8_t              m_flatInterQP;                                                     // 1: all inter pictures at base QP + 5 (no GOP QP offsets), the I picture at that QP plus IntraQPOffset (needs QPA off; with rate control the levels stay equal; default 0)
+  int8_t              m_ccalfOnly;                                                       // 1: the luma and chroma ALF filters stay off and only CCALF filters the chroma (needs ALF and CCALF on; with 4:0:0 it turns ALF off; default 0)
+#define VVENC_SET_LEVEL_LAMBDA(s) ((uint8_t)((s)*64+0.5))
+  uint8_t             m_levelLambdaVal;                                                  // scale of the lambda in dependent quantization's luma level decisions (the trellis), as a fixed point value with
+                                                                                         // 6 fractional bits (1 ... 255, i.e. 0.016 ... 3.98; default 64, i.e. 1.0); below 1.0 small coefficients survive
+                                                                                         // more often (a smaller deadzone); no effect where DepQuant is off and on transform-skip blocks
+                                                                                         // for convenience use VVENC_SET_LEVEL_LAMBDA, e.g. VVENC_SET_LEVEL_LAMBDA(0.5)
+#define VVENC_SET_PSYRDOQ_STRENGTH(s) ((uint8_t)((s)*64+0.5))
+  uint8_t             m_psyRdoqStrengthVal;                                              // psy-rdoq: keeps film grain in the luma quantization of I slices by crediting each coded level with the source energy
+                                                                                         // it keeps, as a multiplier with 6 fractional bits (0 ... 255, i.e. 0 ... 3.98; default 0: off; 1.0 is the grain tune's
+                                                                                         // strength); no effect where DepQuant is off and on transform-skip blocks
+                                                                                         // for convenience use VVENC_SET_PSYRDOQ_STRENGTH, e.g. VVENC_SET_PSYRDOQ_STRENGTH(1.0)
+  int8_t              m_reservedInt8_3[1];                                               // with the fields above in place of a seventh reserved double: the same layout on every ABI
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )

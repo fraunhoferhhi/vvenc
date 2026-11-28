@@ -107,17 +107,20 @@ namespace vvenc {
     void create( bool twoPassRC, bool lookAhead, int targetBitrate, int maxBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats );
     void destroy();
     void updateAfterPic (const int actBits, const int tgtBits);
+    void updateGopQpCorrection (const int levelQP, const uint16_t visAct);
 
     bool            twoPass;
     bool            isLookAhead;
     bool            isIntraGOP;
     bool            isRateSavingMode;
+    bool            picQpFromCuTree; // CuTreePicStrength: picture QPs are levels, the QPs before the CU tree's picture offsets
     double          frameRate;
     int             targetRate;
     int             maxGopRate;
     int             gopSize;
     unsigned        intraPeriod;
     bool            scRelax;
+    bool            flatInterQP; // FlatInterQP: the temporal levels' QPs may be equal (EncRCPic::clipTargetQP)
     int             bitDepth;
     int64_t         bitsUsed;
     int64_t         bitsUsedQPLimDiff;
@@ -147,6 +150,7 @@ namespace vvenc {
 
     int     targetBits;
     int     tmpTargetBits;
+    int     modelBits;     // the first pass's bits scaled to the level the picture is coded at (QP correction with CuTreePicStrength)
     int     poc;
     bool    refreshParams;
     uint16_t visActSteady;
@@ -167,6 +171,7 @@ namespace vvenc {
     void init( const VVEncCfg& encCfg );
     void destroy();
     int  getBaseQP();
+    int  getLookAheadBaseQP( const int numCodedPics ) const;
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats( const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
@@ -201,6 +206,7 @@ namespace vvenc {
     void updateMotionErrStatsGop( const bool flush, const int poc );
     double getLookAheadBoostFac ( const int thresholdDivisor );
     double updateQPstartModelVal();
+    int  xGetBaseQP( const std::list<TRCPassStats>& firstPassData ) const;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );
     void writeStatsHeader();

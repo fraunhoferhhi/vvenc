@@ -46,6 +46,8 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "MCTF.h"
+#include <cmath>
+#include <vector>
 #include <math.h>
 #include "CommonLib/Picture.h"
 #include "CommonLib/dtrace_buffer.h"
@@ -590,6 +592,93 @@ double calcVarCore( const Pel* org, const ptrdiff_t origStride, const int w, con
   return variance / 256.0;
 }
 
+// Keep detail: the fine band of a noisy source is what temporal filtering removes for good, since it does not repeat
+// from picture to picture. These settings put it back on the filtered pictures, where a unit's fine band differs from
+// its motion-aligned neighbour.
+static const double KEEP_UNIT_RHO_FULL        = 0.2;                      // a unit keeps all of the band up to this correlation ...
+static const double KEEP_UNIT_RHO_NONE        = 0.5;                      // ... and none of it from this one on
+static const double KEEP_PICTURE_RHO_ON       = 0.75;                     // a picture below this turns the state on,
+static const double KEEP_PICTURE_RHO_OFF      = 0.80;                     // one above this turns it off: no flipping in between
+static const int    KEEP_WINDOW_RADIUS        = 1;                        // the band is the difference minus its 3x3 mean
+static const int    KEEP_RHO_WINDOW_UNITS     = 2;                        // a unit's correlation is read over +-2 units
+
+// The fine band as 2 y - left - up, source against the nearest motion-aligned neighbour.
+static MCTF::KeepUnitStats keepMeasureUnit( const Pel* org, ptrdiff_t orgStride, const Pel* aligned, int w, int h )
+{
+  MCTF::KeepUnitStats stats;
+  for( int y = 1; y < h; y++ )
+  {
+    for( int x = 1; x < w; x++ )
+    {
+      const float s = float( 2 * org[ y * orgStride + x ] - org[ y * orgStride + x - 1 ] - org[ ( y - 1 ) * orgStride + x ] );
+      const float n = float( 2 * aligned[ y * w + x ] - aligned[ y * w + x - 1 ] - aligned[ ( y - 1 ) * w + x ] );
+      stats.crossed += s * n; stats.source += s * s; stats.neighbour += n * n;
+    }
+  }
+  return stats;
+}
+
+static double keepUnitWeight( const std::vector<MCTF::KeepUnitStats>& stats, int unitX, int unitY, int unitsWide, int unitsHigh )
+{
+  double crossed = 0, source = 0, neighbour = 0;
+  for( int y = std::max( unitY - KEEP_RHO_WINDOW_UNITS, 0 ); y <= std::min( unitY + KEEP_RHO_WINDOW_UNITS, unitsHigh - 1 ); y++ )
+  {
+    for( int x = std::max( unitX - KEEP_RHO_WINDOW_UNITS, 0 ); x <= std::min( unitX + KEEP_RHO_WINDOW_UNITS, unitsWide - 1 ); x++ )
+    {
+      const MCTF::KeepUnitStats& unit = stats[ y * unitsWide + x ];
+      crossed += unit.crossed; source += unit.source; neighbour += unit.neighbour;
+    }
+  }
+  const double rho = crossed / std::max( std::sqrt( source * neighbour ), 1.0 );
+  return std::min( std::max( ( KEEP_UNIT_RHO_NONE - rho ) / ( KEEP_UNIT_RHO_NONE - KEEP_UNIT_RHO_FULL ), 0.0 ), 1.0 );
+}
+
+// target = filtered + gate x high-pass of ( source - filtered ); a 3x3 mean from an integral image is the low-pass
+static void keepFineDetail( const PelStorage& orig, PelStorage& filtered, const std::vector<MCTF::KeepUnitStats>& stats, int unitSize, int bitDepth )
+{
+  const CPelBuf src = orig.get( COMP_Y );
+  PelBuf        dst = filtered.get( COMP_Y );
+  const int w = src.width, h = src.height;
+
+  // one row and column larger than the picture
+  std::vector<int64_t> sum( ( w + 1 ) * ( h + 1 ), 0 );
+  for( int y = 0; y < h; y++ )
+  {
+    int64_t row = 0;
+    for( int x = 0; x < w; x++ )
+    {
+      row += src.at( x, y ) - dst.at( x, y );
+      sum[ ( y + 1 ) * ( w + 1 ) + x + 1 ] = sum[ y * ( w + 1 ) + x + 1 ] + row;
+    }
+  }
+
+  const int unitsWide = ( w + unitSize - 1 ) / unitSize;
+  const int unitsHigh = ( h + unitSize - 1 ) / unitSize;
+  std::vector<float> weights( unitsWide * unitsHigh );
+  for( int y = 0; y < unitsHigh; y++ )
+  {
+    for( int x = 0; x < unitsWide; x++ )
+    {
+      weights[ y * unitsWide + x ] = float( keepUnitWeight( stats, x, y, unitsWide, unitsHigh ) );
+    }
+  }
+
+  // the mean comes from the integral image, so writing in place leaves the rest of the loop unaffected
+  const int maxValue = ( 1 << bitDepth ) - 1;
+  for( int y = 0; y < h; y++ )
+  {
+    const int y0 = std::max( y - KEEP_WINDOW_RADIUS, 0 ), y1 = std::min( y + KEEP_WINDOW_RADIUS + 1, h );
+    for( int x = 0; x < w; x++ )
+    {
+      const int x0 = std::max( x - KEEP_WINDOW_RADIUS, 0 ), x1 = std::min( x + KEEP_WINDOW_RADIUS + 1, w );
+      const int64_t box  = sum[ y1 * ( w + 1 ) + x1 ] - sum[ y0 * ( w + 1 ) + x1 ] - sum[ y1 * ( w + 1 ) + x0 ] + sum[ y0 * ( w + 1 ) + x0 ];
+      const double  mean = double( box ) / ( ( y1 - y0 ) * ( x1 - x0 ) );
+      const double  fine = ( src.at( x, y ) - dst.at( x, y ) - mean ) * weights[ ( y / unitSize ) * unitsWide + x / unitSize ];
+      dst.at( x, y )     = Pel( std::min( std::max( int( std::lround( dst.at( x, y ) + fine ) ), 0 ), maxValue ) );
+    }
+  }
+}
+
 MCTF::MCTF( bool enableOpt )
   : m_encCfg     ( nullptr )
   , m_threadPool ( nullptr )
@@ -638,6 +727,7 @@ void MCTF::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* t
   m_threadPool  = threadPool;
   m_isFinalPass = isFinalPass;
   m_filterPoc   = 0;
+  m_keepDetailActive = false;
   m_area        = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
 
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
@@ -997,7 +1087,25 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     if( pic->useMCTF )
     {
       fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
-      bilateralFilter( origBuf, srcFrameInfo, fltrBuf, filterStrength );
+      filterAndKeepDetail( origBuf, srcFrameInfo, fltrBuf, filterStrength );
+
+      // CuTreePicStrength's noise floor (CuTree::xSetQpOffsets): the luma energy the filter removes, measured on the
+      // pictures of temporal layer 2, whose strength-table entry does not change with the QP (the filter's sigma does)
+      if( m_encCfg->m_cuTreePicScale > 0.0 && pic->gopEntry->m_temporalId == 2 )
+      {
+        const CPelBuf orig = origBuf.get( COMP_Y );
+        const CPelBuf filt = fltrBuf.get( COMP_Y );
+        int64_t sse = 0;
+        for( int y = 0; y < (int)orig.height; y++ )
+        {
+          for( int x = 0; x < (int)orig.width; x++ )
+          {
+            const int64_t d = orig.at( x, y ) - filt.at( x, y );
+            sse += d * d;
+          }
+        }
+        pic->m_picShared->m_mctfNoiseVar = double( sse ) / ( double( orig.width ) * orig.height );
+      }
     }
 
     // The film grain analysis compares the original with a filtered copy of fixed strength, independent of the
@@ -1122,7 +1230,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           if( doFilter )
           {
             fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
-            bilateralFilter( origBuf, srcFrameInfo, fltrBuf, filterStrength );
+            filterAndKeepDetail( origBuf, srcFrameInfo, fltrBuf, filterStrength );
           }
         }
       }
@@ -1155,8 +1263,8 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         pic->m_picShared->m_forceSCC = forceSCC;
       }
 
-      // BIM 2 uses these offsets as they are. CU-tree (BIM 1) keeps their picture offset, m_picAuxQpOffset, and
-      // replaces the CTU offsets with its own.
+      // BIM 2 uses these offsets as they are. CU-tree (BIM 1) keeps their picture offset, m_picAuxQpOffset (unless
+      // CuTreePicStrength replaces it as well), and replaces the CTU offsets with its own.
       if( !m_encCfg->hasBlockQpOffsets() || !pic->useMCTF )
       {
         CHECKD( !pic->m_picShared->m_ctuBimQpOffset.empty(), "BIM disabled, but offset vector not empty!" );
@@ -2024,7 +2132,7 @@ void MCTF::motionEstimationLumaJobs( const std::vector<MotionSearchJob>& jobs ) 
   }
 }
 
-void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
+void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength, KeepUnitStats* keepStats ) const
 {
   PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_APPLY );
 
@@ -2106,13 +2214,60 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
           refStr[i] = m_refStrengths[refStrengthRow][srcFrameInfo[i].index];
         }
 
+        if( keepStats && c == COMP_Y && numRefs > 0 )
+        {
+          int nearest = 0;
+          for( int i = 1; i < numRefs; i++ )
+          {
+            if( srcFrameInfo[ i ].index < srcFrameInfo[ nearest ].index ) nearest = i;
+          }
+          // units are written by the one job that owns their row
+          keepStats[ yBlkAddr * ( ( width + m_mctfUnitSize - 1 ) / m_mctfUnitSize ) + xBlkAddr ] = keepMeasureUnit( orgPic.bufs[c].bufAt( bx, by ), orgPic.bufs[c].stride, correctedPics[ nearest ], w, h );
+        }
+
         m_applyBlock( orgPic.bufs[c], newOrgPic.bufs[c], CompArea( compID, orgPic.chromaFormat, Area( bx, by, w, h ) ), clpRng, correctedPics, numRefs, verror, refStr, weightScaling, sigmaSq );
       }
     }
   }
 }
 
-void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength) const
+void MCTF::updateKeepGate( const std::vector<KeepUnitStats>& stats )
+{
+  double crossed = 0, source = 0, neighbour = 0;
+  for( const KeepUnitStats& unit : stats )
+  {
+    crossed += unit.crossed; source += unit.source; neighbour += unit.neighbour;
+  }
+  // a picture with nothing to compare (no reference left, or flat) leaves the state as it is
+  if( source > 0 && neighbour > 0 )
+  {
+    const double rho   = crossed / std::max( std::sqrt( source * neighbour ), 1.0 );
+    m_keepDetailActive = rho < ( m_keepDetailActive ? KEEP_PICTURE_RHO_OFF : KEEP_PICTURE_RHO_ON );
+  }
+}
+
+void MCTF::filterAndKeepDetail( const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength )
+{
+  if( !m_encCfg->m_mctfKeepDetail )
+  {
+    bilateralFilter( orgPic, srcFrameInfo, newOrgPic, overallStrength );
+    return;
+  }
+
+  const int unitsWide = ( orgPic.Y().width  + m_mctfUnitSize - 1 ) / m_mctfUnitSize;
+  const int unitsHigh = ( orgPic.Y().height + m_mctfUnitSize - 1 ) / m_mctfUnitSize;
+  std::vector<KeepUnitStats> stats( unitsWide * unitsHigh );
+  bilateralFilter( orgPic, srcFrameInfo, newOrgPic, overallStrength, stats.data() );
+
+  updateKeepGate( stats );
+
+  if( m_keepDetailActive )
+  {
+    keepFineDetail( orgPic, newOrgPic, stats, m_mctfUnitSize, m_encCfg->m_internalBitDepth[ CH_L ] );
+  }
+}
+
+void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength, KeepUnitStats* keepStats) const
 {
   const double qp          = m_encCfg->m_QP + m_encCfg->m_QPFraction;
   const double lumaSigmaSq = m_sigmaMultiplier * ( 128.0 + 3.0 / 256.0 * qp * qp * qp );
@@ -2136,6 +2291,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
       PelStorage *newOrgPic;
       const double *sigmaSqCh;
       double overallStrength;
+      KeepUnitStats* keepStats;
       const MCTF* mctf;
       int yStart; 
     };
@@ -2150,7 +2306,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
         ITT_TASKSTART( itt_domain_MCTF_flt, itt_handle_flt );
 
         FltParams* params = static_cast<FltParams*>( task_param );
-        params->mctf->xFinalizeBlkLine( *params->orgPic, *params->srcFrameInfo, *params->newOrgPic, params->yStart, params->sigmaSqCh, params->overallStrength );
+        params->mctf->xFinalizeBlkLine( *params->orgPic, *params->srcFrameInfo, *params->newOrgPic, params->yStart, params->sigmaSqCh, params->overallStrength, params->keepStats );
 
         ITT_TASKEND( itt_domain_MCTF_flt, itt_handle_flt );
         return true;
@@ -2162,6 +2318,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
       cFltParams.newOrgPic       = &newOrgPic;
       cFltParams.sigmaSqCh       = sigmaSqCh;
       cFltParams.overallStrength = overallStrength;
+      cFltParams.keepStats       = keepStats;
       cFltParams.mctf            = this;
       cFltParams.yStart          = yStart;
 
@@ -2174,7 +2331,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
   {
     for (int yStart = 0; yStart < orgPic.Y().height; yStart += m_mctfUnitSize )
     {
-      xFinalizeBlkLine( orgPic, srcFrameInfo, newOrgPic, yStart, sigmaSqCh, overallStrength );
+      xFinalizeBlkLine( orgPic, srcFrameInfo, newOrgPic, yStart, sigmaSqCh, overallStrength, keepStats );
     }
   }
 }

@@ -1735,7 +1735,8 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
 
 void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
-  if( isSkipAlfForFrame( pic ) )
+  // CCALFOnly: no luma or chroma ALF filter is derived, so nothing needs these statistics (CCALF gathers its own)
+  if( isSkipAlfForFrame( pic ) || isCcAlfOnly( pic ) )
   {
     return;
   }
@@ -1970,6 +1971,11 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 
   if( isSkipAlfForFrame( pic ) )
   {
+    return;
+  }
+  if( isCcAlfOnly( pic ) )
+  {
+    xSetCcAlfOnlySlice( cs );
     return;
   }
   const int numCtuLines = numCtus / cs.pcv->widthInCtus;
@@ -2513,6 +2519,38 @@ bool EncAdaptiveLoopFilter::isSkipAlfForFrame( const Picture& pic ) const
   }
 
   return false;
+}
+
+// CCALFOnly: the luma and chroma ALF filters stay off and only CCALF filters the chroma. It needs CCALF in the SPS
+// (ALF and CCALF on, not 4:0:0), since VVC signals CCALF only in a slice with ALF on.
+bool EncAdaptiveLoopFilter::isCcAlfOnly( const Picture& pic ) const
+{
+  return m_encCfg->m_ccalfOnly && pic.cs->sps->ccalfEnabled;
+}
+
+// The slice keeps ALF on but filters no CTB of any component and refers to no ALF APS; CCALF's derivation
+// (deriveCcAlfFilter) then decides its own filters and CTB flags.
+void EncAdaptiveLoopFilter::xSetCcAlfOnlySlice( CodingStructure& cs )
+{
+  Slice& slice = *cs.slice;
+  slice.alfEnabled[COMP_Y]  = true;
+  slice.alfEnabled[COMP_Cb] = false;
+  slice.alfEnabled[COMP_Cr] = false;
+  slice.numAps              = 0;
+  slice.setAlfApsIds( std::vector<int>() );
+  slice.chromaApsId         = -1;
+  // a new CCALF APS takes the id a new luma APS would take: no ALF APS is written in this mode, so nothing collides
+  slice.ccAlfCbApsId        = m_newApsIdLuma;
+  slice.ccAlfCrApsId        = m_newApsIdLuma;
+
+  setCtuEnableFlag( m_ctuEnableFlag, CH_L, 0 );
+  setCtuEnableFlag( m_ctuEnableFlag, CH_C, 0 );
+  setCtuAlternativeChroma( m_ctuAlternative, 0 );
+  // the per-CTB filter set map the later stages read, set as the full derivation sets it
+  for( int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++ )
+  {
+    cs.picture->m_alfCtbFilterIndex[ctbIdx] = NUM_FIXED_FILTER_SETS;
+  }
 }
 
 double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, ChannelType channel, const double chromaWeight,
@@ -4721,7 +4759,7 @@ void  EncAdaptiveLoopFilter::initDistortionCcalf( int numCtus )
 
 void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWriter* CABACEstimator, CtxCache* ctxCache, int ctuIdx )
 {
-  if( isSkipAlfForFrame( *cs.picture ) )
+  if( isSkipAlfForFrame( *cs.picture ) || isCcAlfOnly( *cs.picture ) )
   {
     return;
   }

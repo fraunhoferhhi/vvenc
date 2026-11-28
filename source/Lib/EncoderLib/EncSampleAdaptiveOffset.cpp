@@ -47,6 +47,7 @@ POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "EncSampleAdaptiveOffset.h"
+#include "EncSlice.h"
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/dtrace_buffer.h"
@@ -100,19 +101,71 @@ EncSampleAdaptiveOffset::~EncSampleAdaptiveOffset()
 {
 }
 
-void EncSampleAdaptiveOffset::init( const VVEncCfg& encCfg )
+void EncSampleAdaptiveOffset::init( const VVEncCfg& encCfg, const RdCost* psyCost )
 {
   m_EncCfg = &encCfg;
 
   if ( encCfg.m_bUseSAO )
   {
     SampleAdaptiveOffset::init( encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_log2SaoOffsetScale[CH_L], encCfg.m_log2SaoOffsetScale[CH_C] );
+
+    if( encCfg.m_psyRdStrengthVal )
+    {
+      m_psyCost = psyCost;
+      m_psyScratch.create( CHROMA_400, Area( 0, 0, encCfg.m_CTUSize, encCfg.m_CTUSize ) );
+    }
   }
 }
 
 void EncSampleAdaptiveOffset::initSlice( const Slice* slice )
 {
   memcpy( m_lambda, slice->getLambdas(), sizeof( m_lambda ) );
+
+  // psy-rd weighs the texture energy SAO's offsets take away or add as the CU search weighed it, so that SAO does not
+  // smooth away the grain the coding kept (its SSE-only decision did: SAO on flattened crowd_run's texture)
+  m_psyWeight = m_psyCost ? EncSlice::getPsyRdStrength( *m_EncCfg, *slice ) * sqrt( m_lambda[ COMP_Y ] ) : 0.0;
+}
+
+// Prepares the psy-rd term of the current CTU's luma decision: its boundary availability (as offsetCTU derives it) and
+// the energy gap between the source and the pre-SAO luma, which each candidate's gap is compared with.
+void EncSampleAdaptiveOffset::psyBeginCtu( CodingStructure& cs, const UnitArea& ctuArea )
+{
+  m_psyCs   = &cs;
+  m_psyArea = ctuArea.Y();
+  SampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility( cs, m_psyArea, m_psyAvailMask );
+  if( m_signLineBuf1.size() < m_psyArea.width + 1 )
+  {
+    m_signLineBuf1.resize( m_psyArea.width + 1 );
+    m_signLineBuf2.resize( m_psyArea.width + 1 );
+  }
+  const PelBuf  pre = m_ctuPreSao->get( COMP_Y );
+  const CPelBuf preLuma( pre.buf, pre.stride, m_psyArea.width, m_psyArea.height );
+  m_psyGapBefore = m_psyCost->getPsyEnergyGap( *cs.picture, m_psyArea, preLuma, cs.sps->bitDepths[ CH_L ] );
+}
+
+// The psy-rd cost change of applying these (inverse-quantized) luma offsets to the current CTU, in the SSE units of
+// getDistortion: weight x ( energy gap after - energy gap before ), negative where the offsets bring the energy closer
+// to the source's.
+int64_t EncSampleAdaptiveOffset::getPsyDistortion( int typeIdc, int typeAuxInfo, int* invQuantOffset )
+{
+  // offsets of 0 leave every (in-range) sample as it is: no change
+  if( std::all_of( invQuantOffset, invQuantOffset + MAX_NUM_SAO_CLASSES, []( int offset ) { return offset == 0; } ) )
+  {
+    return 0;
+  }
+  const PelBuf pre     = m_ctuPreSao->get( COMP_Y );
+  PelBuf       scratch = m_psyScratch.get( COMP_Y );
+  const int    w       = m_psyArea.width;
+  const int    h       = m_psyArea.height;
+  for( int y = 0; y < h; y++ )   // offsetBlock leaves the samples it does not filter (at picture edges) as they are
+  {
+    std::copy( pre.bufAt( 0, y ), pre.bufAt( 0, y ) + w, scratch.bufAt( 0, y ) );
+  }
+  offsetBlock( m_psyCs->sps->bitDepths[ CH_L ], m_psyCs->slice->clpRngs[ COMP_Y ], typeIdc, invQuantOffset, typeAuxInfo,
+               pre.buf, scratch.buf, pre.stride, scratch.stride, w, h, m_psyAvailMask, m_signLineBuf1, m_signLineBuf2 );
+  const CPelBuf after( scratch.buf, scratch.stride, w, h );
+  const int64_t gapAfter = m_psyCost->getPsyEnergyGap( *m_psyCs->picture, m_psyArea, after, m_psyCs->sps->bitDepths[ CH_L ] );
+  return int64_t( std::llround( m_psyWeight * double( gapAfter - m_psyGapBefore ) ) );
 }
 
 void EncSampleAdaptiveOffset::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, PelStorage* ctuPreSaoBuf )
@@ -402,6 +455,12 @@ void EncSampleAdaptiveOffset::decideCtuParams( CodingStructure& cs, const std::v
   SAOBlkParam* mergeList[ NUM_SAO_MERGE_TYPES ] = { NULL };
   getMergeList( cs, ctuRsAddr, reconParams, mergeList );
 
+  m_psyCs = nullptr;   // the psy-rd term only where it weighs and luma SAO is on
+  if( m_psyWeight > 0 && saoEnabled[ COMP_Y ] )
+  {
+    psyBeginCtu( cs, ctuArea );
+  }
+
   const TempCtx ctxStart( m_CtxCache, SAOCtx( m_CABACEstimator->getCtx() ) );
   TempCtx       ctxBest ( m_CtxCache );
 
@@ -688,6 +747,10 @@ void EncSampleAdaptiveOffset::deriveModeNewRDO(const BitDepths &bitDepths, int c
 
         //get distortion
         dist[compIdx] = getDistortion(bitDepths[CH_L], testOffset[compIdx].typeIdc, testOffset[compIdx].typeAuxInfo, invQuantOffset, blkStats[ctuRsAddr][compIdx][typeIdc]);
+        if( m_psyCs )
+        {
+          dist[compIdx] += getPsyDistortion( typeIdc, testOffset[compIdx].typeAuxInfo, invQuantOffset );
+        }
 
         //get rate
         m_CABACEstimator->getCtx() = SAOCtx( ctxStartLuma );
@@ -815,6 +878,10 @@ void EncSampleAdaptiveOffset::deriveModeMergeRDO(const BitDepths &bitDepths, int
         //offsets have been reconstructed. Don't call inversed quantization function.
         normDist += (((double)getDistortion(bitDepths[toChannelType(ComponentID(compIdx))], mergedOffsetParam.typeIdc, mergedOffsetParam.typeAuxInfo, mergedOffsetParam.offset, blkStats[ctuRsAddr][compIdx][mergedOffsetParam.typeIdc]))
                        /m_lambda[compIdx] );
+        if( compIdx == COMP_Y && m_psyCs )
+        {
+          normDist += double( getPsyDistortion( mergedOffsetParam.typeIdc, mergedOffsetParam.typeAuxInfo, mergedOffsetParam.offset ) ) / m_lambda[compIdx];
+        }
       }
     }
 

@@ -210,6 +210,7 @@ static constexpr int MAX_NUM_REF =                                     16; ///< 
 static constexpr int MAX_QP =                                          63;
 static constexpr int MAX_QP_PERCEPT_QPA =                              63; ///< max. base QP up to which CTU or sub-CTU QPA is used instead of frame QPA
 static constexpr int MAX_QP_INIT_QPA =                                 42;
+static constexpr int KEEP_HIGH_BAND_MAX_SLICE_QP =                     27; ///< KeepHighBand acts on slices up to this QP: its detail is kept at high rates, above it it only costs bytes
 static constexpr int NOT_VALID =                                       -1;
 static constexpr int MI_NOT_VALID =                                    -1;
 static constexpr int MH_NOT_VALID =                                    -1;

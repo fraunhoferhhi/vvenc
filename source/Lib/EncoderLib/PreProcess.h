@@ -106,6 +106,7 @@ class PreProcess : public EncStage
     void     xGetTemporalActivity ( Picture* curPic, const Picture* refPic1, const Picture* refPic2, VisAct& va ) const;
     void     xDetectSTA           ( Picture* pic, const PicList& picList );
     void     xDetectScc           ( Picture* pic ) const;
+    void     xGetPsyStableShare   ( Picture* pic, const PicList& picList ) const;
     void     xDisableTempDown     ( Picture* pic, const PicList& picList, const int thresh = INT32_MAX );
     void     xDetectFgaSceneCut   ( Picture* pic );
 };

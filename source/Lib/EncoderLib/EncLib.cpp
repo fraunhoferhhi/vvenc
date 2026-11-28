@@ -221,7 +221,13 @@ void EncLib::initPass( int pass, const char* statsFName )
       // restore encoder config for final 2nd RC pass
       const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
       m_rateCtrl->init( m_encCfg );
-      const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
+      // rate control's base QP is a configured QP: CuTreePicStrength codes at the coding QP for it, as at constant QP
+      // (VVEncCfg::xInitCfgMembers); the same QP without CuTreePicStrength
+      VVEncCfg& finalPassCfg      = const_cast<VVEncCfg&>(m_encCfg);
+      finalPassCfg.m_QP           = m_rateCtrl->getBaseQP();
+      finalPassCfg.m_configuredQP = finalPassCfg.m_QP;
+      finalPassCfg.m_QP           = getCodingQp( finalPassCfg );
+      xDecideVeryLowQP();
     }
     if( m_encCfg.m_RCTargetBitrate > 0 && !m_encCfg.m_LookAhead )
     {
@@ -264,7 +270,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_cuTree = new CuTree();
     m_cuTree->initStage( m_encCfg, 1, 0, false, true, false );
-    m_cuTree->init( m_encCfg, m_threadPool );
+    m_cuTree->init( m_encCfg, m_rateCtrl, m_threadPool );
     m_encStages.push_back( m_cuTree );
     // a GOP and its look-ahead wait here, while the GOP encoder holds the previous GOP
     m_maxNumPicShared += m_encCfg.m_GOPSize + CuTree::getNumLookAheadPics( m_encCfg );
@@ -378,6 +384,44 @@ void EncLib::xUninitLib()
   }
 }
 
+void EncLib::xDecideVeryLowQP()
+{
+  VVEncCfg& cfg = const_cast<VVEncCfg&>(m_encCfg);
+  // the options the config left at 2 (below QP 16). getBaseQP() leans towards a QP from the resolution, so at these
+  // targets the pictures run lower than it says: one higher than constant QP's limit. m_QP here is the coding QP for
+  // getBaseQP() (getCodingQp, set by the caller), and m_orgCfg.m_QP is already the coding QP (VVEncCfg::xInitCfgMembers):
+  // both are the QP the pictures are coded at, as at constant QP
+  const bool veryLowQP = m_encCfg.m_QP <= VVENC_VERY_LOW_QP;
+
+  if( cfg.m_MTSImplicit == 2 )
+  {
+    cfg.m_MTSImplicit = veryLowQP ? 0 : 1;
+  }
+  if( cfg.m_veryLowQPSpeedUp == 2 )
+  {
+    cfg.m_veryLowQPSpeedUp = veryLowQP ? 1 : 0;
+    if( veryLowQP )
+    {
+      // after checkCfgParameter, but safe: it only turns tools off and raises MinQT[1] to 8, both valid in any config
+      turnOffToolsForVeryLowQP( cfg );
+    }
+  }
+  if( cfg.m_mctfKeepDetail == 2 )
+  {
+    cfg.m_mctfKeepDetail = veryLowQP ? 1 : 0;
+
+    // Strengths still at what config derived from its guess of the QP, which at high targets is far too low: nothing would be
+    // filtered, so nothing kept. Strengths the user chose differ from these and stay. Config runs twice, so it can't tell them apart.
+    vvencMCTF fromGuess = cfg.m_vvencMCTF;
+    initMCTFStrengths( fromGuess, cfg.m_GOPSize, m_orgCfg.m_QP, cfg.m_QPFractionVal, true );
+    const bool strengthsDerived = fromGuess.numFrames == cfg.m_vvencMCTF.numFrames && std::equal( fromGuess.MCTFStrengths, fromGuess.MCTFStrengths + fromGuess.numFrames, cfg.m_vvencMCTF.MCTFStrengths );
+    if( veryLowQP && strengthsDerived )
+    {
+      initMCTFStrengths( cfg.m_vvencMCTF, cfg.m_GOPSize, cfg.m_QP, cfg.m_QPFractionVal, true );
+    }
+  }
+}
+
 void EncLib::xInitRCCfg()
 {
   // backup original configuration
@@ -389,6 +433,15 @@ void EncLib::xInitRCCfg()
 
   // fixed-QP encoding in first rate control pass
   m_firstPassCfg.m_RCTargetBitrate = 0;
+  // the first pass codes at a fixed QP far above the very-low-QP range; the second pass decides the options left at 2
+  if( m_firstPassCfg.m_mctfKeepDetail == 2 )
+  {
+    m_firstPassCfg.m_mctfKeepDetail = 0;
+  }
+  if( m_firstPassCfg.m_veryLowQPSpeedUp == 2 )
+  {
+    m_firstPassCfg.m_veryLowQPSpeedUp = 0;
+  }
   if( m_firstPassCfg.m_FirstPassMode > 2 )
   {
     m_firstPassCfg.m_SourceWidth  = ( m_encCfg.m_SourceWidth  >> 1 ) & ( ~7 );

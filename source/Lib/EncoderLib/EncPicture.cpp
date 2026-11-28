@@ -153,6 +153,19 @@ void EncPicture::finalizeReference( Picture& pic )
     DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
   }
 
+  // after the in-loop filters, before a picture referencing this one starts (isReconstructed is set after this function)
+  m_SliceEncoder.measurePsyLostShare( pic );
+
+  // psy-rd's tables of the source are read by the picture's CTU tasks only: give their memory back now (about 23 MB for
+  // a 4K picture) rather than keep it for as long as the picture stays in the encoder as a reference
+  for( auto& table : pic.psyOrgEnergy )
+  {
+    std::vector<int32_t>().swap( table );
+  }
+  std::vector<int32_t>().swap( pic.psyOrgGroups );
+  std::vector<int32_t>().swap( pic.psyOrgGroups4x4 );
+  std::vector<uint8_t>().swap( pic.psyEdgeGate );
+
   // copy ALF APSs to global list, unless that was done at the ALF derivation (IFP), as pictures may read them already
   CHECK( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred && !pic.picApsGlobal, "Missing APS from top level" );
   if( pic.picApsGlobal && !m_apsCopiedEarly )

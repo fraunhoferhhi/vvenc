@@ -109,7 +109,7 @@ public:
   virtual ~Quant();
 
   // initialize class
-  virtual void init( int rdoq = 0, bool useRDOQTS = false, int thrVal = 8 );
+  virtual void init( int rdoq = 0, bool useRDOQTS = false, int thrVal = 8, bool keepHighBand = false );
 
 public:
 

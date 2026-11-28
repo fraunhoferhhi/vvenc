@@ -63,6 +63,7 @@ EncRCSeq::EncRCSeq()
   isLookAhead         = false;
   isIntraGOP          = false;
   isRateSavingMode    = false;
+  picQpFromCuTree     = false;
   frameRate           = 0.0;
   targetRate          = 0;
   maxGopRate          = 0;
@@ -79,6 +80,7 @@ EncRCSeq::EncRCSeq()
   lastIntraQP         = 0;
   lastIntraSM         = 0.0;
   scRelax             = false;
+  flatInterQP         = false;
   bitDepth            = 0;
 }
 
@@ -117,6 +119,36 @@ void EncRCSeq::destroy()
   return;
 }
 
+// CuTreePicStrength: one QP correction for all temporal levels, set at the start of each GOP from the bits of all
+// levels so far, so that the rate control moves a GOP's level and the CU tree's picture offsets alone split the
+// bits inside it. A correction per level steers each level to its share of the first pass's bits, and that split
+// came from the first pass's offsets (of its QP and its encoder), not from the offsets the pictures are coded with.
+// The correction is the first-pass model's error in QP: the actual bits against the bits the model gives at the
+// levels the pictures were coded at (EncRCPic::modelBits, summed in targetBitCnt). Against the target bits, as per
+// level, the pictures measured already carry the correction, so it settles at about half the error, and the bit
+// budget makes up the rest only with a standing deficit of around a GOP's bits.
+// A scene cut keeps the counters (two-pass too): the error is mostly the encoder's (its settings and the CU tree's
+// offsets against the first pass's), not the scene's, and a restart leaves the GOPs after each cut uncorrected.
+void EncRCSeq::updateGopQpCorrection (const int levelQP, const uint16_t visAct)
+{
+  const uint16_t vaMin = 1u << (bitDepth - 6);
+  const double clipVal = (visAct > 0 && visAct < vaMin + 48 ? 0.25 * (visAct - vaMin) : 12.0); // as in EncRCPic::updateAfterPicture()
+  uint64_t actualBits  = 0, targetBits = 0;
+  double correction    = 0.0;
+
+  for (int l = 0; l < 8; l++)
+  {
+    actualBits += actualBitCnt[l];
+    targetBits += targetBitCnt[l];
+  }
+  if (actualBits > 0 && targetBits > 0)
+  {
+    correction = (105.0 / 128.0) * sqrt ((double) std::max (1, levelQP)) * log ((double) actualBits / (double) targetBits) / log (2.0);
+    correction = Clip3 (-clipVal, clipVal, correction);
+  }
+  std::fill_n (qpCorrection, 8, correction);
+}
+
 void EncRCSeq::updateAfterPic (const int actBits, const int tgtBits)
 {
   estimatedBitUsage += tgtBits;
@@ -140,6 +172,7 @@ EncRCPic::EncRCPic()
   frameLevel          = 0;
   targetBits          = 0;
   tmpTargetBits       = 0;
+  modelBits           = 0;
   picQP               = 0;
   picBits             = 0;
   poc                 = 0;
@@ -193,7 +226,8 @@ void EncRCPic::clipTargetQP (std::list<std::shared_ptr<EncRCPic>>& listPreviousP
     }
     if ((*it)->frameLevel == frameLevel - 1 && (*it)->picQP >= 0) // last temporal level
     {
-      lastPrevTLQP = (frameLevel == 1 ? ((*it)->picQP * 3) >> 2 : std::max<int> (encRCSeq->lastIntraQP, (*it)->picQP));
+      // FlatInterQP codes every inter picture at one QP: no level is held above the I picture's QP
+      lastPrevTLQP = (frameLevel == 1 ? ((*it)->picQP * 3) >> 2 : (encRCSeq->flatInterQP ? (*it)->picQP : std::max<int> (encRCSeq->lastIntraQP, (*it)->picQP)));
     }
     if ((*it)->frameLevel == 1 && frameLevel == 0 && refreshParams && lastCurrTLQP < 0)
     {
@@ -221,9 +255,15 @@ void EncRCPic::clipTargetQP (std::list<std::shared_ptr<EncRCPic>>& listPreviousP
 
     qp = Clip3 (lastCurrTLQP - clipRange, std::min (MAX_QP, lastCurrTLQP + (refreshParams ? (refrIncrFac * clipRange) >> 1 : clipRange)), qp);
   }
-  if (lastPrevTLQP >= 0) // prevent QP from being lower than QPs at lower temporal level
+  if (lastPrevTLQP >= 0) // prevent QP from being lower than QPs at lower temporal level (FlatInterQP: equal is allowed)
   {
-    qp = Clip3 (std::min (MAX_QP, lastPrevTLQP + 1), MAX_QP, qp);
+    // CuTreePicStrength: the QPs here are levels, the QPs before the CU tree's picture offsets, and one level serves
+    // all temporal levels of a GOP (the offsets order them). Held at or above the level of the temporal level below,
+    // the upper temporal levels could follow the bit budget up but never down: each GOP kept its key pictures' level
+    if (!encRCSeq->picQpFromCuTree || frameLevel <= 1)
+    {
+      qp = Clip3 (std::min (MAX_QP, lastPrevTLQP + (encRCSeq->flatInterQP && frameLevel >= 2 ? 0 : 1)), MAX_QP, qp);
+    }
   }
   else if (encRCSeq->lastIntraQP >= -1 && (frameLevel == 1 || frameLevel == 2))
   {
@@ -247,9 +287,12 @@ void EncRCPic::updateAfterPicture (const int picActualBits, const int averageQP)
     const double clipVal = (visActSteady > 0 && visActSteady < vaMin + 48 ? 0.25 * (visActSteady - vaMin) : 12.0);
 
     encRCSeq->actualBitCnt[frameLevel] += (uint64_t) picActualBits;
-    encRCSeq->targetBitCnt[frameLevel] += (uint64_t) targetBits;
+    // CuTreePicStrength: the correction is measured against the first pass's model (EncRCSeq::updateGopQpCorrection)
+    encRCSeq->targetBitCnt[frameLevel] += (uint64_t) (encRCSeq->picQpFromCuTree ? modelBits : targetBits);
 
     if (refreshParams && frameLevel <= 2) encRCSeq->lastAverageQP = 0;
+
+    if (encRCSeq->picQpFromCuTree) return; // one correction for all levels, set per GOP: EncRCSeq::updateGopQpCorrection()
 
     encRCSeq->qpCorrection[frameLevel] = (105.0 / 128.0) * sqrt ((double) std::max (1, encRCSeq->lastAverageQP)) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // adjust target bits as in VCIP paper eq.(4)
     encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal, clipVal, encRCSeq->qpCorrection[frameLevel]);
@@ -325,14 +368,45 @@ void RateCtrl::init( const VVEncCfg& encCfg )
   encRCSeq = new EncRCSeq;
   encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead == 1, m_pcEncCfg->m_RCTargetBitrate, m_pcEncCfg->m_RCMaxBitrate, (double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale,
                     m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
+  encRCSeq->picQpFromCuTree = m_pcEncCfg->m_cuTreePicScale > 0.0;
+  encRCSeq->flatInterQP = m_pcEncCfg->m_flatInterQP;
 }
 
 int RateCtrl::getBaseQP()
 {
+  return xGetBaseQP( m_listRCFirstPassStats );
+}
+
+// CuTreePicStrength with look-ahead rate control, for the CU tree's analysis QP: the base QP that the pre-analysis
+// statistics of the pictures before coding number numCodedPics give, from whole GOPs and at most as many pictures as
+// getBaseQP() sees; -1 while that is not more than a GOP. The CU tree runs ahead of both encoders, and how far each
+// has come when it runs depends on timing: so it asks by coding number, for pictures the pre-analysis has surely
+// coded (CuTree::processPictures), and the answer depends on their statistics alone, not on the final encoder's.
+int RateCtrl::getLookAheadBaseQP( const int numCodedPics ) const
+{
+  const int firstInCache  = m_numPicStatsTotal - (int) m_firstPassCache.size(); // coding number of the cache's first picture
+  const int firstInWindow = std::max( 0, numCodedPics - ( (int) encRCSeq->intraPeriod + encRCSeq->gopSize + 1 ) );
+
+  if( numCodedPics <= encRCSeq->gopSize || numCodedPics >= m_numPicStatsTotal || firstInWindow < firstInCache )
+  {
+    return -1;
+  }
+  const auto first = std::next( m_firstPassCache.begin(), firstInWindow - firstInCache );
+  auto       last  = std::next( first, numCodedPics - firstInWindow );
+  while( last != first && !last->isStartOfGop ) // drop a GOP's first coded pictures: its key pictures without the rest
+  {
+    last--;
+  }
+  const std::list<TRCPassStats> window( first, last );
+
+  return (int) window.size() > encRCSeq->gopSize ? xGetBaseQP( window ) : -1;
+}
+
+int RateCtrl::xGetBaseQP( const std::list<TRCPassStats>& firstPassData ) const
+{
   // estimate near-optimal base QP for PPS in second RC pass
   double d = (3840.0 * 2160.0) / double (m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight);
   const double firstQPOffset = sqrt ((d * m_pcEncCfg->m_RCTargetBitrate) / 500000.0);
-  std::list<TRCPassStats>& firstPassData = m_listRCFirstPassStats;
   int baseQP = MAX_QP;
 
   if (firstPassData.size() > 0 && encRCSeq->frameRate > 0.0)
@@ -760,7 +834,11 @@ void RateCtrl::processFirstPassData( const bool flush, const int poc /*= -1*/ )
         if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > encRCSeq->intraPeriod + encRCSeq->gopSize + 1 )
         {
           m_listRCFirstPassStats.pop_front();
-          m_firstPassCache.pop_front();
+          // CuTreePicStrength: the CU tree asks for statistics of up to two GOPs before these (getLookAheadBaseQP)
+          if( !encRCSeq->picQpFromCuTree || (int) m_firstPassCache.size() > (int) encRCSeq->intraPeriod + 3 * encRCSeq->gopSize + 1 )
+          {
+            m_firstPassCache.pop_front();
+          }
         }
 
         // the chunk is considered to contain a particular number of pictures up to the picture starting the next GOP (including it)
@@ -810,8 +888,9 @@ void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
 double RateCtrl::getAverageBitsFromFirstPass()
 {
   const uint16_t vaMin = 1u << (encRCSeq->bitDepth - 6);
-  const int16_t factor = (m_pcEncCfg->m_QP > 27 ? 2 : 3);
-  const uint32_t shift = (m_pcEncCfg->m_QP > 37 ? 1 : 4);
+  // configured QP: the coding QP of CuTreePicStrength is higher by its offset (equal without it)
+  const int16_t factor = (m_pcEncCfg->m_configuredQP > 27 ? 2 : 3);
+  const uint32_t shift = (m_pcEncCfg->m_configuredQP > 37 ? 1 : 4);
   int vaTm1 = 0, vaTm2 = 0; // temporal memories
   uint64_t totalBitsFirstPass = 0;
   std::list<TRCPassStats>::iterator it;
@@ -1151,7 +1230,8 @@ void RateCtrl::updateAfterPicEncRC( const Picture* pic )
 {
   const int clipBits = std::max( pic->encRCPic->targetBits, pic->actualTotalBits );
 
-  pic->encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
+  // CuTreePicStrength: the history holds levels, the QPs before the CU tree's picture offsets (0 without it)
+  pic->encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp - pic->cuTreePicQpOffset );
   addToPictureList( encRCSeq, m_listRCPictures, pic->encRCPic );
   encRCSeq->updateAfterPic( pic->actualTotalBits, pic->encRCPic->tmpTargetBits );
 
@@ -1185,6 +1265,9 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
         {
           const double sqrOfResRatio = std::min( 1.0, double( m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight ) / ( 3840.0 * 2160.0 ) );
           const int firstPassSliceQP = it->qp;
+          // CuTreePicStrength: the QPs here are levels, in units of the coding QP, while QPstart and the base QP are
+          // in units of the configured QP, which is lower by this offset (0 without CuTreePicStrength)
+          const int codingQpOffset = m_pcEncCfg->m_QP - m_pcEncCfg->m_configuredQP;
           const int budgetRelaxScale = ( encRCSeq->maxGopRate + 0.5 < 2.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate ? 2 : 3 ); // quarters
           const bool isRateCapperMax = ( encRCSeq->maxGopRate + 0.5 >= 3.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate );
           const bool isEndOfSequence = ( it->poc >= flushPOC && flushPOC >= 0 );
@@ -1193,10 +1276,18 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
           pic.encRCPic->visActSteady = it->visActY;
 
+          if ( encRCSeq->picQpFromCuTree && it->isStartOfGop ) // before the refresh below, which sets the first I picture's own correction
+          {
+            encRCSeq->updateGopQpCorrection( firstPassSliceQP, it->visActY );
+          }
           if ( it->refreshParameters ) // reset counters for budget usage in subsequent frames
           {
-            encRCSeq->qpCorrection[ frameLevel ] = ( it->poc == 0 && it->isIntra && d < it->numBits ? std::max( -1.0 * it->visActY / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : 0.0 );
-            if ( !m_pcEncCfg->m_LookAhead )
+            // CuTreePicStrength: the levels share the GOP's correction; only the first I picture gets its own
+            if ( !encRCSeq->picQpFromCuTree || ( it->poc == 0 && it->isIntra ) )
+            {
+              encRCSeq->qpCorrection[ frameLevel ] = ( it->poc == 0 && it->isIntra && d < it->numBits ? std::max( -1.0 * it->visActY / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : 0.0 );
+            }
+            if ( !m_pcEncCfg->m_LookAhead && !encRCSeq->picQpFromCuTree ) // CuTreePicStrength keeps them, see updateGopQpCorrection()
             {
               encRCSeq->actualBitCnt[ frameLevel ] = encRCSeq->targetBitCnt[ frameLevel ] = 0;
             }
@@ -1276,19 +1367,23 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           tmpVal = updateQPstartModelVal() + log (sqrOfResRatio) / log (2.0); // GOP's QPstart
           d /= (double)it->numBits;
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
-          sliceQP = int( 0.5 + d + ( it->isIntra ? 0.375 : 0.5 ) * std::max( 0.0, tmpVal - d ) + encRCSeq->qpCorrection[ frameLevel ] );
+          sliceQP = int( 0.5 + d + ( it->isIntra ? 0.375 : 0.5 ) * std::max( 0.0, tmpVal + codingQpOffset - d ) + encRCSeq->qpCorrection[ frameLevel ] );
 
           const int sqp_bckp = sliceQP;
-          pic.encRCPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : m_pcEncCfg->m_QP ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), 5 - budgetRelaxScale,
+          pic.encRCPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() + codingQpOffset : m_pcEncCfg->m_QP ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), 5 - budgetRelaxScale,
                                   ( it->poc < encRCSeq->gopSize ? 0 : ( m_pcEncCfg->m_maxTLayer + 1 ) >> 1 ), sqrOfResRatio, sliceQP, &encRCSeq->lastAverageQP );
           
-          if( it->isIntra && sliceQP >= sqp_bckp )
+          // not with CuTreePicStrength: the CU tree's picture offset places the I picture below its level
+          if( it->isIntra && sliceQP >= sqp_bckp && !encRCSeq->picQpFromCuTree )
           {
             sliceQP -= (it->visActY < 64 ? 2 : std::max( 0, (encRCSeq->bitDepth < 10 ? 7 : 8) - floorLog2(it->visActY)));
           }
           
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRCSeq->minEstLambda, encRCSeq->maxEstLambda, lambda );
+
+          // the first pass's bits at this QP by the model of the QP estimate above, VCIP paper eq.(4); read only with CuTreePicStrength
+          pic.encRCPic->modelBits = (int) Clip3( 1.0, (double) INT32_MAX, 0.5 + it->numBits * pow( 2.0, ( firstPassSliceQP - sliceQP ) / ( ( 105.0 / 128.0 ) * sqrt( (double) std::max( 1, firstPassSliceQP ) ) ) ) );
 
           if ( m_pcEncCfg->m_LookAhead ) // update frame bit ratios for bit budget calculation
           {

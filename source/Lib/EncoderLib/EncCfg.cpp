@@ -56,8 +56,12 @@ VVEncCfg::VVEncCfg()
   , m_bimCtuSize( 64 )
   , m_MaxQT { 128, 128, 128 }
   , m_cuTreeScale( 0.0 )
+  , m_cuTreePicScale( 0.0 )
+  , m_configuredQP( 0 )
   , m_QPFraction( 0.0 )
   , m_fgaStrength( 0.0 )
+  , m_psyRdStrength( 0.0 )
+  , m_psyRdoqStrength( 0.0 )
 {
   m_fg.m_fgcSEIEnabled = false;
   m_fg.m_fgcSEICompModelPresent[0] = false;
@@ -73,6 +77,31 @@ VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
   return *this;
 }
 
+void initMCTFStrengths( vvencMCTF& mctf, int GOPSize, int QP, int QPFractionVal, bool rateControl )
+{
+  const int    log2GopSize = std::min<int>( 6, floorLog2( GOPSize ) );
+  const double exactQP     = QP + QPFractionVal / 256.0;
+
+  mctf.numFrames = mctf.numStrength = std::max( 1, log2GopSize - ( ( QP - ( rateControl ? 1 : 0 ) ) >> 4 ) );
+
+  for( int i = 0; i < mctf.numFrames; i++ )
+  {
+    mctf.MCTFFrames[i]    = GOPSize >> ( mctf.numFrames - i - 1 );
+    mctf.MCTFStrengths[i] = Clip3( 0.0, 2.0, ( exactQP - 4.0 ) / 8.0 ) / double( mctf.numFrames - i );
+  }
+  mctf.MCTFStrengths[mctf.numFrames - 1] = Clip3( 0.0, 1.5, ( exactQP - 4.0 ) * 3.0 / 32.0 );
+}
+
+void turnOffToolsForVeryLowQP( vvenc_config& cfg )
+{
+  cfg.m_LFNST    = 0;
+  cfg.m_BDOF     = 0;
+  cfg.m_DMVR     = 0;
+  cfg.m_PROF     = 0;
+  cfg.m_SbTMVP   = 0;
+  cfg.m_MinQT[1] = std::max( cfg.m_MinQT[1], 8u );
+}
+
 static unsigned getMaxTlVal( unsigned perTlVal )
 {
   unsigned maxVal = 0;
@@ -84,14 +113,43 @@ static unsigned getMaxTlVal( unsigned perTlVal )
   return maxVal;
 }
 
+// The strengths behind the psy multipliers' 1.0 (--Tune grain): psy-rd's weight of the energy change against sqrt(lambda)
+// x SSE units, and psy-rdoq's level credit, 0.3 of it, the values the tune was measured with.
+static constexpr double PSY_RD_UNIT   = 20.0;
+static constexpr double PSY_RDOQ_UNIT = 0.3 * PSY_RD_UNIT;
+
+int getCodingQp( const vvenc_config& c )
+{
+  // the picture QPs from the dependency model replace the QP cascade and lower the referenced pictures' QPs: code from
+  // a higher QP to keep about the cascade's rate; with FlatInterQP they only lower the flat levels, which keep their own
+  // offset (EncSlice::getCascadeQP)
+  const int offset = c.m_cuTreePicStrength > 0 && ! c.m_flatInterQP ? int( 3.0 + 2.0 * c.m_cuTreePicStrength / 32.0 + 0.5 ) : 0;
+  return std::min( c.m_QP + offset, MAX_QP );
+}
+
+// ( multiplier x scale ) first: a scale that gives a multiplier --PsyRD can take gives exactly that option's strength
+double VVEncCfg::psyRdStrength( double pictureScale ) const
+{
+  return PSY_RD_UNIT * ( m_psyRdStrengthVal * pictureScale ) / 64.0;
+}
+
+double VVEncCfg::psyRdoqStrength( double pictureScale ) const
+{
+  return PSY_RDOQ_UNIT * ( m_psyRdoqStrengthVal * pictureScale ) / 64.0;
+}
+
 void VVEncCfg::xInitCfgMembers()
 {
+  m_configuredQP        = m_QP;
+  m_QP                  = getCodingQp( *this );
   m_stageParallelProc   = m_numThreads > 0 && m_maxParallelFrames > 0;
   m_log2GopSize         = floorLog2( m_GOPSize );
   m_maxTLayer           = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
   m_bimCtuSize          = m_CTUSize;
   m_QPFraction          = m_QPFractionVal / 256.0;
   m_fgaStrength         = m_fgaStrengthVal / 64.0;
+  m_psyRdStrength       = psyRdStrength( 1.0 );
+  m_psyRdoqStrength     = psyRdoqStrength( 1.0 );
   m_MaxQT[0]            =
   m_MaxQT[1]            = 
   m_MaxQT[2]            = m_CTUSize;
@@ -99,6 +157,7 @@ void VVEncCfg::xInitCfgMembers()
   m_reuseCuResults      = ( m_IntraPeriod > 1 && getMaxTlVal( m_maxMTTDepth ) > 1 ) || m_maxMTTDepthI > ( m_IntraPeriod == 1 ? 1 : 2 );
   m_splitCostThrParamId = getMaxTlVal(m_maxMTTDepth);
   m_cuTreeScale         = m_cuTreeStrength / 32.0;
+  m_cuTreePicScale      = m_cuTreePicStrength / 32.0;
 
   m_mergeRdCandQuotaRegular = std::min( NUM_MRG_SATD_CAND, std::max( ( int ) m_maxNumMergeCand - 2, 1 ) );
   //                                        0  1  2  3  4

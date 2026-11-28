@@ -182,6 +182,9 @@ class EncPicture;
 
     bool          lumaPredReady;
     bool          chromaPredReady;
+    // psy-rd's sum over the blocks of the luma prediction in the item's buffer, from the candidate ranking (-1: not
+    // measured): the RD pass codes that prediction again (RdCost::getPsyDiff)
+    int64_t       psyPredDiff;
 
     MergeItemType mergeItemType;
 
@@ -416,7 +419,7 @@ private:
   void    generateMergePrediction     ( const UnitArea& unitArea, MergeItem* mergeItem, CodingUnit& cu, bool luma, bool chroma,
                                         PelUnitBuf& dstBuf, bool finalRd, bool forceNoResidual, PelUnitBuf* predBuf1, PelUnitBuf* predBuf2 );
   double  calcLumaCost4MergePrediction( const TempCtx& ctxStart, const PelUnitBuf& predBuf, double lambda, CodingUnit& pu, DistParam& distParam, uint64_t* knownFracBits = nullptr,
-                                        double dropCost = MAX_DOUBLE, DistParam* stopDistParam = nullptr );
+                                        double dropCost = MAX_DOUBLE, DistParam* stopDistParam = nullptr, int64_t* psyPredDiff = nullptr );
   void    addRegularCandsToPruningList( const MergeCtx& mergeCtx, const UnitArea& localUnitArea, double sqrtLambdaForFirstPassIntra,
                                         const TempCtx& ctxStart, DistParam& distParam, CodingUnit& cu, bool* sameMv, MergeBufVector& regularPred );
   void    addCiipCandsToPruningList   ( const MergeCtx& mergeCtx, const UnitArea& localUnitArea, double sqrtLambdaForFirstPassIntra,

@@ -152,6 +152,7 @@ private:
   SaoPreFilterEdges            m_saoPreFilterEdges;
   std::vector<CtuEncParam>     ctuEncParams;
   std::vector<int>             m_ctuAddrMap;
+  RdCost                       m_psyRdCost;                          ///< builds each picture's psy-rd source energies
 
 public:
   std::function<void( Picture& )> m_alfFiltersDerived;               ///< IFP: called when the ALF and CC-ALF filters (the APSs) are final
@@ -188,9 +189,15 @@ private:
 
   double  xGetQPForPicture    ( const Slice* slice );
   int     xGetQPForPicture    ( const Slice* slice, const int baseQP );
+  int     xGetCuTreePicQpOffset( const Slice* slice, const int baseQP );
 
 public:
   static int getCascadeQP     ( const VVEncCfg& encCfg, const GOPEntry& gopEntry, const bool isIntra, int qp, const int lumaQpBDOffset );
+  static int getLowestInterQP ( const VVEncCfg& encCfg, const int baseQP );
+  static double getPsyRdStrength( const VVEncCfg& encCfg, const Slice& slice );
+  static double getPsyRdoqStrength( const VVEncCfg& encCfg, const Slice& slice );
+  static int    getPsyRateDeblockingOffset( const VVEncCfg& encCfg, int configuredOffsetDiv2 );
+  void          measurePsyLostShare( Picture& pic ) const;
 };
 
 } // namespace vvenc

@@ -157,6 +157,54 @@ void IntraSearch::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache *ctxCache
 //////////////////////////////////////////////////////////////////////////
 static constexpr double COST_UNKNOWN = -65536.0;
 
+// psy-rd's credit of an angular intra candidate's energy in grain (see touchesPsyEdge); with 0.5 --Tune grain drew fewer
+// brush strokes on all four grainy test films at equal size, keeping more grain energy
+static constexpr double PSY_ANGULAR_GRAIN_CREDIT = 0.5;
+
+// true when a 4-sample grid position inside the luma area is gated as near a source edge (Picture::psyEdgeGate); grid
+// positions of the coded area beyond the source picture are not in the gate
+static bool touchesPsyEdge( const Picture& pic, const CompArea& area )
+{
+  const int gridH = pic.psyGridW > 0 ? int( pic.psyEdgeGate.size() ) / pic.psyGridW : 0;
+  for( int y = area.y; y < area.y + int( area.height ) && ( y >> 2 ) < gridH; y += 4 )
+    for( int x = area.x; x < area.x + int( area.width ) && ( x >> 2 ) < pic.psyGridW; x += 4 )
+      if( pic.psyEdgeGate[size_t( y >> 2 ) * pic.psyGridW + ( x >> 2 )] )
+      {
+        return true;
+      }
+  return false;
+}
+
+// the quantised levels of one luma TU: what the quantiser leaves in the TU
+struct LumaLevels
+{
+  TCoeffSig levels[MAX_TB_SIZEY * MAX_TB_SIZEY];   // on the stack: one pair per I-slice luma TU
+  int       lastPos = -1;
+  TCoeff    absSum  = 0;
+
+  void save( TransformUnit& tu, TCoeff sum )
+  {
+    const CoeffSigBuf buf = tu.getCoeffs( COMP_Y );
+    CHECKD( buf.width > MAX_TB_SIZEY || buf.height > MAX_TB_SIZEY, "luma TU larger than the largest transform" );
+    for( unsigned y = 0; y < buf.height; y++ )
+    {
+      std::copy( buf.bufAt( 0, y ), buf.bufAt( 0, y ) + buf.width, levels + y * buf.width );
+    }
+    lastPos = tu.lastPos[COMP_Y];
+    absSum  = sum;
+  }
+  void restore( TransformUnit& tu ) const
+  {
+    CoeffSigBuf buf = tu.getCoeffs( COMP_Y );
+    for( unsigned y = 0; y < buf.height; y++ )
+    {
+      std::copy( levels + y * buf.width, levels + ( y + 1 ) * buf.width, buf.bufAt( 0, y ) );
+    }
+    tu.lastPos[COMP_Y] = lastPos;
+    TU::setCbfAtDepth( tu, COMP_Y, tu.depth, absSum > 0 );
+  }
+};
+
 double IntraSearch::xFindInterCUCost( CodingUnit &cu )
 {
   if( CU::isConsIntra(cu) && !cu.slice->isIntra() )
@@ -719,11 +767,18 @@ bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, 
       CHECK(cu.ispMode && cu.mipFlag, "Error: combination of ISP and MIP not supported");
       CHECK(cu.ispMode && cu.multiRefIdx, "Error: combination of ISP and MRL not supported");
 
+      // psy-rd: an angular candidate (regular, ISP or BDPCM; not planar, DC or MIP) in a CU without a source edge gets only
+      // part of its reconstruction's energy credited, so a directional streak no longer earns the grain's reward
+      const bool angularInGrain = m_pcRdCost->usePsy() && !cu.mipFlag && cu.intraDir[CH_L] > DC_IDX
+                                  && !touchesPsyEdge( *cs.picture, cu.blocks[COMP_Y] );
+      m_pcRdCost->setPsyRecCredit( angularInGrain ? PSY_ANGULAR_GRAIN_CREDIT : 1.0 );
+
       // determine residual for partition
       cs.initSubStructure(*csTemp, partitioner.chType, cs.area, true);
       int doISP = (((cu.ispMode == 0) && noLFNST) || (useISPlfnst && mode && cu.ispMode && (bestLfnstIdx == 0)) || disableLFNST) ? -mode : mode;
       // the contexts are ctxStart's on entry (the reset below follows every call)
       xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP, disableMTS, ctxStart);
+      m_pcRdCost->setPsyRecCredit( 1.0 );
 
       DTRACE(g_trace_ctx, D_INTRA_COST, "IntraCost T [x=%d,y=%d,w=%d,h=%d] %f (%d,%d,%d,%d,%d,%d) \n", cu.blocks[0].x,
         cu.blocks[0].y, width, height, csTemp->cost, testMode.modeId, testMode.ispMod,
@@ -1528,6 +1583,50 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   {
     const QpParam cQP = lumaQP ? *lumaQP : QpParam( tu, compID );
     m_pcTrQuant->transformNxN(tu, compID, cQP, uiAbsSum, m_CABACEstimator->getCtx(), loadTr, lfnstPrimary);
+    bool resiOfLevels = false;   // piResi already holds the inverse transform of the levels in the TU
+
+    // psy-rdoq keeps levels so that the I picture keeps the source's fine texture. In a large transform a few kept levels
+    // are long cosines: strokes, not grain, which every picture predicted from this one inherits. So its levels stay only
+    // where they bring the reconstruction's fine band (8x8 blocks, group by group: RdCost::getPsyGroupGap) closer to the
+    // source's than the plain quantisation does; else the plain levels are coded. (With the grouped psy difference of
+    // RdCost.h: wrath_of_man strokes -24 % at equal size, gangster_chase's film grain unchanged.) ISP and BDPCM blocks
+    // keep psy-rdoq's result: their sub-blocks predict from each other.
+    if( uiAbsSum > 0 && cs.slice->isIntra() && tu.mtsIdx[COMP_Y] != MTS_SKIP && !cu.ispMode && !cu.bdpcmM[CH_L]
+        && m_pcTrQuant->getQuant()->getPsyRdoqStrength() > 0.0 )
+    {
+      LumaLevels withPsy, plain;
+      withPsy.save( tu, uiAbsSum );
+      TCoeff plainAbsSum = 0;
+      m_pcTrQuant->requantLumaWithoutPsyRdoq( tu, cQP, plainAbsSum, m_CABACEstimator->getCtx(), loadTr );
+      plain.save( tu, plainAbsSum );
+
+      // each result's distance to the source; the inverse transforms overwrite the residual: psy-rdoq's is left in it,
+      // the plain one is computed again below when it is chosen
+      int64_t plainGap;
+      if( plain.absSum > 0 )
+      {
+        m_pcTrQuant->invTransformNxN( tu, compID, piResi, cQP );
+        plainGap = m_pcRdCost->getPsyGroupGap( *cs.picture, area, piPred, piResi );
+      }
+      else
+      {
+        plainGap = m_pcRdCost->getPsyGroupGap( *cs.picture, area, piPred, CPelBuf() );
+      }
+      withPsy.restore( tu );
+      m_pcTrQuant->invTransformNxN( tu, compID, piResi, cQP );
+      const int64_t psyGap = m_pcRdCost->getPsyGroupGap( *cs.picture, area, piPred, piResi );
+
+      if( psyGap < plainGap )
+      {
+        uiAbsSum     = withPsy.absSum;   // psy-rdoq's levels are in the TU, their residual in piResi
+        resiOfLevels = true;
+      }
+      else
+      {
+        plain.restore( tu );
+        uiAbsSum = plain.absSum;
+      }
+    }
 
     DTRACE( g_trace_ctx, D_TU_ABS_SUM, "%d: comp=%d, abssum=%d\n", DTRACE_GET_COUNTER( g_trace_ctx, D_TU_ABS_SUM ), compID, uiAbsSum );
     if (tu.cu->ispMode && isLuma(compID) && CU::isISPLast(*tu.cu, area, area.compID) && CU::allLumaCBFsAreZero(*tu.cu))
@@ -1539,7 +1638,10 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
     //--- inverse transform ---
     if (uiAbsSum > 0)
     {
-      m_pcTrQuant->invTransformNxN(tu, compID, piResi, cQP);
+      if( !resiOfLevels )
+      {
+        m_pcTrQuant->invTransformNxN(tu, compID, piResi, cQP);
+      }
     }
     else
     {
@@ -1604,6 +1706,10 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
 
   //===== update distortion =====
   ruiDist += m_pcRdCost->getDistPart( piOrg, piReco, bitDepth, compID, DF_SSE );
+  if( m_pcRdCost->usePsy() && compID == COMP_Y )   // every intra decision (mode RD, MTS, LFNST, ISP) reads this distortion
+  {
+    ruiDist += m_pcRdCost->getPsyDistortion( *cs.picture, area, piReco, bitDepth );
+  }
   if( jointCbCr )
   {
     CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );

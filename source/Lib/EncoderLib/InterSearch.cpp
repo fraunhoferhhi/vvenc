@@ -3991,6 +3991,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
           nonCoeffFracBits = m_CABACEstimator->getEstFracBits();
           nonCoeffCost = m_pcRdCost->calcRdCost(nonCoeffFracBits, nonCoeffDist, !m_pcEncCfg->m_lumaLevelToDeltaQPEnabled);
+          if( m_pcRdCost->usePsy() && compID == COMP_Y )   // psy-rd: dropping the residual leaves the prediction's texture
+          {
+            nonCoeffCost += m_pcRdCost->calcRdCost( 0, xGetPsyOfPrediction( cs, compArea ) );
+          }
         }
 
         if ((puiZeroDist != NULL) && isFirstMode)
@@ -4032,6 +4036,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           m_pcTrQuant->invTransformNxN(tu, compID, resiBuf, cQP);
           currCompDist = m_pcRdCost->getDistPart(orgResi, resiBuf, channelBitDepth, compID, DF_SSE);
           currCompCost = m_pcRdCost->calcRdCost(currCompFracBits, currCompDist, false);
+          if( m_pcRdCost->usePsy() && compID == COMP_Y )   // psy-rd: coding it keeps the texture of prediction + residual
+          {
+            currCompCost += m_pcRdCost->calcRdCost( 0, m_pcRdCost->getPsyDistortion( *cs.picture, compArea, cs.getPredBuf( compArea ), resiBuf, channelBitDepth ) );
+          }
         }
         else if (transformMode > 0)
         {
@@ -4425,6 +4433,25 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   }
 }
 
+// psy-rd of the luma prediction alone over an area of the CU (its residual dropped). Over the whole CU the TU search
+// asks for it where one TU covers the CU, and encodeResAndCalcRdInterCU after the search: the value is kept
+// (m_psyPredDistCU, set before the search from the caller's measurement or cleared). The prediction does not change.
+Distortion InterSearch::xGetPsyOfPrediction( const CodingStructure &cs, const CompArea &area )
+{
+  const bool wholeCU = area == cs.area.Y();
+  if( wholeCU && m_psyPredDistCUKnown )
+  {
+    return m_psyPredDistCU;
+  }
+  const Distortion psy = m_pcRdCost->getPsyDistortion( *cs.picture, area, cs.getPredBuf( area ), cs.sps->bitDepths[CH_L] );
+  if( wholeCU )
+  {
+    m_psyPredDistCU      = psy;
+    m_psyPredDistCUKnown = true;
+  }
+  return psy;
+}
+
 void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &partitioner, const bool skipResidual, const double bestCost )
 {
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
@@ -4441,6 +4468,8 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   const ChromaFormat format      = cs.area.chromaFormat;;
   const int  numValidComponents  = getNumberValidComponents(format);
   const SPS &sps                 = *cs.sps;
+  const int64_t psyPredDiff      = m_psyPredDiffGiven;   // for this call only (setPsyPredDiff)
+  m_psyPredDiffGiven             = -1;
 
   if( skipResidual ) //  No residual coding : SKIP mode
   {
@@ -4471,6 +4500,13 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
     m_CABACEstimator->cu_skip_flag  ( cu );
     m_CABACEstimator->merge_data(cu);
     cs.fracBits = m_CABACEstimator->getEstFracBits();
+    // psy-rd: in cs.dist, so that it survives EncCu's cost recomputations and adds up over split CUs; the reconstruction
+    // is the prediction, which the caller may have measured
+    if( m_pcRdCost->usePsy() && luma )
+    {
+      distortion += psyPredDiff >= 0 ? m_pcRdCost->getPsyDistortion( psyPredDiff )
+                                     : m_pcRdCost->getPsyDistortion( *cs.picture, cs.area.Y(), cs.getRecoBuf( COMP_Y ), sps.bitDepths[CH_L] );
+    }
     cs.dist     = distortion;
     cs.cost     = m_pcRdCost->calcRdCost(cs.fracBits, cs.dist);
 
@@ -4492,6 +4528,11 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
 
   const TempCtx ctxStart( m_CtxCache, m_CABACEstimator->getCtx() );
 
+  m_psyPredDistCUKnown = psyPredDiff >= 0;
+  if( m_psyPredDistCUKnown )
+  {
+    m_psyPredDistCU = m_pcRdCost->getPsyDistortion( psyPredDiff );
+  }
   m_tuResiBitsValid = false;
   xEstimateInterResidualQT(cs, partitioner, ctxStart, &zeroDistortion );
   TransformUnit& firstTU = *cs.getTU( partitioner.chType );
@@ -4512,7 +4553,29 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   // If a block full of 0's is efficient, then just use 0's.
   // The costs at this point do not include header bits.
 
-  if (zeroCost < cs.cost || !cu.rootCbf)
+  double     psyCostResidual = 0, psyCostZero = 0;   // psy-rd: the texture each choice keeps
+  Distortion psyDistResidual = 0, psyDistZero = 0;
+  const bool psyChoice = m_pcRdCost->usePsy() && luma && cu.rootCbf;
+  if( psyChoice )
+  {
+    // the search leaves the luma residual of blocks with a zero cbf uncleared: clear it here, as the final
+    // reconstruction below does, so that those blocks reconstruct to the prediction
+    for( const TransformUnit* tu : cs.tus )
+    {
+      if( tu->blocks[COMP_Y].valid() && !TU::getCbf( *tu, COMP_Y ) )
+      {
+        cs.getResiBuf( tu->blocks[COMP_Y] ).fill( 0 );
+      }
+    }
+    PelBuf tmpReco = cs.getRecoBuf( COMP_Y );   // overwritten below by the final reconstruction anyway
+    tmpReco.reconstruct( cs.getPredBuf( COMP_Y ), cs.getResiBuf( COMP_Y ), cs.slice->clpRngs[COMP_Y] );
+    psyDistResidual = m_pcRdCost->getPsyDistortion( *cs.picture, cs.area.Y(), tmpReco, sps.bitDepths[CH_L] );
+    psyDistZero     = xGetPsyOfPrediction( cs, cs.area.Y() );
+    psyCostResidual = m_pcRdCost->calcRdCost( 0, psyDistResidual );
+    psyCostZero     = m_pcRdCost->calcRdCost( 0, psyDistZero );
+  }
+
+  if (zeroCost + psyCostZero < cs.cost + psyCostResidual || !cu.rootCbf)
   {
     cu.sbtInfo = 0;
     cu.rootCbf = false;
@@ -4588,6 +4651,14 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
     finalDistortion += m_pcRdCost->getDistPart( org, reco, sps.bitDepths[toChannelType(compID)], compID, DF_SSE );
   }
 
+  if( psyChoice )   // the final luma reconstruction is the one the choice measured: the prediction, or tmpReco
+  {
+    finalDistortion += cu.rootCbf ? psyDistResidual : psyDistZero;
+  }
+  else if( m_pcRdCost->usePsy() && luma )   // psy-rd: see the skip path above; without a residual the reconstruction is the prediction
+  {
+    finalDistortion += xGetPsyOfPrediction( cs, cs.area.Y() );
+  }
   cs.dist     = finalDistortion;
   cs.fracBits = finalFracBits;
   cs.cost     = m_pcRdCost->calcRdCost(cs.fracBits, cs.dist);
