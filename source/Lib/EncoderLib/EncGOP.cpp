@@ -365,8 +365,10 @@ bool EncGOP::hasEnoughPictures( const PicList& picList ) const
   // of a later GOP has arrived; the list is in coding order, so its last picture has the highest GOP number. A GOP shorter
   // than GOPSize (the first one, when the intra period is not a multiple of the GOP size) then need not wait for
   // GOPSize + 1 pictures. With look-ahead, the GOP encoder gets its pictures in coding order from the pre-analysis
-  // encoder, so the size test alone decides.
-  if( m_isPreAnalysis || m_pcEncCfg->m_LookAhead )
+  // encoder, so the size test alone decides. It also decides in blocking mode (no frame parallel coding): there, once
+  // the output has started, every call must give an access unit, which only GOPSize + 1 queued pictures guarantee
+  // (after a short first GOP, the next GOP's first picture in coding order is still up to GOPSize pictures away).
+  if( m_isPreAnalysis || m_pcEncCfg->m_LookAhead || ! isNonBlocking() )
   {
     return false;
   }
